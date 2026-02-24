@@ -212,7 +212,7 @@ export function Dashboard() {
               {figmaFiles.map((file) => (
                 <div
                   key={file.id}
-                  className="flex items-center justify-between p-4 bg-secondary rounded-lg hover:bg-accent transition-colors cursor-pointer border border-transparent hover:border-border"
+                  className="flex items-center justify-between p-4 bg-card rounded-lg hover:bg-muted/50 transition-colors cursor-pointer border border-border/50 hover:border-border"
                 >
                   <div>
                     <div className="font-medium">{file.name}</div>
