@@ -55,8 +55,8 @@ export function Conflicts() {
   return (
     <div className="p-8">
       <div className="mb-8">
-        <h1 className="text-3xl font-bold tracking-tight">Conflicts</h1>
-        <p className="text-muted-foreground mt-2">
+        <h1 className="text-lg font-bold tracking-tight">Conflicts</h1>
+        <p className="text-muted-foreground text-xs mt-2">
           Manage and resolve conflicts in your design system
         </p>
       </div>
@@ -68,7 +68,7 @@ export function Conflicts() {
             <CardDescription className="text-red-600">High Priority</CardDescription>
           </CardHeader>
           <CardContent>
-            <div className="text-3xl font-bold text-red-900">
+            <div className="text-xl font-bold text-red-900">
               {conflicts.filter((c) => c.severity === 'high').length}
             </div>
           </CardContent>
@@ -79,7 +79,7 @@ export function Conflicts() {
             <CardDescription className="text-yellow-600">Medium Priority</CardDescription>
           </CardHeader>
           <CardContent>
-            <div className="text-3xl font-bold text-yellow-900">
+            <div className="text-xl font-bold text-yellow-900">
               {conflicts.filter((c) => c.severity === 'medium').length}
             </div>
           </CardContent>
@@ -90,7 +90,7 @@ export function Conflicts() {
             <CardDescription className="text-blue-600">Low Priority</CardDescription>
           </CardHeader>
           <CardContent>
-            <div className="text-3xl font-bold text-blue-900">
+            <div className="text-xl font-bold text-blue-900">
               {conflicts.filter((c) => c.severity === 'low').length}
             </div>
           </CardContent>
@@ -108,10 +108,10 @@ export function Conflicts() {
           ) : conflicts.length === 0 ? (
             <div className="p-12 text-center">
               <HugeiconsIcon icon={CheckmarkCircle02Icon} className="h-16 w-16 mx-auto mb-4 text-green-500" />
-              <h3 className="text-xl font-semibold mb-2">
+              <h3 className="text-lg font-semibold mb-2">
                 No Active Conflicts
               </h3>
-              <p className="text-muted-foreground">
+              <p className="text-muted-foreground text-xs">
                 Your design system is in sync. Great work!
               </p>
             </div>
@@ -136,12 +136,12 @@ export function Conflicts() {
                         </Badge>
                       </div>
 
-                      <h3 className="text-lg font-semibold mb-1">
+                      <h3 className="text-sm font-semibold mb-1">
                         {conflict.entity_name || 'Unnamed Entity'}
                       </h3>
 
                       {conflict.description && (
-                        <p className="text-muted-foreground">{conflict.description}</p>
+                        <p className="text-muted-foreground text-xs">{conflict.description}</p>
                       )}
 
                       <div className="text-sm text-muted-foreground mt-2">

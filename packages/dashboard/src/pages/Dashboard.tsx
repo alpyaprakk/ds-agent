@@ -38,10 +38,10 @@ export function Dashboard() {
       <div className="p-8">
         <div className="max-w-2xl mx-auto text-center py-12">
           <HugeiconsIcon icon={PackageIcon} className="h-16 w-16 mx-auto mb-4 text-muted-foreground" />
-          <h2 className="text-2xl font-bold mb-2">
+          <h2 className="text-lg font-bold mb-2">
             No Workspace Selected
           </h2>
-          <p className="text-muted-foreground mb-6">
+          <p className="text-muted-foreground text-xs mb-6">
             Create or select a workspace to get started with your design system.
           </p>
           <Button>Create Workspace</Button>
@@ -53,11 +53,11 @@ export function Dashboard() {
   return (
     <div className="p-8">
       <div className="mb-8">
-        <h1 className="text-3xl font-bold tracking-tight">
+        <h1 className="text-lg font-bold tracking-tight">
           {currentWorkspace.icon} {currentWorkspace.name}
         </h1>
         {currentWorkspace.description && (
-          <p className="text-muted-foreground mt-2">{currentWorkspace.description}</p>
+          <p className="text-muted-foreground text-xs mt-2">{currentWorkspace.description}</p>
         )}
       </div>
 
@@ -72,7 +72,7 @@ export function Dashboard() {
           </CardHeader>
           <CardContent>
             <div className="flex items-baseline gap-2">
-              <div className="text-3xl font-bold">
+              <div className="text-xl font-bold">
                 {currentWorkspace.health_score || 0}%
               </div>
               <div className="flex items-center text-sm text-green-600">
@@ -100,7 +100,7 @@ export function Dashboard() {
           </CardHeader>
           <CardContent>
             <div className="flex items-baseline gap-2">
-              <div className="text-3xl font-bold">
+              <div className="text-xl font-bold">
                 {currentWorkspace.total_components || 0}
               </div>
               <div className="flex items-center text-sm text-green-600">
@@ -123,7 +123,7 @@ export function Dashboard() {
           </CardHeader>
           <CardContent>
             <div className="flex items-baseline gap-2">
-              <div className="text-3xl font-bold">
+              <div className="text-xl font-bold">
                 {currentWorkspace.total_variables || 0}
               </div>
               <div className="flex items-center text-sm text-green-600">
@@ -150,7 +150,7 @@ export function Dashboard() {
           </CardHeader>
           <CardContent>
             <div className="flex items-baseline gap-2">
-              <div className="text-3xl font-bold">
+              <div className="text-xl font-bold">
                 {conflicts.length}
               </div>
               {conflicts.length > 0 ? (
