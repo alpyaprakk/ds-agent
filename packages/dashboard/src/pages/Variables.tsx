@@ -121,8 +121,8 @@ export function Variables() {
     <div className="p-8">
       <div className="mb-8 flex items-center justify-between">
         <div>
-          <h1 className="text-3xl font-bold tracking-tight">Variables</h1>
-          <p className="text-muted-foreground mt-2">
+          <h1 className="text-lg font-bold tracking-tight">Variables</h1>
+          <p className="text-muted-foreground mt-2 text-xs">
             Manage design tokens and variables across your design system
           </p>
         </div>
@@ -139,7 +139,7 @@ export function Variables() {
             <CardDescription>Total Variables</CardDescription>
           </CardHeader>
           <CardContent>
-            <div className="text-3xl font-bold">
+            <div className="text-xl font-bold">
               {collections.reduce((sum, col) => sum + col.variables.length, 0)}
             </div>
           </CardContent>
@@ -149,7 +149,7 @@ export function Variables() {
             <CardDescription>Collections</CardDescription>
           </CardHeader>
           <CardContent>
-            <div className="text-3xl font-bold">{collections.length}</div>
+            <div className="text-xl font-bold">{collections.length}</div>
           </CardContent>
         </Card>
         <Card>
@@ -157,7 +157,7 @@ export function Variables() {
             <CardDescription>Aliases</CardDescription>
           </CardHeader>
           <CardContent>
-            <div className="text-3xl font-bold">
+            <div className="text-xl font-bold">
               {collections.reduce((sum, col) => sum + col.variables.filter((v) => v.is_alias).length, 0)}
             </div>
           </CardContent>
@@ -167,7 +167,7 @@ export function Variables() {
             <CardDescription>Total Usage</CardDescription>
           </CardHeader>
           <CardContent>
-            <div className="text-3xl font-bold">
+            <div className="text-xl font-bold">
               {collections.reduce((sum, col) => sum + col.variables.reduce((s, v) => s + (v.usage_count || 0), 0), 0)}
             </div>
           </CardContent>
@@ -253,14 +253,14 @@ export function Variables() {
             {selectedVariable ? (
               <div className="space-y-6">
                 <div>
-                  <label className="text-sm font-medium text-muted-foreground">Name</label>
-                  <div className="mt-1 text-lg font-semibold">
+                  <label className="text-xs font-medium text-muted-foreground">Name</label>
+                  <div className="mt-1 text-sm font-semibold">
                     {selectedVariable.name}
                   </div>
                 </div>
 
                 <div>
-                  <label className="text-sm font-medium text-muted-foreground">Value</label>
+                  <label className="text-xs font-medium text-muted-foreground">Value</label>
                   <div className="mt-1 flex items-center gap-3">
                     {selectedVariable.type === 'COLOR' && (
                       <div
@@ -268,7 +268,7 @@ export function Variables() {
                         style={{ backgroundColor: selectedVariable.value }}
                       />
                     )}
-                    <span className="text-lg font-mono">
+                    <span className="text-sm font-mono">
                       {selectedVariable.value}
                       {selectedVariable.type === 'FLOAT' && 'px'}
                     </span>
@@ -276,7 +276,7 @@ export function Variables() {
                 </div>
 
                 <div>
-                  <label className="text-sm font-medium text-muted-foreground">Type</label>
+                  <label className="text-xs font-medium text-muted-foreground">Type</label>
                   <div className="mt-1">
                     <Badge variant="secondary">{selectedVariable.type}</Badge>
                   </div>
@@ -284,16 +284,16 @@ export function Variables() {
 
                 {selectedVariable.is_alias && (
                   <div>
-                    <label className="text-sm font-medium text-muted-foreground">Alias Target</label>
-                    <div className="mt-1">
+                    <label className="text-xs font-medium text-muted-foreground">Alias Target</label>
+                    <div className="mt-1 text-xs">
                       {selectedVariable.alias_target || 'N/A'}
                     </div>
                   </div>
                 )}
 
                 <div>
-                  <label className="text-sm font-medium text-muted-foreground">Usage Count</label>
-                  <div className="mt-1 text-2xl font-bold">
+                  <label className="text-xs font-medium text-muted-foreground">Usage Count</label>
+                  <div className="mt-1 text-lg font-bold">
                     {selectedVariable.usage_count || 0}
                   </div>
                   <p className="text-sm text-muted-foreground mt-1">
@@ -304,8 +304,8 @@ export function Variables() {
 
                 {selectedVariable.description && (
                   <div>
-                    <label className="text-sm font-medium text-muted-foreground">Description</label>
-                    <div className="mt-1">{selectedVariable.description}</div>
+                    <label className="text-xs font-medium text-muted-foreground">Description</label>
+                    <div className="mt-1 text-xs">{selectedVariable.description}</div>
                   </div>
                 )}
               </div>

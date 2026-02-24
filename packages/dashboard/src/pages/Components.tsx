@@ -156,8 +156,8 @@ export function Components() {
   return (
     <div className="p-8">
       <div className="mb-8">
-        <h1 className="text-3xl font-bold tracking-tight">Components</h1>
-        <p className="text-muted-foreground mt-2">
+        <h1 className="text-lg font-bold tracking-tight">Components</h1>
+        <p className="text-muted-foreground mt-2 text-xs">
           Explore and manage components in your design system
         </p>
       </div>
@@ -169,7 +169,7 @@ export function Components() {
             <CardDescription>Total Components</CardDescription>
           </CardHeader>
           <CardContent>
-            <div className="text-3xl font-bold">{components.length}</div>
+            <div className="text-xl font-bold">{components.length}</div>
           </CardContent>
         </Card>
 
@@ -181,7 +181,7 @@ export function Components() {
             </CardDescription>
           </CardHeader>
           <CardContent>
-            <div className="text-3xl font-bold text-green-900">{statusCounts.healthy}</div>
+            <div className="text-xl font-bold text-green-900">{statusCounts.healthy}</div>
           </CardContent>
         </Card>
 
@@ -193,7 +193,7 @@ export function Components() {
             </CardDescription>
           </CardHeader>
           <CardContent>
-            <div className="text-3xl font-bold text-yellow-900">{statusCounts.warning}</div>
+            <div className="text-xl font-bold text-yellow-900">{statusCounts.warning}</div>
           </CardContent>
         </Card>
 
@@ -205,7 +205,7 @@ export function Components() {
             </CardDescription>
           </CardHeader>
           <CardContent>
-            <div className="text-3xl font-bold text-red-900">{statusCounts.error}</div>
+            <div className="text-xl font-bold text-red-900">{statusCounts.error}</div>
           </CardContent>
         </Card>
       </div>
@@ -308,19 +308,19 @@ export function Components() {
               <div className="space-y-6">
                 <div>
                   <div className="flex items-center gap-3 mb-2">
-                    <HugeiconsIcon icon={PackageIcon} className="h-6 w-6 text-muted-foreground" />
-                    <h3 className="text-2xl font-bold">
+                    <HugeiconsIcon icon={PackageIcon} className="h-5 w-5 text-muted-foreground" />
+                    <h3 className="text-lg font-bold">
                       {selectedComponent.name}
                     </h3>
                   </div>
                   {selectedComponent.description && (
-                    <p className="text-muted-foreground">{selectedComponent.description}</p>
+                    <p className="text-muted-foreground text-xs">{selectedComponent.description}</p>
                   )}
                 </div>
 
                 {/* Status Badge */}
                 <div>
-                  <label className="text-sm font-medium text-muted-foreground">Status</label>
+                  <label className="text-xs font-medium text-muted-foreground">Status</label>
                   <div className="mt-1">
                     <Badge
                       variant={selectedComponent.status === 'healthy' ? 'default' : 'secondary'}
@@ -339,10 +339,10 @@ export function Components() {
 
                 {/* Variable Coverage */}
                 <div>
-                  <label className="text-sm font-medium text-muted-foreground">Variable Coverage</label>
+                  <label className="text-xs font-medium text-muted-foreground">Variable Coverage</label>
                   <div className="mt-2">
                     <div className="flex items-center justify-between mb-2">
-                      <span className="text-3xl font-bold">
+                      <span className="text-xl font-bold">
                         {selectedComponent.variable_coverage}%
                       </span>
                       <Badge variant="outline">
@@ -368,7 +368,7 @@ export function Components() {
                 {/* Missing Variables */}
                 {selectedComponent.missing_variables.length > 0 && (
                   <div>
-                    <label className="text-sm font-medium text-muted-foreground mb-2 block">
+                    <label className="text-xs font-medium text-muted-foreground mb-2 block">
                       Missing Variables
                     </label>
                     <div className="space-y-2">
@@ -390,14 +390,14 @@ export function Components() {
                 {/* Stats */}
                 <div className="grid grid-cols-2 gap-4">
                   <div>
-                    <label className="text-sm font-medium text-muted-foreground">Variants</label>
-                    <div className="text-2xl font-bold">
+                    <label className="text-xs font-medium text-muted-foreground">Variants</label>
+                    <div className="text-lg font-bold">
                       {selectedComponent.total_variants}
                     </div>
                   </div>
                   <div>
-                    <label className="text-sm font-medium text-muted-foreground">Properties</label>
-                    <div className="text-2xl font-bold">
+                    <label className="text-xs font-medium text-muted-foreground">Properties</label>
+                    <div className="text-lg font-bold">
                       {selectedComponent.total_properties}
                     </div>
                   </div>
@@ -406,7 +406,7 @@ export function Components() {
                 {/* Last Synced */}
                 {selectedComponent.last_synced && (
                   <div>
-                    <label className="text-sm font-medium text-muted-foreground">Last Synced</label>
+                    <label className="text-xs font-medium text-muted-foreground">Last Synced</label>
                     <div className="mt-1 flex items-center gap-2">
                       <HugeiconsIcon icon={Clock01Icon} className="h-4 w-4" />
                       <span className="text-sm">
