@@ -1,0 +1,29 @@
+{
+  "name": "ds-agent",
+  "version": "1.0.0",
+  "private": true,
+  "description": "AI-powered Design System Agent with Figma integration",
+  "workspaces": [
+    "packages/*"
+  ],
+  "scripts": {
+    "dev": "turbo run dev",
+    "build": "turbo run build",
+    "lint": "turbo run lint",
+    "test": "turbo run test",
+    "clean": "turbo run clean && rm -rf node_modules",
+    "db:migrate": "cd packages/server && npm run db:migrate",
+    "db:seed": "cd packages/server && npm run db:seed",
+    "agent:init": "node scripts/init-agent.js"
+  },
+  "devDependencies": {
+    "turbo": "^2.0.0",
+    "typescript": "^5.3.3",
+    "@types/node": "^20.11.0"
+  },
+  "engines": {
+    "node": ">=18.0.0",
+    "npm": ">=9.0.0"
+  },
+  "packageManager": "npm@10.2.4"
+}

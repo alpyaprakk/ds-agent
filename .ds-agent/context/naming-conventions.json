@@ -1,0 +1,93 @@
+{
+  "version": "1.0.0",
+  "variables": {
+    "pattern": "{category}/{property}/{variant}",
+    "case": "kebab-case",
+    "examples": {
+      "colors": {
+        "primitive": "color/blue/500",
+        "semantic": "color/primary/500",
+        "alias": "color/button/background"
+      },
+      "spacing": {
+        "primitive": "spacing/4",
+        "semantic": "spacing/xs",
+        "contextual": "spacing/button/padding"
+      },
+      "typography": {
+        "font_family": "typography/font/sans",
+        "font_size": "typography/size/md",
+        "line_height": "typography/leading/normal",
+        "font_weight": "typography/weight/bold"
+      },
+      "borders": {
+        "radius": "border/radius/md",
+        "width": "border/width/thin",
+        "style": "border/style/solid"
+      },
+      "shadows": {
+        "elevation": "shadow/elevation/md",
+        "color": "shadow/color/default"
+      }
+    },
+    "forbidden_patterns": [
+      "var-*",
+      "variable-*",
+      "temp-*",
+      "*-final",
+      "*-new",
+      "*-old"
+    ]
+  },
+  "components": {
+    "pattern": "{ComponentName}/{Variant}",
+    "case": "PascalCase",
+    "examples": {
+      "simple": "Button",
+      "variant": "Button/Primary",
+      "complex": "NavigationBar/Desktop"
+    },
+    "forbidden_patterns": [
+      "*-component",
+      "component-*",
+      "*-temp",
+      "*-copy",
+      "*-2",
+      "*-final"
+    ]
+  },
+  "properties": {
+    "case": "PascalCase",
+    "examples": [
+      "Variant",
+      "Size",
+      "State",
+      "IconPosition",
+      "IsFullWidth"
+    ],
+    "forbidden": [
+      "variant",
+      "size",
+      "state"
+    ]
+  },
+  "pages": {
+    "pattern": "{emoji} {Name}",
+    "examples": [
+      "📦 Components",
+      "🎨 Styles",
+      "📚 Patterns",
+      "🧪 Testing",
+      "📝 Documentation"
+    ]
+  },
+  "frames": {
+    "pattern": "{Purpose} - {Details}",
+    "case": "Title Case",
+    "examples": [
+      "Button - All Variants",
+      "Input - States",
+      "Card - Examples"
+    ]
+  }
+}

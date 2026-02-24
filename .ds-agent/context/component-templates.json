@@ -1,0 +1,255 @@
+{
+  "version": "1.0.0",
+  "templates": {
+    "Button": {
+      "description": "Standard button component with variants, sizes, and states",
+      "properties": {
+        "Variant": {
+          "type": "VARIANT",
+          "values": ["Default", "Primary", "Secondary", "Outline", "Ghost", "Danger"]
+        },
+        "Size": {
+          "type": "VARIANT",
+          "values": ["Small", "Medium", "Large"]
+        },
+        "State": {
+          "type": "VARIANT",
+          "values": ["Default", "Hover", "Active", "Disabled"]
+        },
+        "Icon": {
+          "type": "BOOLEAN",
+          "defaultValue": false
+        },
+        "IconPosition": {
+          "type": "VARIANT",
+          "values": ["Left", "Right"],
+          "condition": "Icon === true"
+        },
+        "FullWidth": {
+          "type": "BOOLEAN",
+          "defaultValue": false
+        }
+      },
+      "structure": {
+        "type": "COMPONENT_SET",
+        "auto_layout": {
+          "direction": "HORIZONTAL",
+          "padding": {
+            "horizontal": "spacing/button/padding-x",
+            "vertical": "spacing/button/padding-y"
+          },
+          "gap": "spacing/button/gap",
+          "alignment": "CENTER"
+        },
+        "children": [
+          {
+            "name": "Icon",
+            "type": "INSTANCE",
+            "visible": "Icon === true",
+            "size": "icon/size/md"
+          },
+          {
+            "name": "Label",
+            "type": "TEXT",
+            "content": "Button",
+            "style": "typography/button/text"
+          }
+        ]
+      },
+      "variables": {
+        "Default": {
+          "background": "color/button/default/background",
+          "text": "color/button/default/text",
+          "border": "color/button/default/border"
+        },
+        "Primary": {
+          "background": "color/primary/500",
+          "text": "color/white",
+          "border": "color/primary/500"
+        },
+        "Secondary": {
+          "background": "color/secondary/500",
+          "text": "color/white",
+          "border": "color/secondary/500"
+        }
+      }
+    },
+    "Input": {
+      "description": "Text input field with validation states",
+      "properties": {
+        "Size": {
+          "type": "VARIANT",
+          "values": ["Small", "Medium", "Large"]
+        },
+        "State": {
+          "type": "VARIANT",
+          "values": ["Default", "Focus", "Error", "Disabled"]
+        },
+        "Type": {
+          "type": "VARIANT",
+          "values": ["Text", "Password", "Email", "Number"]
+        },
+        "HasIcon": {
+          "type": "BOOLEAN",
+          "defaultValue": false
+        }
+      },
+      "structure": {
+        "type": "COMPONENT_SET",
+        "auto_layout": {
+          "direction": "HORIZONTAL",
+          "padding": {
+            "horizontal": "spacing/input/padding-x",
+            "vertical": "spacing/input/padding-y"
+          },
+          "gap": "spacing/input/gap",
+          "alignment": "CENTER"
+        }
+      },
+      "variables": {
+        "Default": {
+          "background": "color/input/background",
+          "text": "color/input/text",
+          "border": "color/input/border",
+          "placeholder": "color/input/placeholder"
+        },
+        "Focus": {
+          "border": "color/primary/500",
+          "shadow": "shadow/focus"
+        },
+        "Error": {
+          "border": "color/error/500",
+          "text": "color/error/700"
+        }
+      }
+    },
+    "Card": {
+      "description": "Container card component with variants",
+      "properties": {
+        "Variant": {
+          "type": "VARIANT",
+          "values": ["Default", "Outlined", "Elevated"]
+        },
+        "Padding": {
+          "type": "VARIANT",
+          "values": ["None", "Small", "Medium", "Large"]
+        }
+      },
+      "structure": {
+        "type": "COMPONENT_SET",
+        "auto_layout": {
+          "direction": "VERTICAL",
+          "padding": "spacing/card/padding",
+          "gap": "spacing/card/gap"
+        }
+      },
+      "variables": {
+        "Default": {
+          "background": "color/card/background",
+          "border": "color/card/border"
+        },
+        "Elevated": {
+          "background": "color/card/background",
+          "shadow": "shadow/elevation/md"
+        }
+      }
+    },
+    "Badge": {
+      "description": "Small status or label badge",
+      "properties": {
+        "Variant": {
+          "type": "VARIANT",
+          "values": ["Default", "Primary", "Success", "Warning", "Error", "Info"]
+        },
+        "Size": {
+          "type": "VARIANT",
+          "values": ["Small", "Medium"]
+        }
+      },
+      "structure": {
+        "type": "COMPONENT_SET",
+        "auto_layout": {
+          "direction": "HORIZONTAL",
+          "padding": {
+            "horizontal": "spacing/badge/padding-x",
+            "vertical": "spacing/badge/padding-y"
+          }
+        }
+      }
+    },
+    "Avatar": {
+      "description": "User avatar component",
+      "properties": {
+        "Size": {
+          "type": "VARIANT",
+          "values": ["XSmall", "Small", "Medium", "Large", "XLarge"]
+        },
+        "Type": {
+          "type": "VARIANT",
+          "values": ["Image", "Initials", "Icon"]
+        },
+        "Status": {
+          "type": "VARIANT",
+          "values": ["None", "Online", "Offline", "Busy"]
+        }
+      },
+      "structure": {
+        "type": "COMPONENT_SET",
+        "constraints": {
+          "width": "fixed",
+          "height": "fixed",
+          "aspect_ratio": 1
+        }
+      }
+    },
+    "Checkbox": {
+      "description": "Checkbox input component",
+      "properties": {
+        "State": {
+          "type": "VARIANT",
+          "values": ["Unchecked", "Checked", "Indeterminate", "Disabled"]
+        },
+        "Size": {
+          "type": "VARIANT",
+          "values": ["Small", "Medium", "Large"]
+        }
+      }
+    },
+    "Radio": {
+      "description": "Radio button component",
+      "properties": {
+        "State": {
+          "type": "VARIANT",
+          "values": ["Unchecked", "Checked", "Disabled"]
+        },
+        "Size": {
+          "type": "VARIANT",
+          "values": ["Small", "Medium", "Large"]
+        }
+      }
+    },
+    "Switch": {
+      "description": "Toggle switch component",
+      "properties": {
+        "State": {
+          "type": "VARIANT",
+          "values": ["Off", "On", "Disabled"]
+        },
+        "Size": {
+          "type": "VARIANT",
+          "values": ["Small", "Medium", "Large"]
+        }
+      }
+    }
+  },
+  "usage_guidelines": {
+    "Button": "Use for primary actions, navigation, and form submissions",
+    "Input": "Use for text entry in forms",
+    "Card": "Use for grouping related content",
+    "Badge": "Use for status indicators, tags, or counts",
+    "Avatar": "Use for user profile images or initials",
+    "Checkbox": "Use for multi-select options",
+    "Radio": "Use for single-select options from a list",
+    "Switch": "Use for binary on/off settings"
+  }
+}

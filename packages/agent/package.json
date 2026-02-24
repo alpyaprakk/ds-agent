@@ -1,0 +1,22 @@
+{
+  "name": "@ds-agent/agent",
+  "version": "1.0.0",
+  "private": true,
+  "description": "AI agent core logic and context management",
+  "main": "dist/index.js",
+  "scripts": {
+    "dev": "tsx watch src/index.ts",
+    "build": "tsc",
+    "lint": "eslint src --ext .ts",
+    "test": "jest"
+  },
+  "dependencies": {
+    "zod": "^3.22.4",
+    "uuid": "^9.0.1"
+  },
+  "devDependencies": {
+    "tsx": "^4.7.0",
+    "typescript": "^5.3.3",
+    "@types/uuid": "^9.0.7"
+  }
+}

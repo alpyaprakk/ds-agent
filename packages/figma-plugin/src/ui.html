@@ -1,0 +1,116 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <title>DS Agent</title>
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    body {
+      font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+      padding: 16px;
+      background: #f9fafb;
+    }
+
+    h1 {
+      font-size: 18px;
+      font-weight: 600;
+      margin-bottom: 16px;
+      color: #111827;
+    }
+
+    button {
+      width: 100%;
+      padding: 10px 16px;
+      background: #3b82f6;
+      color: white;
+      border: none;
+      border-radius: 6px;
+      font-size: 14px;
+      font-weight: 500;
+      cursor: pointer;
+      margin-bottom: 8px;
+    }
+
+    button:hover {
+      background: #2563eb;
+    }
+
+    #status {
+      margin-top: 16px;
+      padding: 12px;
+      background: white;
+      border-radius: 6px;
+      font-size: 13px;
+      color: #6b7280;
+      border: 1px solid #e5e7eb;
+    }
+
+    .section {
+      margin-bottom: 24px;
+    }
+
+    .label {
+      font-size: 12px;
+      font-weight: 500;
+      color: #6b7280;
+      margin-bottom: 8px;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+    }
+  </style>
+</head>
+<body>
+  <h1>🤖 DS Agent</h1>
+
+  <div class="section">
+    <div class="label">Actions</div>
+    <button id="get-variables">Get Variables</button>
+    <button id="get-components">Get Components</button>
+    <button id="sync">Sync with Server</button>
+  </div>
+
+  <div id="status">Ready</div>
+
+  <script>
+    // Get Variables
+    document.getElementById('get-variables').onclick = () => {
+      parent.postMessage({ pluginMessage: { type: 'get-variables' } }, '*');
+      document.getElementById('status').textContent = 'Fetching variables...';
+    };
+
+    // Get Components
+    document.getElementById('get-components').onclick = () => {
+      parent.postMessage({ pluginMessage: { type: 'get-components' } }, '*');
+      document.getElementById('status').textContent = 'Fetching components...';
+    };
+
+    // Sync
+    document.getElementById('sync').onclick = () => {
+      document.getElementById('status').textContent = 'Syncing with server...';
+      // TODO: Implement sync
+    };
+
+    // Listen for messages from plugin code
+    window.onmessage = (event) => {
+      const msg = event.data.pluginMessage;
+
+      if (msg.type === 'variables-data') {
+        document.getElementById('status').textContent =
+          `Found ${msg.variables.length} variables`;
+        console.log('Variables:', msg.variables);
+      }
+
+      if (msg.type === 'components-data') {
+        document.getElementById('status').textContent =
+          `Found ${msg.components.length} components`;
+        console.log('Components:', msg.components);
+      }
+    };
+  </script>
+</body>
+</html>

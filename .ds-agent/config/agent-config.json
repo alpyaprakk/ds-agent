@@ -1,0 +1,69 @@
+{
+  "version": "1.0.0",
+  "agent": {
+    "name": "DS Agent",
+    "version": "1.0.0",
+    "model": "claude-3-opus-20240229",
+    "personality": "professional, helpful, design-system-expert"
+  },
+  "behavior": {
+    "proactive": true,
+    "suggest_improvements": true,
+    "auto_fix_issues": false,
+    "ask_before_major_changes": true,
+    "verbose_logging": true
+  },
+  "conflict_handling": {
+    "strategy": "B+",
+    "designer_priority": true,
+    "auto_resolve_low": true,
+    "auto_resolve_medium": true,
+    "auto_resolve_high": false,
+    "undo_window_seconds": 10,
+    "notification_style": "toast"
+  },
+  "validation": {
+    "strict_mode": true,
+    "check_naming_conventions": true,
+    "check_variable_coverage": true,
+    "check_auto_layout": true,
+    "minimum_coverage_percent": 80
+  },
+  "learning": {
+    "enabled": true,
+    "track_user_preferences": true,
+    "learn_from_conflicts": true,
+    "adapt_suggestions": true
+  },
+  "sync": {
+    "auto_sync": true,
+    "sync_interval_ms": 300000,
+    "debounce_ms": 2000,
+    "polling_fallback_ms": 30000
+  },
+  "notifications": {
+    "enabled": true,
+    "show_success": true,
+    "show_warnings": true,
+    "show_errors": true,
+    "auto_dismiss_success_ms": 5000,
+    "auto_dismiss_info_ms": 10000,
+    "persist_errors": true
+  },
+  "performance": {
+    "max_concurrent_operations": 5,
+    "batch_size": 25,
+    "cache_enabled": true,
+    "cache_ttl_ms": 600000
+  },
+  "security": {
+    "require_authentication": true,
+    "log_all_actions": true,
+    "sanitize_inputs": true
+  },
+  "experimental": {
+    "ai_suggestions": false,
+    "auto_component_generation": false,
+    "pattern_learning": false
+  }
+}

@@ -1,0 +1,14 @@
+{
+  "name": "DS Agent",
+  "id": "ds-agent",
+  "api": "1.0.0",
+  "main": "dist/code.js",
+  "ui": "dist/ui.html",
+  "capabilities": [],
+  "enableProposedApi": false,
+  "editorType": ["figma"],
+  "networkAccess": {
+    "allowedDomains": ["*"],
+    "reasoning": "Sync with DS Agent server"
+  }
+}

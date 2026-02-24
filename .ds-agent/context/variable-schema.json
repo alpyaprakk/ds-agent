@@ -1,0 +1,129 @@
+{
+  "version": "1.0.0",
+  "collections": {
+    "colors": {
+      "description": "Color palette including primitives and semantic tokens",
+      "structure": {
+        "primitives": {
+          "pattern": "color/{hue}/{shade}",
+          "shades": [50, 100, 200, 300, 400, 500, 600, 700, 800, 900, 950],
+          "hues": ["gray", "red", "orange", "yellow", "green", "blue", "indigo", "purple", "pink"]
+        },
+        "semantic": {
+          "pattern": "color/{purpose}/{variant}",
+          "purposes": ["primary", "secondary", "success", "warning", "error", "info"],
+          "variants": ["50", "100", "200", "300", "400", "500", "600", "700", "800", "900"]
+        },
+        "contextual": {
+          "pattern": "color/{component}/{property}",
+          "examples": [
+            "color/button/background",
+            "color/button/text",
+            "color/input/border",
+            "color/card/background"
+          ]
+        }
+      }
+    },
+    "spacing": {
+      "description": "Spacing scale for consistent layouts",
+      "structure": {
+        "primitives": {
+          "pattern": "spacing/{value}",
+          "values": [0, 1, 2, 4, 6, 8, 12, 16, 20, 24, 32, 40, 48, 64, 80, 96, 128]
+        },
+        "semantic": {
+          "pattern": "spacing/{size}",
+          "sizes": ["none", "xs", "sm", "md", "lg", "xl", "2xl", "3xl"]
+        },
+        "contextual": {
+          "pattern": "spacing/{component}/{property}",
+          "examples": [
+            "spacing/button/padding-x",
+            "spacing/button/padding-y",
+            "spacing/card/gap",
+            "spacing/section/margin"
+          ]
+        }
+      }
+    },
+    "typography": {
+      "description": "Typography scale including fonts, sizes, weights, and line heights",
+      "structure": {
+        "font_family": {
+          "pattern": "typography/font/{type}",
+          "types": ["sans", "serif", "mono", "display"]
+        },
+        "font_size": {
+          "pattern": "typography/size/{size}",
+          "sizes": ["xs", "sm", "base", "lg", "xl", "2xl", "3xl", "4xl", "5xl", "6xl"]
+        },
+        "font_weight": {
+          "pattern": "typography/weight/{weight}",
+          "weights": ["thin", "light", "normal", "medium", "semibold", "bold", "extrabold", "black"]
+        },
+        "line_height": {
+          "pattern": "typography/leading/{size}",
+          "sizes": ["none", "tight", "snug", "normal", "relaxed", "loose"]
+        },
+        "contextual": {
+          "pattern": "typography/{element}/{property}",
+          "examples": [
+            "typography/heading/h1",
+            "typography/body/paragraph",
+            "typography/button/text"
+          ]
+        }
+      }
+    },
+    "borders": {
+      "description": "Border properties including radius, width, and style",
+      "structure": {
+        "radius": {
+          "pattern": "border/radius/{size}",
+          "sizes": ["none", "sm", "md", "lg", "xl", "2xl", "full"]
+        },
+        "width": {
+          "pattern": "border/width/{size}",
+          "sizes": ["none", "thin", "medium", "thick"]
+        }
+      }
+    },
+    "shadows": {
+      "description": "Shadow effects for elevation",
+      "structure": {
+        "elevation": {
+          "pattern": "shadow/elevation/{level}",
+          "levels": ["none", "xs", "sm", "md", "lg", "xl", "2xl"]
+        }
+      }
+    },
+    "opacity": {
+      "description": "Opacity values",
+      "structure": {
+        "pattern": "opacity/{level}",
+        "levels": [0, 5, 10, 20, 25, 30, 40, 50, 60, 70, 75, 80, 90, 95, 100]
+      }
+    }
+  },
+  "alias_guidelines": {
+    "semantic_over_primitive": "Prefer color/primary/500 → color/blue/500 (alias)",
+    "contextual_over_semantic": "Prefer color/button/background → color/primary/500 (alias)",
+    "max_depth": 3,
+    "naming": "Aliases should clearly indicate their purpose"
+  },
+  "validation": {
+    "required_collections": ["colors", "spacing", "typography", "borders"],
+    "minimum_variables": {
+      "colors": 20,
+      "spacing": 8,
+      "typography": 10,
+      "borders": 5
+    },
+    "coverage_targets": {
+      "components_using_color_vars": 100,
+      "components_using_spacing_vars": 100,
+      "components_with_auto_layout": 95
+    }
+  }
+}

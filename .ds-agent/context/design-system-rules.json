@@ -1,0 +1,136 @@
+{
+  "version": "1.0.0",
+  "rules": {
+    "variables": {
+      "naming": {
+        "pattern": "category/property/variant",
+        "examples": [
+          "color/primary/500",
+          "spacing/medium",
+          "typography/heading/h1",
+          "border/radius/md"
+        ],
+        "categories": [
+          "color",
+          "spacing",
+          "typography",
+          "border",
+          "shadow",
+          "opacity"
+        ]
+      },
+      "required_collections": [
+        "colors",
+        "spacing",
+        "typography",
+        "borders"
+      ],
+      "alias_strategy": "semantic-over-primitive",
+      "max_alias_depth": 3
+    },
+    "components": {
+      "auto_layout_required": true,
+      "variant_naming": "kebab-case",
+      "property_naming": "PascalCase",
+      "must_use_variables": true,
+      "organization": {
+        "use_pages": true,
+        "page_naming": "📦 Components",
+        "grouping": "by-category",
+        "categories": [
+          "Buttons",
+          "Inputs",
+          "Cards",
+          "Navigation",
+          "Typography",
+          "Icons"
+        ]
+      },
+      "required_properties": {
+        "Button": ["Variant", "Size", "State"],
+        "Input": ["Size", "State", "Type"],
+        "Card": ["Variant", "Elevation"]
+      }
+    },
+    "best_practices": {
+      "check_existing_before_create": true,
+      "validate_variable_coverage": true,
+      "ensure_responsive_layouts": true,
+      "document_component_usage": true,
+      "use_consistent_spacing": true,
+      "avoid_hard_coded_values": true
+    }
+  },
+  "validation_rules": {
+    "component_must_have": [
+      "description",
+      "variants",
+      "auto_layout",
+      "proper_naming",
+      "variable_bindings"
+    ],
+    "variable_must_have": [
+      "collection",
+      "proper_naming",
+      "documentation"
+    ],
+    "warnings": {
+      "hard_coded_colors": "Components should use color variables",
+      "no_auto_layout": "Components without auto-layout are not responsive",
+      "missing_variants": "Consider adding size and state variants",
+      "low_variable_coverage": "Low variable usage (< 80%) detected"
+    }
+  },
+  "guardrails": {
+    "never_do": [
+      {
+        "rule": "Hard-coded values instead of variables",
+        "reason": "Breaks design system consistency",
+        "exception": "Fixed-size icons or specific illustrations"
+      },
+      {
+        "rule": "Delete existing components without confirmation",
+        "reason": "May break existing connections",
+        "action": "Always ask user first"
+      },
+      {
+        "rule": "Create components without auto-layout",
+        "reason": "Not responsive or maintainable",
+        "exception": "Icon components or fixed-size elements"
+      },
+      {
+        "rule": "Use naming that doesn't follow conventions",
+        "reason": "Creates inconsistency",
+        "action": "Follow design-system-rules.json patterns"
+      },
+      {
+        "rule": "Create variable alias chains > 3 deep",
+        "reason": "Complexity and performance issues",
+        "action": "Warn user and suggest restructuring"
+      }
+    ],
+    "always_do": [
+      "Check existing variables before creating new ones",
+      "Validate variable coverage after component creation",
+      "Add component descriptions with usage examples",
+      "Follow naming conventions strictly",
+      "Log all actions for audit trail"
+    ],
+    "ask_user_when": [
+      "Making breaking changes (delete, major rename)",
+      "Creating > 5 new variables at once",
+      "Modifying existing components",
+      "Naming convention is ambiguous",
+      "Multiple approaches are valid"
+    ]
+  },
+  "conflict_resolution": {
+    "priority": "designer_over_agent",
+    "auto_resolve_severity": {
+      "low": "auto",
+      "medium": "auto_with_confirmation",
+      "high": "manual_required"
+    },
+    "undo_window_seconds": 10
+  }
+}
