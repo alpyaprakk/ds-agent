@@ -106,32 +106,28 @@ export function Layout({ children }: LayoutProps) {
                       key={item.path}
                       to={item.path}
                       className={cn(
-                        'flex items-center justify-center rounded-lg py-2.5 text-xs transition-all duration-300',
+                        'flex items-center rounded-lg text-xs transition-all duration-300 overflow-hidden',
                         'hover:bg-accent/50',
+                        sidebarCollapsed ? 'justify-center w-10 h-10' : 'justify-start px-3 py-2.5',
                         isActive
                           ? 'bg-primary text-primary-foreground font-semibold shadow-sm hover:bg-primary/90'
                           : 'text-muted-foreground font-medium hover:text-foreground hover:bg-muted/50'
                       )}
                     >
-                      <div className={cn(
-                        'flex items-center gap-3 transition-all duration-300',
-                        sidebarCollapsed ? 'w-auto' : 'w-full px-3'
+                      <HugeiconsIcon
+                        icon={Icon}
+                        size={20}
+                        className={cn(
+                          'flex-shrink-0',
+                          isActive ? 'opacity-100' : 'opacity-70'
+                        )}
+                      />
+                      <span className={cn(
+                        'truncate transition-all duration-300 whitespace-nowrap',
+                        sidebarCollapsed ? 'w-0 opacity-0 ml-0' : 'w-auto opacity-100 ml-3'
                       )}>
-                        <HugeiconsIcon
-                          icon={Icon}
-                          size={20}
-                          className={cn(
-                            'flex-shrink-0',
-                            isActive ? 'opacity-100' : 'opacity-70'
-                          )}
-                        />
-                        <span className={cn(
-                          'truncate transition-all duration-300',
-                          sidebarCollapsed ? 'w-0 opacity-0' : 'w-auto opacity-100'
-                        )}>
-                          {item.name}
-                        </span>
-                      </div>
+                        {item.name}
+                      </span>
                     </Link>
                   );
 
