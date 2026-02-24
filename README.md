@@ -92,6 +92,8 @@ VITE_WS_URL=ws://localhost:3001
 - [Workspace Architecture](./WORKSPACE_ARCHITECTURE.md) - Multi-workspace design
 - [Sync Strategy](./SYNC_STRATEGY.md) - Real-time sync and conflict resolution
 - [Final Configuration](./FINAL_CONFIGURATION.md) - Implementation decisions
+- [Deployment Guide](./DEPLOYMENT.md) - Dokploy deployment with custom domain
+- [Cloudflare DNS](./CLOUDFLARE_DNS.md) - DNS configuration for ds-agent.alpy.io
 
 ## 🎯 Key Features
 
@@ -175,40 +177,56 @@ npm run clean
 
 ## 📈 Roadmap
 
-### Phase 1: Foundation (Weeks 1-2) ✅
+### Phase 1: Foundation ✅
 - [x] Project structure
 - [x] Database schema
 - [x] Agent context system
+- [x] Monorepo setup with Turborepo
+- [x] TypeScript configuration
 
-### Phase 2: Core Agent (Weeks 3-4)
-- [ ] Context loader
-- [ ] Decision engine
-- [ ] Variable analyzer
-- [ ] Component creation logic
+### Phase 2: Core Agent ✅
+- [x] Context loader
+- [x] Variable analyzer
+- [x] Component creator
+- [x] Design system agent orchestrator
 
-### Phase 3: Figma Plugin (Weeks 5-6)
-- [ ] Plugin scaffold
-- [ ] Document change listener
-- [ ] Sync client
-- [ ] API operations
+### Phase 3: Figma Plugin ✅
+- [x] Plugin scaffold
+- [x] Document change listener
+- [x] Manifest configuration
+- [x] API integration structure
 
-### Phase 4: Dashboard (Weeks 7-8)
-- [ ] UI components
-- [ ] WebSocket integration
-- [ ] Variable manager
-- [ ] Conflicts page
+### Phase 4: Dashboard ✅
+- [x] UI components
+- [x] WebSocket integration
+- [x] Variable manager page
+- [x] Conflicts page
+- [x] Components explorer
+- [x] Workspace selector
+- [x] Create workspace modal
+- [x] Add Figma file modal
+- [x] Toast notifications
 
-### Phase 5: Integration (Weeks 9-10)
-- [ ] End-to-end sync
-- [ ] Conflict resolution
-- [ ] Testing
-- [ ] Bug fixes
+### Phase 5: Server & API ✅
+- [x] Express REST API
+- [x] WebSocket handlers
+- [x] Database repositories
+- [x] Sync orchestrator
+- [x] Conflict detection engine
 
-### Phase 6: Polish (Weeks 11-12)
-- [ ] UI refinements
-- [ ] Documentation
-- [ ] Examples
-- [ ] Launch
+### Phase 6: Deployment ✅
+- [x] Docker configuration
+- [x] docker-compose setup
+- [x] Nginx configuration
+- [x] Deployment documentation
+- [x] DNS setup guide
+
+### Next Steps 🚧
+- [ ] Connect Figma plugin to server
+- [ ] Implement real-time sync end-to-end
+- [ ] Add authentication
+- [ ] Testing suite
+- [ ] Performance optimization
 
 ## 🤝 Contributing
 

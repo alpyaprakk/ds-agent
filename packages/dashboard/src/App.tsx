@@ -1,51 +1,102 @@
-import { useState } from 'react';
+import { useEffect } from 'react';
+import { BrowserRouter, Routes, Route } from 'react-router-dom';
+import { Toaster, toast } from 'sonner';
+import { Layout } from './components/Layout';
+import { Dashboard } from './pages/Dashboard';
+import { Conflicts } from './pages/Conflicts';
+import { Variables } from './pages/Variables';
+import { Components } from './pages/Components';
+import { useWorkspaceStore } from './store/workspace-store';
+import { wsClient } from './lib/websocket';
 
 function App() {
-  const [count, setCount] = useState(0);
+  const { fetchWorkspaces, setCurrentWorkspace, workspaces } = useWorkspaceStore();
+
+  useEffect(() => {
+    // Connect WebSocket
+    wsClient.connect();
+
+    // Fetch initial data
+    fetchWorkspaces();
+
+    // Setup WebSocket listeners
+    wsClient.on('workspace_joined', (data) => {
+      console.log('Joined workspace:', data.workspace_id);
+      toast.success('Connected to workspace');
+    });
+
+    wsClient.on('conflict_detected', (data) => {
+      console.log('Conflict detected:', data);
+      const severity = data.severity || 'medium';
+      const message = `${data.entity_type} conflict detected: ${data.entity_name || 'Unnamed'}`;
+
+      if (severity === 'high') {
+        toast.error(message, {
+          description: 'Please review and resolve this conflict',
+          duration: 10000,
+        });
+      } else if (severity === 'medium') {
+        toast.warning(message, {
+          description: 'Auto-resolved, but please verify',
+          duration: 5000,
+        });
+      } else {
+        toast.info(message, {
+          description: 'Auto-resolved successfully',
+          duration: 3000,
+        });
+      }
+
+      // Refresh conflicts
+      if (useWorkspaceStore.getState().currentWorkspace) {
+        useWorkspaceStore.getState().fetchConflicts(
+          useWorkspaceStore.getState().currentWorkspace!.id,
+          'active'
+        );
+      }
+    });
+
+    wsClient.on('figma_changes', (data) => {
+      console.log('Figma changes:', data);
+      toast.success('Design system updated', {
+        description: `${data.changes?.length || 0} changes synced from Figma`,
+        duration: 3000,
+      });
+
+      // Refresh workspace data
+      if (useWorkspaceStore.getState().currentWorkspace) {
+        useWorkspaceStore.getState().fetchConflicts(
+          useWorkspaceStore.getState().currentWorkspace!.id,
+          'active'
+        );
+      }
+    });
+
+    return () => {
+      wsClient.disconnect();
+    };
+  }, [fetchWorkspaces]);
+
+  useEffect(() => {
+    // Auto-select first workspace if available
+    if (workspaces.length > 0 && !useWorkspaceStore.getState().currentWorkspace) {
+      setCurrentWorkspace(workspaces[0]);
+      wsClient.joinWorkspace(workspaces[0].id);
+    }
+  }, [workspaces, setCurrentWorkspace]);
 
   return (
-    <div className="min-h-screen bg-gray-50">
-      <div className="container mx-auto px-4 py-8">
-        <h1 className="text-4xl font-bold text-gray-900 mb-4">
-          DS Agent Dashboard
-        </h1>
-        <p className="text-gray-600 mb-8">
-          Design System Agent - Multi-workspace manager
-        </p>
-
-        <div className="bg-white rounded-lg shadow p-6">
-          <h2 className="text-2xl font-semibold mb-4">Getting Started</h2>
-          <p className="text-gray-700 mb-4">
-            Welcome to DS Agent! The intelligent design system management platform.
-          </p>
-
-          <div className="space-y-4">
-            <div className="border-l-4 border-blue-500 pl-4">
-              <h3 className="font-semibold text-lg">✅ Project Setup Complete</h3>
-              <p className="text-gray-600">All packages initialized and ready.</p>
-            </div>
-
-            <div className="border-l-4 border-yellow-500 pl-4">
-              <h3 className="font-semibold text-lg">🚧 Next Steps</h3>
-              <ul className="list-disc list-inside text-gray-600 space-y-1">
-                <li>Configure database connection</li>
-                <li>Setup Figma integration</li>
-                <li>Initialize first workspace</li>
-              </ul>
-            </div>
-          </div>
-
-          <div className="mt-8">
-            <button
-              onClick={() => setCount(count + 1)}
-              className="bg-blue-500 hover:bg-blue-600 text-white px-6 py-2 rounded-lg transition"
-            >
-              Counter: {count}
-            </button>
-          </div>
-        </div>
-      </div>
-    </div>
+    <BrowserRouter>
+      <Toaster position="top-right" richColors />
+      <Layout>
+        <Routes>
+          <Route path="/" element={<Dashboard />} />
+          <Route path="/variables" element={<Variables />} />
+          <Route path="/components" element={<Components />} />
+          <Route path="/conflicts" element={<Conflicts />} />
+        </Routes>
+      </Layout>
+    </BrowserRouter>
   );
 }
 
