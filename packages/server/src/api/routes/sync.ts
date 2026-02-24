@@ -1,4 +1,5 @@
 import { Router } from 'express';
+import { randomUUID } from 'crypto';
 import { FigmaFileRepository } from '../../db/repositories';
 import { SyncOrchestrator } from '../../sync/orchestrator';
 import { figmaApi } from '../../services/figma-api';
@@ -61,7 +62,7 @@ router.post('/files/:fileId', async (req, res) => {
              modes = EXCLUDED.modes,
              updated_at = NOW()`,
           [
-            crypto.randomUUID(),
+            randomUUID(),
             file.workspace_id,
             file.id,
             collection.name,
@@ -82,7 +83,7 @@ router.post('/files/:fileId', async (req, res) => {
              value = EXCLUDED.value,
              updated_at = NOW()`,
           [
-            crypto.randomUUID(),
+            randomUUID(),
             file.workspace_id,
             file.id,
             variable.name,
@@ -105,7 +106,7 @@ router.post('/files/:fileId', async (req, res) => {
              description = EXCLUDED.description,
              updated_at = NOW()`,
           [
-            crypto.randomUUID(),
+            randomUUID(),
             file.workspace_id,
             file.id,
             component.name,
