@@ -57,12 +57,6 @@ export function Layout({ children }: LayoutProps) {
                 <div className="flex h-10 w-10 items-center justify-center flex-shrink-0">
                   <img src="/logo.svg" alt="Logo" className="h-8 w-8" />
                 </div>
-                {!sidebarCollapsed && (
-                  <div className="flex flex-col">
-                    <span className="text-sm font-semibold">Stokehaus</span>
-                    <span className="text-xs text-muted-foreground">Design System</span>
-                  </div>
-                )}
               </div>
               {!sidebarCollapsed && (
                 <Button
