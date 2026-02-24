@@ -99,11 +99,11 @@ export function Layout({ children }: LayoutProps) {
                       key={item.path}
                       to={item.path}
                       className={cn(
-                        'flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm transition-all',
+                        'flex items-center gap-3 rounded-lg px-3 py-2.5 text-xs transition-all',
                         'hover:bg-accent/50',
                         isActive
-                          ? 'bg-primary text-primary-foreground font-semibold shadow-sm'
-                          : 'text-muted-foreground font-normal hover:text-foreground',
+                          ? 'bg-primary text-primary-foreground font-semibold shadow-sm hover:bg-primary/90'
+                          : 'text-muted-foreground font-medium hover:text-foreground hover:bg-muted/50',
                         sidebarCollapsed && 'justify-center px-2'
                       )}
                     >

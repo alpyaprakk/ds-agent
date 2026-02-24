@@ -9,6 +9,7 @@ import { Components } from './pages/Components';
 import { useWorkspaceStore } from './store/workspace-store';
 import { wsClient } from './lib/websocket';
 import { LayoutProvider } from './contexts/LayoutContext';
+import { ThemeProvider } from './contexts/ThemeContext';
 
 function App() {
   const { fetchWorkspaces, setCurrentWorkspace, workspaces } = useWorkspaceStore();
@@ -87,19 +88,21 @@ function App() {
   }, [workspaces, setCurrentWorkspace]);
 
   return (
-    <BrowserRouter>
-      <LayoutProvider>
-        <Toaster position="top-right" richColors />
-        <Layout>
-          <Routes>
-            <Route path="/" element={<Dashboard />} />
-            <Route path="/variables" element={<Variables />} />
-            <Route path="/components" element={<Components />} />
-            <Route path="/conflicts" element={<Conflicts />} />
-          </Routes>
-        </Layout>
-      </LayoutProvider>
-    </BrowserRouter>
+    <ThemeProvider>
+      <BrowserRouter>
+        <LayoutProvider>
+          <Toaster position="top-right" richColors />
+          <Layout>
+            <Routes>
+              <Route path="/" element={<Dashboard />} />
+              <Route path="/variables" element={<Variables />} />
+              <Route path="/components" element={<Components />} />
+              <Route path="/conflicts" element={<Conflicts />} />
+            </Routes>
+          </Layout>
+        </LayoutProvider>
+      </BrowserRouter>
+    </ThemeProvider>
   );
 }
 

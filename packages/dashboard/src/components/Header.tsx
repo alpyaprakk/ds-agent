@@ -4,7 +4,9 @@ import {
   Notification03Icon,
   Settings02Icon,
   Logout03Icon,
-  User02Icon
+  User02Icon,
+  Moon02Icon,
+  Sun03Icon
 } from '@hugeicons/core-free-icons';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -18,9 +20,11 @@ import {
 } from '@/components/ui/dropdown-menu';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { useWorkspaceStore } from '../store/workspace-store';
+import { useTheme } from '../contexts/ThemeContext';
 
 export function Header() {
   const { currentWorkspace } = useWorkspaceStore();
+  const { theme, toggleTheme } = useTheme();
 
   return (
     <header className="sticky top-0 z-40 border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
@@ -28,10 +32,10 @@ export function Header() {
 
         {/* Workspace Name */}
         <div className="flex items-center gap-3">
-          <span className="text-2xl">{currentWorkspace?.icon || '📦'}</span>
+          <span className="text-xl">{currentWorkspace?.icon || '📦'}</span>
           <div>
-            <h2 className="text-sm font-semibold">{currentWorkspace?.name || 'Select Workspace'}</h2>
-            <p className="text-xs text-muted-foreground">Design System Manager</p>
+            <h2 className="text-xs font-semibold">{currentWorkspace?.name || 'Select Workspace'}</h2>
+            <p className="text-[10px] text-muted-foreground">Design System Manager</p>
           </div>
         </div>
 
@@ -46,6 +50,15 @@ export function Header() {
             className="pl-10 pr-4 h-10"
           />
         </div>
+
+        {/* Theme Toggle */}
+        <Button variant="ghost" size="icon" className="h-10 w-10" onClick={toggleTheme}>
+          {theme === 'dark' ? (
+            <HugeiconsIcon icon={Sun03Icon} size={20} />
+          ) : (
+            <HugeiconsIcon icon={Moon02Icon} size={20} />
+          )}
+        </Button>
 
         {/* Notifications */}
         <Button variant="ghost" size="icon" className="h-10 w-10">
