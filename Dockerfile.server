@@ -1,0 +1,51 @@
+# Build stage
+FROM node:20-alpine AS builder
+
+WORKDIR /app
+
+# Copy root configuration files
+COPY package*.json ./
+COPY turbo.json ./
+COPY tsconfig.json ./
+
+# Copy server package files
+COPY packages/server/package*.json ./packages/server/
+
+# Install dependencies
+RUN npm install
+
+# Copy source code
+COPY packages/server ./packages/server
+COPY .ds-agent ./.ds-agent
+COPY database ./database
+
+# Build server
+RUN npm run build --workspace=@ds-agent/server
+
+# Production stage
+FROM node:20-alpine AS runner
+
+WORKDIR /app
+
+ENV NODE_ENV=production
+
+# Create non-root user
+RUN addgroup --system --gid 1001 nodejs && \
+    adduser --system --uid 1001 nodejs
+
+# Copy built files and dependencies
+COPY --from=builder --chown=nodejs:nodejs /app/packages/server/dist ./dist
+COPY --from=builder --chown=nodejs:nodejs /app/packages/server/package*.json ./
+COPY --from=builder --chown=nodejs:nodejs /app/.ds-agent ./.ds-agent
+COPY --from=builder --chown=nodejs:nodejs /app/database ./database
+COPY --from=builder --chown=nodejs:nodejs /app/packages/server/scripts ./scripts
+
+# Install production dependencies only
+RUN npm ci --only=production
+
+USER nodejs
+
+EXPOSE 3000
+
+# Run migration then start server
+CMD ["sh", "-c", "node scripts/migrate.js && node dist/index.js"]
