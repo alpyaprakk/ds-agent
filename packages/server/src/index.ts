@@ -29,12 +29,7 @@ app.use(cors({
 }));
 app.use(express.json());
 
-// Health check
-app.get('/health', (_req, res) => {
-  res.json({ status: 'ok', timestamp: new Date().toISOString() });
-});
-
-// API routes
+// API routes (includes /api/health)
 app.use('/api', apiRoutes);
 
 // WebSocket handlers
