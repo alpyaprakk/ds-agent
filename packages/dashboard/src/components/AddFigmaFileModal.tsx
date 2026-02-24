@@ -199,12 +199,12 @@ export function AddFigmaFileModal({ isOpen, onClose }: AddFigmaFileModalProps) {
           </div>
 
           {/* Info Box */}
-          <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
+          <div className="bg-blue-50 dark:bg-blue-950/30 border border-blue-200 dark:border-blue-800/50 rounded-lg p-4">
             <div className="flex gap-3">
-              <HugeiconsIcon icon={Alert02Icon} className="h-5 w-5 text-blue-600 flex-shrink-0 mt-0.5" />
-              <div className="text-sm text-blue-900">
+              <HugeiconsIcon icon={Alert02Icon} className="h-5 w-5 text-blue-600 dark:text-blue-400 flex-shrink-0 mt-0.5" />
+              <div className="text-sm text-blue-900 dark:text-blue-100">
                 <p className="font-medium mb-1">How it works:</p>
-                <ul className="list-disc list-inside space-y-1 text-blue-800">
+                <ul className="list-disc list-inside space-y-1 text-blue-800 dark:text-blue-200">
                   <li>Paste your Figma file URL</li>
                   <li>We'll extract variables and components</li>
                   <li>Changes will sync automatically via the plugin</li>
