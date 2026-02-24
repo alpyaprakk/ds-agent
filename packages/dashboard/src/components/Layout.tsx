@@ -49,54 +49,54 @@ export function Layout({ children }: LayoutProps) {
         >
           <div className="flex h-full flex-col">
             {/* Logo with Collapse Button */}
-            <div className="flex items-center justify-center border-b h-16 transition-all duration-300">
-              <div className="flex items-center justify-center w-full">
-                {!sidebarCollapsed ? (
-                  <div className="flex items-center justify-center w-full px-4">
-                    <div className="flex items-center gap-3 flex-1">
-                      <div className="flex h-10 w-10 items-center justify-center flex-shrink-0">
-                        <img src="/logo.svg" alt="Logo" className="h-8 w-8 dark:invert" />
-                      </div>
+            <div className="flex items-center border-b h-16 transition-all duration-300 px-3">
+              <div className="flex items-center w-full">
+                <div className="flex items-center flex-1 overflow-hidden">
+                  {sidebarCollapsed ? (
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <button
+                          onClick={toggleSidebar}
+                          className="group relative flex h-10 w-10 items-center justify-center rounded-lg transition-all hover:bg-muted/50 flex-shrink-0"
+                        >
+                          <img
+                            src="/logo.svg"
+                            alt="Logo"
+                            className="absolute h-8 w-8 dark:invert transition-opacity duration-200 group-hover:opacity-0"
+                          />
+                          <HugeiconsIcon
+                            icon={SidebarRight01Icon}
+                            size={20}
+                            className="absolute opacity-0 transition-opacity duration-200 group-hover:opacity-100"
+                          />
+                        </button>
+                      </TooltipTrigger>
+                      <TooltipContent side="right">
+                        Expand sidebar
+                      </TooltipContent>
+                    </Tooltip>
+                  ) : (
+                    <div className="flex h-10 w-10 items-center justify-center flex-shrink-0">
+                      <img src="/logo.svg" alt="Logo" className="h-8 w-8 dark:invert" />
                     </div>
-                    <Button
-                      variant="ghost"
-                      size="icon"
-                      onClick={toggleSidebar}
-                      className="h-8 w-8 flex-shrink-0"
-                    >
-                      <HugeiconsIcon icon={SidebarLeft01Icon} size={18} />
-                    </Button>
-                  </div>
-                ) : (
-                  <Tooltip>
-                    <TooltipTrigger asChild>
-                      <button
-                        onClick={toggleSidebar}
-                        className="group relative flex h-10 w-10 items-center justify-center rounded-lg transition-all hover:bg-muted/50"
-                      >
-                        <img
-                          src="/logo.svg"
-                          alt="Logo"
-                          className="absolute h-8 w-8 dark:invert transition-opacity duration-200 group-hover:opacity-0"
-                        />
-                        <HugeiconsIcon
-                          icon={SidebarRight01Icon}
-                          size={20}
-                          className="absolute opacity-0 transition-opacity duration-200 group-hover:opacity-100"
-                        />
-                      </button>
-                    </TooltipTrigger>
-                    <TooltipContent side="right">
-                      Expand sidebar
-                    </TooltipContent>
-                  </Tooltip>
+                  )}
+                </div>
+                {!sidebarCollapsed && (
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    onClick={toggleSidebar}
+                    className="h-8 w-8 flex-shrink-0 transition-all duration-300"
+                  >
+                    <HugeiconsIcon icon={SidebarLeft01Icon} size={18} />
+                  </Button>
                 )}
               </div>
             </div>
 
             {/* Navigation */}
             <ScrollArea className="flex-1 py-4">
-              <nav className="space-y-1 px-2">
+              <nav className="space-y-1 px-3">
                 {navigation.map((item) => {
                   const isActive = location.pathname === item.path;
                   const Icon = item.icon;
@@ -106,9 +106,8 @@ export function Layout({ children }: LayoutProps) {
                       key={item.path}
                       to={item.path}
                       className={cn(
-                        'flex items-center rounded-lg text-xs transition-all duration-300 overflow-hidden w-full',
-                        'hover:bg-accent/50',
-                        sidebarCollapsed ? 'justify-center py-2' : 'justify-start px-3 py-2.5 gap-3',
+                        'flex items-center justify-start rounded-lg text-xs transition-all duration-300 overflow-hidden h-10',
+                        sidebarCollapsed ? 'pl-[10px] pr-[10px]' : 'pl-3 pr-3',
                         isActive
                           ? 'bg-primary text-primary-foreground font-semibold shadow-sm hover:bg-primary/90'
                           : 'text-muted-foreground font-medium hover:text-foreground hover:bg-muted/50'
@@ -118,13 +117,13 @@ export function Layout({ children }: LayoutProps) {
                         icon={Icon}
                         size={20}
                         className={cn(
-                          'flex-shrink-0 transition-all duration-300',
+                          'flex-shrink-0',
                           isActive ? 'opacity-100' : 'opacity-70'
                         )}
                       />
                       <span className={cn(
                         'truncate transition-all duration-300 whitespace-nowrap',
-                        sidebarCollapsed ? 'w-0 opacity-0' : 'w-auto opacity-100'
+                        sidebarCollapsed ? 'w-0 opacity-0 ml-0' : 'w-auto opacity-100 ml-3'
                       )}>
                         {item.name}
                       </span>
