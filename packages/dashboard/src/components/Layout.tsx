@@ -49,55 +49,54 @@ export function Layout({ children }: LayoutProps) {
         >
           <div className="flex h-full flex-col">
             {/* Logo with Collapse Button */}
-            <div className={cn(
-              'flex items-center justify-between border-b h-16 px-4 transition-all',
-              sidebarCollapsed && 'justify-center px-2'
-            )}>
-              {!sidebarCollapsed ? (
-                <>
-                  <div className="flex items-center gap-3">
-                    <div className="flex h-10 w-10 items-center justify-center flex-shrink-0">
-                      <img src="/logo.svg" alt="Logo" className="h-8 w-8 dark:invert" />
+            <div className="flex items-center justify-center border-b h-16 transition-all duration-300">
+              <div className="flex items-center justify-center w-full">
+                {!sidebarCollapsed ? (
+                  <div className="flex items-center justify-center w-full px-4">
+                    <div className="flex items-center gap-3 flex-1">
+                      <div className="flex h-10 w-10 items-center justify-center flex-shrink-0">
+                        <img src="/logo.svg" alt="Logo" className="h-8 w-8 dark:invert" />
+                      </div>
                     </div>
-                  </div>
-                  <Button
-                    variant="ghost"
-                    size="icon"
-                    onClick={toggleSidebar}
-                    className="h-8 w-8 flex-shrink-0"
-                  >
-                    <HugeiconsIcon icon={SidebarLeft01Icon} size={18} />
-                  </Button>
-                </>
-              ) : (
-                <Tooltip>
-                  <TooltipTrigger asChild>
-                    <button
+                    <Button
+                      variant="ghost"
+                      size="icon"
                       onClick={toggleSidebar}
-                      className="group relative flex h-10 w-10 items-center justify-center rounded-lg transition-all hover:bg-muted/50"
+                      className="h-8 w-8 flex-shrink-0"
                     >
-                      <img
-                        src="/logo.svg"
-                        alt="Logo"
-                        className="absolute h-8 w-8 dark:invert transition-opacity duration-200 group-hover:opacity-0"
-                      />
-                      <HugeiconsIcon
-                        icon={SidebarRight01Icon}
-                        size={20}
-                        className="absolute opacity-0 transition-opacity duration-200 group-hover:opacity-100"
-                      />
-                    </button>
-                  </TooltipTrigger>
-                  <TooltipContent side="right">
-                    Expand sidebar
-                  </TooltipContent>
-                </Tooltip>
-              )}
+                      <HugeiconsIcon icon={SidebarLeft01Icon} size={18} />
+                    </Button>
+                  </div>
+                ) : (
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <button
+                        onClick={toggleSidebar}
+                        className="group relative flex h-10 w-10 items-center justify-center rounded-lg transition-all hover:bg-muted/50"
+                      >
+                        <img
+                          src="/logo.svg"
+                          alt="Logo"
+                          className="absolute h-8 w-8 dark:invert transition-opacity duration-200 group-hover:opacity-0"
+                        />
+                        <HugeiconsIcon
+                          icon={SidebarRight01Icon}
+                          size={20}
+                          className="absolute opacity-0 transition-opacity duration-200 group-hover:opacity-100"
+                        />
+                      </button>
+                    </TooltipTrigger>
+                    <TooltipContent side="right">
+                      Expand sidebar
+                    </TooltipContent>
+                  </Tooltip>
+                )}
+              </div>
             </div>
 
             {/* Navigation */}
             <ScrollArea className="flex-1 py-4">
-              <nav className={cn('space-y-1', sidebarCollapsed ? 'px-2' : 'px-3')}>
+              <nav className="space-y-1 px-2">
                 {navigation.map((item) => {
                   const isActive = location.pathname === item.path;
                   const Icon = item.icon;
@@ -107,25 +106,32 @@ export function Layout({ children }: LayoutProps) {
                       key={item.path}
                       to={item.path}
                       className={cn(
-                        'flex items-center gap-3 rounded-lg px-3 py-2.5 text-xs transition-all',
+                        'flex items-center justify-center rounded-lg py-2.5 text-xs transition-all duration-300',
                         'hover:bg-accent/50',
                         isActive
                           ? 'bg-primary text-primary-foreground font-semibold shadow-sm hover:bg-primary/90'
-                          : 'text-muted-foreground font-medium hover:text-foreground hover:bg-muted/50',
-                        sidebarCollapsed && 'justify-center px-2'
+                          : 'text-muted-foreground font-medium hover:text-foreground hover:bg-muted/50'
                       )}
                     >
-                      <HugeiconsIcon
-                        icon={Icon}
-                        size={20}
-                        className={cn(
-                          'flex-shrink-0 transition-all',
-                          isActive ? 'opacity-100' : 'opacity-70'
-                        )}
-                      />
-                      {!sidebarCollapsed && (
-                        <span className="truncate">{item.name}</span>
-                      )}
+                      <div className={cn(
+                        'flex items-center gap-3 transition-all duration-300',
+                        sidebarCollapsed ? 'w-auto' : 'w-full px-3'
+                      )}>
+                        <HugeiconsIcon
+                          icon={Icon}
+                          size={20}
+                          className={cn(
+                            'flex-shrink-0',
+                            isActive ? 'opacity-100' : 'opacity-70'
+                          )}
+                        />
+                        <span className={cn(
+                          'truncate transition-all duration-300',
+                          sidebarCollapsed ? 'w-0 opacity-0' : 'w-auto opacity-100'
+                        )}>
+                          {item.name}
+                        </span>
+                      </div>
                     </Link>
                   );
 
@@ -150,13 +156,15 @@ export function Layout({ children }: LayoutProps) {
             <Separator />
 
             {/* Footer */}
-            <div className={cn('p-4', sidebarCollapsed && 'px-2')}>
-              <div className={cn(
-                'flex items-center gap-2 text-xs text-muted-foreground',
-                sidebarCollapsed && 'justify-center'
-              )}>
+            <div className="p-4">
+              <div className="flex items-center justify-center gap-2 text-xs text-muted-foreground transition-all duration-300">
                 <div className="h-2 w-2 rounded-full bg-green-500 animate-pulse" />
-                {!sidebarCollapsed && <span>Connected</span>}
+                <span className={cn(
+                  'transition-all duration-300',
+                  sidebarCollapsed ? 'w-0 opacity-0 overflow-hidden' : 'w-auto opacity-100'
+                )}>
+                  Connected
+                </span>
               </div>
             </div>
           </div>
