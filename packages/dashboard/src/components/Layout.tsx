@@ -1,10 +1,17 @@
 import { ReactNode } from 'react';
 import { Link, useLocation } from 'react-router-dom';
 import { LayoutDashboard, Palette, Package, AlertTriangle } from 'lucide-react';
-import { WorkspaceSelector } from './WorkspaceSelector';
 import { Separator } from '@/components/ui/separator';
 import { ScrollArea } from '@/components/ui/scroll-area';
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from '@/components/ui/tooltip';
 import { cn } from '@/lib/utils';
+import { useLayout } from '@/contexts/LayoutContext';
+import { Header } from './Header';
 
 interface LayoutProps {
   children: ReactNode;
@@ -19,69 +26,96 @@ const navigation = [
 
 export function Layout({ children }: LayoutProps) {
   const location = useLocation();
+  const { sidebarCollapsed } = useLayout();
 
   return (
-    <div className="min-h-screen bg-background">
-      {/* Sidebar */}
-      <aside className="fixed left-0 top-0 h-full w-64 border-r bg-card">
-        <div className="flex h-full flex-col">
-          {/* Header */}
-          <div className="p-6">
-            <h1 className="text-2xl font-bold tracking-tight">DS Agent</h1>
-            <p className="text-sm text-muted-foreground mt-1">Design System Manager</p>
-          </div>
-
-          <Separator />
-
-          {/* Workspace Selector */}
-          <div className="px-3 py-4">
-            <WorkspaceSelector />
-          </div>
-
-          <Separator />
-
-          {/* Navigation */}
-          <ScrollArea className="flex-1 px-3 py-4">
-            <nav className="space-y-1">
-              {navigation.map((item) => {
-                const isActive = location.pathname === item.path;
-                const Icon = item.icon;
-                return (
-                  <Link
-                    key={item.path}
-                    to={item.path}
-                    className={cn(
-                      'flex items-center gap-3 px-3 py-2 rounded-md text-sm font-medium transition-colors',
-                      isActive
-                        ? 'bg-primary text-primary-foreground'
-                        : 'text-muted-foreground hover:bg-accent hover:text-accent-foreground'
-                    )}
-                  >
-                    <Icon className="h-4 w-4" />
-                    {item.name}
-                  </Link>
-                );
-              })}
-            </nav>
-          </ScrollArea>
-
-          <Separator />
-
-          {/* Footer */}
-          <div className="p-4">
-            <div className="flex items-center gap-2 text-xs text-muted-foreground mb-2">
-              <div className="h-2 w-2 rounded-full bg-green-500 animate-pulse" />
-              <span>Connected</span>
+    <TooltipProvider delayDuration={0}>
+      <div className="min-h-screen bg-background">
+        {/* Sidebar */}
+        <aside
+          className={cn(
+            'fixed left-0 top-0 z-50 h-full border-r bg-card transition-all duration-300',
+            sidebarCollapsed ? 'w-16' : 'w-64'
+          )}
+        >
+          <div className="flex h-full flex-col">
+            {/* Logo */}
+            <div className={cn('flex items-center border-b h-16 px-4 transition-all', sidebarCollapsed ? 'justify-center' : 'gap-3')}>
+              <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-primary text-primary-foreground text-xl font-bold">
+                DS
+              </div>
+              {!sidebarCollapsed && (
+                <div className="flex flex-col">
+                  <span className="text-sm font-semibold">DS Agent</span>
+                  <span className="text-xs text-muted-foreground">Design System</span>
+                </div>
+              )}
             </div>
-            <div className="text-xs text-muted-foreground">Version 1.0.0</div>
-          </div>
-        </div>
-      </aside>
 
-      {/* Main content */}
-      <main className="ml-64 min-h-screen">
-        {children}
-      </main>
-    </div>
+            {/* Navigation */}
+            <ScrollArea className="flex-1 py-4">
+              <nav className={cn('space-y-1', sidebarCollapsed ? 'px-2' : 'px-3')}>
+                {navigation.map((item) => {
+                  const isActive = location.pathname === item.path;
+                  const Icon = item.icon;
+
+                  const linkContent = (
+                    <Link
+                      key={item.path}
+                      to={item.path}
+                      className={cn(
+                        'flex items-center gap-3 rounded-md px-3 py-2.5 text-sm font-medium transition-all',
+                        'hover:bg-accent hover:text-accent-foreground',
+                        isActive && 'bg-primary text-primary-foreground shadow-sm',
+                        sidebarCollapsed && 'justify-center'
+                      )}
+                    >
+                      <Icon className="h-5 w-5 flex-shrink-0" />
+                      {!sidebarCollapsed && <span>{item.name}</span>}
+                    </Link>
+                  );
+
+                  if (sidebarCollapsed) {
+                    return (
+                      <Tooltip key={item.path}>
+                        <TooltipTrigger asChild>
+                          {linkContent}
+                        </TooltipTrigger>
+                        <TooltipContent side="right">
+                          {item.name}
+                        </TooltipContent>
+                      </Tooltip>
+                    );
+                  }
+
+                  return linkContent;
+                })}
+              </nav>
+            </ScrollArea>
+
+            <Separator />
+
+            {/* Footer */}
+            <div className={cn('p-4', sidebarCollapsed && 'px-2')}>
+              <div className={cn(
+                'flex items-center gap-2 text-xs text-muted-foreground',
+                sidebarCollapsed && 'justify-center'
+              )}>
+                <div className="h-2 w-2 rounded-full bg-green-500 animate-pulse" />
+                {!sidebarCollapsed && <span>Connected</span>}
+              </div>
+            </div>
+          </div>
+        </aside>
+
+        {/* Main content */}
+        <div className={cn('transition-all duration-300', sidebarCollapsed ? 'ml-16' : 'ml-64')}>
+          <Header />
+          <main className="min-h-screen">
+            {children}
+          </main>
+        </div>
+      </div>
+    </TooltipProvider>
   );
 }
