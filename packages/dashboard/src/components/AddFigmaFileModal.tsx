@@ -1,7 +1,18 @@
 import { useState } from 'react';
 import { useWorkspaceStore } from '../store/workspace-store';
-import { X, AlertCircle } from 'lucide-react';
+import { AlertCircle } from 'lucide-react';
 import { toast } from 'sonner';
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import { cn } from '@/lib/utils';
 
 interface AddFigmaFileModalProps {
   isOpen: boolean;
@@ -117,38 +128,22 @@ export function AddFigmaFileModal({ isOpen, onClose }: AddFigmaFileModalProps) {
     }
   };
 
-  if (!isOpen) return null;
-
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center">
-      {/* Backdrop */}
-      <div
-        className="absolute inset-0 bg-black/50"
-        onClick={handleClose}
-      />
+    <Dialog open={isOpen} onOpenChange={handleClose}>
+      <DialogContent className="sm:max-w-md">
+        <DialogHeader>
+          <DialogTitle>Add Figma File</DialogTitle>
+          <DialogDescription>
+            Connect a Figma file to your workspace to sync variables and components.
+          </DialogDescription>
+        </DialogHeader>
 
-      {/* Modal */}
-      <div className="relative bg-white rounded-lg shadow-xl w-full max-w-md mx-4">
-        {/* Header */}
-        <div className="flex items-center justify-between p-6 border-b border-gray-200">
-          <h2 className="text-xl font-bold text-gray-900">Add Figma File</h2>
-          <button
-            onClick={handleClose}
-            disabled={loading}
-            className="text-gray-400 hover:text-gray-600 transition"
-          >
-            <X size={20} />
-          </button>
-        </div>
-
-        {/* Form */}
-        <form onSubmit={handleSubmit} className="p-6 space-y-5">
+        <form onSubmit={handleSubmit} className="space-y-5">
           {/* URL Input */}
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">
-              Figma File URL *
-            </label>
-            <input
+          <div className="space-y-2">
+            <Label htmlFor="url">Figma File URL *</Label>
+            <Input
+              id="url"
               type="text"
               value={formData.url}
               onChange={(e) => {
@@ -156,40 +151,33 @@ export function AddFigmaFileModal({ isOpen, onClose }: AddFigmaFileModalProps) {
                 setError('');
               }}
               placeholder="https://figma.com/file/ABC123/Design-System"
-              className={`
-                w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent
-                ${error ? 'border-red-300' : 'border-gray-300'}
-              `}
+              className={cn(error && 'border-destructive')}
               disabled={loading}
             />
             {error && (
-              <div className="mt-2 flex items-start gap-2 text-sm text-red-600">
-                <AlertCircle size={16} className="mt-0.5 flex-shrink-0" />
+              <div className="flex items-start gap-2 text-sm text-destructive">
+                <AlertCircle className="h-4 w-4 mt-0.5 flex-shrink-0" />
                 <span>{error}</span>
               </div>
             )}
-            <p className="mt-2 text-xs text-gray-500">
+            <p className="text-xs text-muted-foreground">
               Paste the URL from your Figma file (file/... or design/... URLs supported)
             </p>
           </div>
 
           {/* Role Selection */}
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-3">
-              File Role *
-            </label>
+          <div className="space-y-3">
+            <Label>File Role *</Label>
             <div className="space-y-2">
               {ROLE_OPTIONS.map((option) => (
                 <label
                   key={option.value}
-                  className={`
-                    flex items-start gap-3 p-3 border-2 rounded-lg cursor-pointer transition
-                    ${
-                      formData.role === option.value
-                        ? 'border-blue-500 bg-blue-50'
-                        : 'border-gray-200 hover:border-gray-300'
-                    }
-                  `}
+                  className={cn(
+                    'flex items-start gap-3 p-3 border-2 rounded-lg cursor-pointer transition',
+                    formData.role === option.value
+                      ? 'border-primary bg-accent'
+                      : 'border-border hover:border-muted-foreground'
+                  )}
                 >
                   <input
                     type="radio"
@@ -201,8 +189,8 @@ export function AddFigmaFileModal({ isOpen, onClose }: AddFigmaFileModalProps) {
                     disabled={loading}
                   />
                   <div>
-                    <div className="font-medium text-gray-900">{option.label}</div>
-                    <div className="text-sm text-gray-500">{option.description}</div>
+                    <div className="font-medium">{option.label}</div>
+                    <div className="text-sm text-muted-foreground">{option.description}</div>
                   </div>
                 </label>
               ))}
@@ -212,7 +200,7 @@ export function AddFigmaFileModal({ isOpen, onClose }: AddFigmaFileModalProps) {
           {/* Info Box */}
           <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
             <div className="flex gap-3">
-              <AlertCircle size={20} className="text-blue-600 flex-shrink-0 mt-0.5" />
+              <AlertCircle className="h-5 w-5 text-blue-600 flex-shrink-0 mt-0.5" />
               <div className="text-sm text-blue-900">
                 <p className="font-medium mb-1">How it works:</p>
                 <ul className="list-disc list-inside space-y-1 text-blue-800">
@@ -226,24 +214,25 @@ export function AddFigmaFileModal({ isOpen, onClose }: AddFigmaFileModalProps) {
 
           {/* Actions */}
           <div className="flex gap-3 pt-4">
-            <button
+            <Button
               type="button"
+              variant="outline"
               onClick={handleClose}
               disabled={loading}
-              className="flex-1 px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition font-medium"
+              className="flex-1"
             >
               Cancel
-            </button>
-            <button
+            </Button>
+            <Button
               type="submit"
               disabled={loading || !currentWorkspace}
-              className="flex-1 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition font-medium disabled:opacity-50"
+              className="flex-1"
             >
               {loading ? 'Adding...' : 'Add File'}
-            </button>
+            </Button>
           </div>
         </form>
-      </div>
-    </div>
+      </DialogContent>
+    </Dialog>
   );
 }

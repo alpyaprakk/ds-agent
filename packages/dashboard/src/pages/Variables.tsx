@@ -1,6 +1,10 @@
 import { useEffect, useState } from 'react';
 import { useWorkspaceStore } from '../store/workspace-store';
 import { ChevronRight, ChevronDown, Edit2, Plus, AlertCircle } from 'lucide-react';
+import { Button } from '@/components/ui/button';
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { Badge } from '@/components/ui/badge';
+import { cn } from '@/lib/utils';
 
 interface Variable {
   id: string;
@@ -99,7 +103,7 @@ export function Variables() {
   if (!currentWorkspace) {
     return (
       <div className="p-8">
-        <div className="text-center py-12 text-gray-500">
+        <div className="text-center py-12 text-muted-foreground">
           No workspace selected
         </div>
       </div>
@@ -110,181 +114,201 @@ export function Variables() {
     <div className="p-8">
       <div className="mb-8 flex items-center justify-between">
         <div>
-          <h1 className="text-3xl font-bold text-gray-900">Variables</h1>
-          <p className="text-gray-600 mt-2">
+          <h1 className="text-3xl font-bold tracking-tight">Variables</h1>
+          <p className="text-muted-foreground mt-2">
             Manage design tokens and variables across your design system
           </p>
         </div>
-        <button className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition font-medium flex items-center gap-2">
-          <Plus size={16} />
+        <Button>
+          <Plus className="h-4 w-4 mr-2" />
           Add Variable
-        </button>
+        </Button>
       </div>
 
       {/* Summary Stats */}
       <div className="grid grid-cols-4 gap-6 mb-8">
-        <div className="bg-white rounded-lg shadow p-6">
-          <div className="text-sm font-medium text-gray-500 mb-2">Total Variables</div>
-          <div className="text-3xl font-bold text-gray-900">
-            {collections.reduce((sum, col) => sum + col.variables.length, 0)}
-          </div>
-        </div>
-        <div className="bg-white rounded-lg shadow p-6">
-          <div className="text-sm font-medium text-gray-500 mb-2">Collections</div>
-          <div className="text-3xl font-bold text-gray-900">{collections.length}</div>
-        </div>
-        <div className="bg-white rounded-lg shadow p-6">
-          <div className="text-sm font-medium text-gray-500 mb-2">Aliases</div>
-          <div className="text-3xl font-bold text-gray-900">
-            {collections.reduce((sum, col) => sum + col.variables.filter((v) => v.is_alias).length, 0)}
-          </div>
-        </div>
-        <div className="bg-white rounded-lg shadow p-6">
-          <div className="text-sm font-medium text-gray-500 mb-2">Total Usage</div>
-          <div className="text-3xl font-bold text-gray-900">
-            {collections.reduce((sum, col) => sum + col.variables.reduce((s, v) => s + (v.usage_count || 0), 0), 0)}
-          </div>
-        </div>
+        <Card>
+          <CardHeader className="pb-3">
+            <CardDescription>Total Variables</CardDescription>
+          </CardHeader>
+          <CardContent>
+            <div className="text-3xl font-bold">
+              {collections.reduce((sum, col) => sum + col.variables.length, 0)}
+            </div>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardHeader className="pb-3">
+            <CardDescription>Collections</CardDescription>
+          </CardHeader>
+          <CardContent>
+            <div className="text-3xl font-bold">{collections.length}</div>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardHeader className="pb-3">
+            <CardDescription>Aliases</CardDescription>
+          </CardHeader>
+          <CardContent>
+            <div className="text-3xl font-bold">
+              {collections.reduce((sum, col) => sum + col.variables.filter((v) => v.is_alias).length, 0)}
+            </div>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardHeader className="pb-3">
+            <CardDescription>Total Usage</CardDescription>
+          </CardHeader>
+          <CardContent>
+            <div className="text-3xl font-bold">
+              {collections.reduce((sum, col) => sum + col.variables.reduce((s, v) => s + (v.usage_count || 0), 0), 0)}
+            </div>
+          </CardContent>
+        </Card>
       </div>
 
       <div className="grid grid-cols-2 gap-8">
         {/* Collections Tree */}
-        <div className="bg-white rounded-lg shadow">
-          <div className="px-6 py-4 border-b border-gray-200">
-            <h2 className="text-lg font-semibold text-gray-900">Collections</h2>
-          </div>
+        <Card>
+          <CardHeader>
+            <CardTitle>Collections</CardTitle>
+          </CardHeader>
+          <CardContent>
+            {loading ? (
+              <div className="text-center py-6 text-muted-foreground">Loading...</div>
+            ) : (
+              <div className="space-y-2">
+                {collections.map((collection) => (
+                  <div key={collection.id}>
+                    <button
+                      onClick={() => toggleCollection(collection.id)}
+                      className="w-full flex items-center gap-2 px-3 py-2 rounded-md hover:bg-accent transition text-left"
+                    >
+                      {expandedCollections.has(collection.id) ? (
+                        <ChevronDown className="h-4 w-4 text-muted-foreground" />
+                      ) : (
+                        <ChevronRight className="h-4 w-4 text-muted-foreground" />
+                      )}
+                      <span className="font-medium">{collection.name}</span>
+                      <Badge variant="secondary" className="ml-auto">
+                        {collection.variables.length}
+                      </Badge>
+                    </button>
 
-          {loading ? (
-            <div className="p-6 text-center text-gray-500">Loading...</div>
-          ) : (
-            <div className="p-4">
-              {collections.map((collection) => (
-                <div key={collection.id} className="mb-2">
-                  <button
-                    onClick={() => toggleCollection(collection.id)}
-                    className="w-full flex items-center gap-2 px-3 py-2 rounded-lg hover:bg-gray-50 transition text-left"
-                  >
-                    {expandedCollections.has(collection.id) ? (
-                      <ChevronDown size={16} className="text-gray-500" />
-                    ) : (
-                      <ChevronRight size={16} className="text-gray-500" />
-                    )}
-                    <span className="font-medium text-gray-900">{collection.name}</span>
-                    <span className="ml-auto text-sm text-gray-500">
-                      {collection.variables.length}
-                    </span>
-                  </button>
-
-                  {expandedCollections.has(collection.id) && (
-                    <div className="ml-6 mt-1 space-y-1">
-                      {collection.variables.map((variable) => (
-                        <button
-                          key={variable.id}
-                          onClick={() => setSelectedVariable(variable)}
-                          className={`
-                            w-full flex items-center gap-3 px-3 py-2 rounded-lg transition text-left
-                            ${
+                    {expandedCollections.has(collection.id) && (
+                      <div className="ml-6 mt-1 space-y-1">
+                        {collection.variables.map((variable) => (
+                          <button
+                            key={variable.id}
+                            onClick={() => setSelectedVariable(variable)}
+                            className={cn(
+                              'w-full flex items-center gap-3 px-3 py-2 rounded-md transition text-left',
                               selectedVariable?.id === variable.id
-                                ? 'bg-blue-50 text-blue-700'
-                                : 'hover:bg-gray-50 text-gray-700'
-                            }
-                          `}
-                        >
-                          {variable.type === 'COLOR' && (
-                            <div
-                              className="w-4 h-4 rounded border border-gray-300"
-                              style={{ backgroundColor: variable.value }}
-                            />
-                          )}
-                          <span className="text-sm flex-1">{variable.name}</span>
-                          {variable.is_alias && (
-                            <AlertCircle size={14} className="text-blue-500" />
-                          )}
-                        </button>
-                      ))}
-                    </div>
-                  )}
-                </div>
-              ))}
-            </div>
-          )}
-        </div>
+                                ? 'bg-primary text-primary-foreground'
+                                : 'hover:bg-accent'
+                            )}
+                          >
+                            {variable.type === 'COLOR' && (
+                              <div
+                                className="w-4 h-4 rounded border"
+                                style={{ backgroundColor: variable.value }}
+                              />
+                            )}
+                            <span className="text-sm flex-1">{variable.name}</span>
+                            {variable.is_alias && (
+                              <AlertCircle className="h-4 w-4" />
+                            )}
+                          </button>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                ))}
+              </div>
+            )}
+          </CardContent>
+        </Card>
 
         {/* Variable Details */}
-        <div className="bg-white rounded-lg shadow">
-          <div className="px-6 py-4 border-b border-gray-200 flex items-center justify-between">
-            <h2 className="text-lg font-semibold text-gray-900">Variable Details</h2>
-            {selectedVariable && (
-              <button className="text-blue-600 hover:text-blue-700 transition flex items-center gap-2">
-                <Edit2 size={16} />
-                Edit
-              </button>
-            )}
-          </div>
-
-          {selectedVariable ? (
-            <div className="p-6 space-y-6">
-              <div>
-                <label className="text-sm font-medium text-gray-500">Name</label>
-                <div className="mt-1 text-lg font-semibold text-gray-900">
-                  {selectedVariable.name}
-                </div>
-              </div>
-
-              <div>
-                <label className="text-sm font-medium text-gray-500">Value</label>
-                <div className="mt-1 flex items-center gap-3">
-                  {selectedVariable.type === 'COLOR' && (
-                    <div
-                      className="w-8 h-8 rounded border border-gray-300"
-                      style={{ backgroundColor: selectedVariable.value }}
-                    />
-                  )}
-                  <span className="text-lg font-mono text-gray-900">
-                    {selectedVariable.value}
-                    {selectedVariable.type === 'FLOAT' && 'px'}
-                  </span>
-                </div>
-              </div>
-
-              <div>
-                <label className="text-sm font-medium text-gray-500">Type</label>
-                <div className="mt-1 text-gray-900">{selectedVariable.type}</div>
-              </div>
-
-              {selectedVariable.is_alias && (
+        <Card>
+          <CardHeader>
+            <div className="flex items-center justify-between">
+              <CardTitle>Variable Details</CardTitle>
+              {selectedVariable && (
+                <Button variant="ghost" size="sm">
+                  <Edit2 className="h-4 w-4 mr-2" />
+                  Edit
+                </Button>
+              )}
+            </div>
+          </CardHeader>
+          <CardContent>
+            {selectedVariable ? (
+              <div className="space-y-6">
                 <div>
-                  <label className="text-sm font-medium text-gray-500">Alias Target</label>
-                  <div className="mt-1 text-gray-900">
-                    {selectedVariable.alias_target || 'N/A'}
+                  <label className="text-sm font-medium text-muted-foreground">Name</label>
+                  <div className="mt-1 text-lg font-semibold">
+                    {selectedVariable.name}
                   </div>
                 </div>
-              )}
 
-              <div>
-                <label className="text-sm font-medium text-gray-500">Usage Count</label>
-                <div className="mt-1 text-2xl font-bold text-gray-900">
-                  {selectedVariable.usage_count || 0}
-                </div>
-                <p className="text-sm text-gray-500 mt-1">
-                  Used in {selectedVariable.usage_count || 0} component
-                  {selectedVariable.usage_count !== 1 ? 's' : ''}
-                </p>
-              </div>
-
-              {selectedVariable.description && (
                 <div>
-                  <label className="text-sm font-medium text-gray-500">Description</label>
-                  <div className="mt-1 text-gray-900">{selectedVariable.description}</div>
+                  <label className="text-sm font-medium text-muted-foreground">Value</label>
+                  <div className="mt-1 flex items-center gap-3">
+                    {selectedVariable.type === 'COLOR' && (
+                      <div
+                        className="w-8 h-8 rounded border"
+                        style={{ backgroundColor: selectedVariable.value }}
+                      />
+                    )}
+                    <span className="text-lg font-mono">
+                      {selectedVariable.value}
+                      {selectedVariable.type === 'FLOAT' && 'px'}
+                    </span>
+                  </div>
                 </div>
-              )}
-            </div>
-          ) : (
-            <div className="p-12 text-center text-gray-500">
-              Select a variable to view details
-            </div>
-          )}
-        </div>
+
+                <div>
+                  <label className="text-sm font-medium text-muted-foreground">Type</label>
+                  <div className="mt-1">
+                    <Badge variant="secondary">{selectedVariable.type}</Badge>
+                  </div>
+                </div>
+
+                {selectedVariable.is_alias && (
+                  <div>
+                    <label className="text-sm font-medium text-muted-foreground">Alias Target</label>
+                    <div className="mt-1">
+                      {selectedVariable.alias_target || 'N/A'}
+                    </div>
+                  </div>
+                )}
+
+                <div>
+                  <label className="text-sm font-medium text-muted-foreground">Usage Count</label>
+                  <div className="mt-1 text-2xl font-bold">
+                    {selectedVariable.usage_count || 0}
+                  </div>
+                  <p className="text-sm text-muted-foreground mt-1">
+                    Used in {selectedVariable.usage_count || 0} component
+                    {selectedVariable.usage_count !== 1 ? 's' : ''}
+                  </p>
+                </div>
+
+                {selectedVariable.description && (
+                  <div>
+                    <label className="text-sm font-medium text-muted-foreground">Description</label>
+                    <div className="mt-1">{selectedVariable.description}</div>
+                  </div>
+                )}
+              </div>
+            ) : (
+              <div className="py-12 text-center text-muted-foreground">
+                Select a variable to view details
+              </div>
+            )}
+          </CardContent>
+        </Card>
       </div>
     </div>
   );
