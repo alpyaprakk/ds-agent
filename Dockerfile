@@ -16,8 +16,8 @@ RUN npm install
 COPY packages/dashboard ./packages/dashboard
 
 # Build args for environment variables
-ARG VITE_API_URL
-ARG VITE_WS_URL
+ARG VITE_API_URL=https://ds-agent.alpy.io/api
+ARG VITE_WS_URL=https://ds-agent.alpy.io
 
 ENV VITE_API_URL=$VITE_API_URL
 ENV VITE_WS_URL=$VITE_WS_URL
