@@ -1,45 +1,65 @@
-import { readFileSync } from 'fs';
-import { join } from 'path';
+// Import classes
+import { ContextLoader } from './context/loader';
+import { VariableAnalyzer } from './analyzers/variable-analyzer';
+import { ComponentCreator } from './creators/component-creator';
 
-export interface DesignSystemRules {
-  version: string;
-  rules: {
-    variables: any;
-    components: any;
-    best_practices: any;
-  };
-  validation_rules: any;
-  guardrails: any;
-}
+// Export main classes
+export { ContextLoader } from './context/loader';
+export { VariableAnalyzer } from './analyzers/variable-analyzer';
+export { ComponentCreator } from './creators/component-creator';
 
-export class AgentContext {
-  private rules: DesignSystemRules | null = null;
-  private contextPath: string;
+// Export types
+export type {
+  DesignSystemRules,
+  NamingConventions,
+  VariableSchema,
+  ComponentTemplates,
+  AgentConfig
+} from './context/loader';
+
+export type {
+  VariableAnalysis,
+  ComponentVariableRequirements
+} from './analyzers/variable-analyzer';
+
+export type {
+  ComponentSpec,
+  CreateComponentResult
+} from './creators/component-creator';
+
+// Main Agent class
+export class DesignSystemAgent {
+  private contextLoader: ContextLoader;
+  private variableAnalyzer: VariableAnalyzer;
+  private componentCreator: ComponentCreator;
 
   constructor(contextPath?: string) {
-    this.contextPath = contextPath || join(process.cwd(), '.ds-agent');
+    this.contextLoader = new ContextLoader(contextPath);
+    this.contextLoader.loadAll();
+
+    this.variableAnalyzer = new VariableAnalyzer(this.contextLoader);
+    this.componentCreator = new ComponentCreator(this.contextLoader);
   }
 
-  loadRules(): DesignSystemRules {
-    if (this.rules) return this.rules;
-
-    const rulesPath = join(this.contextPath, 'context', 'design-system-rules.json');
-    const rulesContent = readFileSync(rulesPath, 'utf-8');
-    this.rules = JSON.parse(rulesContent);
-
-    return this.rules!;
+  getContextLoader() {
+    return this.contextLoader;
   }
 
-  getRules(): DesignSystemRules | null {
-    return this.rules;
+  getVariableAnalyzer() {
+    return this.variableAnalyzer;
   }
 
-  validateComponentName(name: string): boolean {
-    if (!this.rules) this.loadRules();
+  getComponentCreator() {
+    return this.componentCreator;
+  }
 
-    // Example validation
-    return name.length > 0 && /^[A-Z]/.test(name);
+  async createComponent(spec: any, existingVariables: Record<string, any>) {
+    return this.componentCreator.createComponent(spec, existingVariables);
+  }
+
+  analyzeVariables(componentType: string, existingVariables: Record<string, any>) {
+    return this.variableAnalyzer.analyzeForComponent(componentType, existingVariables);
   }
 }
 
-export default AgentContext;
+export default DesignSystemAgent;
