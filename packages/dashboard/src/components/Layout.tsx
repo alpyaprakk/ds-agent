@@ -55,7 +55,7 @@ export function Layout({ children }: LayoutProps) {
             )}>
               <div className="flex items-center gap-3">
                 <div className="flex h-10 w-10 items-center justify-center flex-shrink-0">
-                  <img src="/logo.svg" alt="Logo" className="h-8 w-8" />
+                  <img src="/logo.svg" alt="Logo" className="h-8 w-8 dark:invert" />
                 </div>
               </div>
               {!sidebarCollapsed && (
