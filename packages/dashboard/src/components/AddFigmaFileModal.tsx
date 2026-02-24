@@ -176,7 +176,7 @@ export function AddFigmaFileModal({ isOpen, onClose }: AddFigmaFileModalProps) {
                   className={cn(
                     'flex items-start gap-3 p-3 border-2 rounded-lg cursor-pointer transition',
                     formData.role === option.value
-                      ? 'border-primary bg-accent'
+                      ? 'border-primary bg-primary/10'
                       : 'border-border hover:border-muted-foreground'
                   )}
                 >
