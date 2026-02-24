@@ -53,32 +53,40 @@ export function Layout({ children }: LayoutProps) {
               'flex items-center justify-between border-b h-16 px-4 transition-all',
               sidebarCollapsed && 'justify-center px-2'
             )}>
-              <div className="flex items-center gap-3">
-                <div className="flex h-10 w-10 items-center justify-center flex-shrink-0">
-                  <img src="/logo.svg" alt="Logo" className="h-8 w-8 dark:invert" />
-                </div>
-              </div>
-              {!sidebarCollapsed && (
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  onClick={toggleSidebar}
-                  className="h-8 w-8 flex-shrink-0"
-                >
-                  <HugeiconsIcon icon={SidebarLeft01Icon} size={18} />
-                </Button>
-              )}
-              {sidebarCollapsed && (
+              {!sidebarCollapsed ? (
+                <>
+                  <div className="flex items-center gap-3">
+                    <div className="flex h-10 w-10 items-center justify-center flex-shrink-0">
+                      <img src="/logo.svg" alt="Logo" className="h-8 w-8 dark:invert" />
+                    </div>
+                  </div>
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    onClick={toggleSidebar}
+                    className="h-8 w-8 flex-shrink-0"
+                  >
+                    <HugeiconsIcon icon={SidebarLeft01Icon} size={18} />
+                  </Button>
+                </>
+              ) : (
                 <Tooltip>
                   <TooltipTrigger asChild>
-                    <Button
-                      variant="ghost"
-                      size="icon"
+                    <button
                       onClick={toggleSidebar}
-                      className="h-8 w-8 absolute right-2"
+                      className="group relative flex h-10 w-10 items-center justify-center rounded-lg transition-all hover:bg-muted/50"
                     >
-                      <HugeiconsIcon icon={SidebarRight01Icon} size={18} />
-                    </Button>
+                      <img
+                        src="/logo.svg"
+                        alt="Logo"
+                        className="absolute h-8 w-8 dark:invert transition-opacity duration-200 group-hover:opacity-0"
+                      />
+                      <HugeiconsIcon
+                        icon={SidebarRight01Icon}
+                        size={20}
+                        className="absolute opacity-0 transition-opacity duration-200 group-hover:opacity-100"
+                      />
+                    </button>
                   </TooltipTrigger>
                   <TooltipContent side="right">
                     Expand sidebar
