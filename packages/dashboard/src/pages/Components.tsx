@@ -1,6 +1,12 @@
 import { useEffect, useState } from 'react';
 import { useWorkspaceStore } from '../store/workspace-store';
-import { Package, AlertCircle, CheckCircle2, Clock } from 'lucide-react';
+import { HugeiconsIcon } from '@hugeicons/react';
+import {
+  PackageIcon,
+  Alert02Icon,
+  CheckmarkCircle02Icon,
+  Clock01Icon
+} from '@hugeicons/core-free-icons';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
@@ -127,11 +133,11 @@ export function Components() {
   const getStatusIcon = (status: string) => {
     switch (status) {
       case 'healthy':
-        return <CheckCircle2 size={16} className="text-green-600" />;
+        return <HugeiconsIcon icon={CheckmarkCircle02Icon} size={16} className="text-green-600" />;
       case 'warning':
-        return <AlertCircle size={16} className="text-yellow-600" />;
+        return <HugeiconsIcon icon={Alert02Icon} size={16} className="text-yellow-600" />;
       case 'error':
-        return <AlertCircle size={16} className="text-red-600" />;
+        return <HugeiconsIcon icon={Alert02Icon} size={16} className="text-red-600" />;
       default:
         return null;
     }
@@ -170,7 +176,7 @@ export function Components() {
         <Card className="border-green-200 bg-green-50">
           <CardHeader className="pb-3">
             <CardDescription className="flex items-center gap-2 text-green-600">
-              <CheckCircle2 className="h-4 w-4" />
+              <HugeiconsIcon icon={CheckmarkCircle02Icon} className="h-4 w-4" />
               Healthy
             </CardDescription>
           </CardHeader>
@@ -182,7 +188,7 @@ export function Components() {
         <Card className="border-yellow-200 bg-yellow-50">
           <CardHeader className="pb-3">
             <CardDescription className="flex items-center gap-2 text-yellow-600">
-              <AlertCircle className="h-4 w-4" />
+              <HugeiconsIcon icon={Alert02Icon} className="h-4 w-4" />
               Warning
             </CardDescription>
           </CardHeader>
@@ -194,7 +200,7 @@ export function Components() {
         <Card className="border-red-200 bg-red-50">
           <CardHeader className="pb-3">
             <CardDescription className="flex items-center gap-2 text-red-600">
-              <AlertCircle className="h-4 w-4" />
+              <HugeiconsIcon icon={Alert02Icon} className="h-4 w-4" />
               Error
             </CardDescription>
           </CardHeader>
@@ -253,7 +259,7 @@ export function Components() {
                   >
                     <div className="flex items-start justify-between mb-2">
                       <div className="flex items-center gap-3">
-                        <Package className="h-5 w-5 text-muted-foreground" />
+                        <HugeiconsIcon icon={PackageIcon} className="h-5 w-5 text-muted-foreground" />
                         <span className="font-medium">{component.name}</span>
                       </div>
                       {getStatusIcon(component.status)}
@@ -302,7 +308,7 @@ export function Components() {
               <div className="space-y-6">
                 <div>
                   <div className="flex items-center gap-3 mb-2">
-                    <Package className="h-6 w-6 text-muted-foreground" />
+                    <HugeiconsIcon icon={PackageIcon} className="h-6 w-6 text-muted-foreground" />
                     <h3 className="text-2xl font-bold">
                       {selectedComponent.name}
                     </h3>
@@ -402,7 +408,7 @@ export function Components() {
                   <div>
                     <label className="text-sm font-medium text-muted-foreground">Last Synced</label>
                     <div className="mt-1 flex items-center gap-2">
-                      <Clock className="h-4 w-4" />
+                      <HugeiconsIcon icon={Clock01Icon} className="h-4 w-4" />
                       <span className="text-sm">
                         {new Date(selectedComponent.last_synced).toLocaleString()}
                       </span>

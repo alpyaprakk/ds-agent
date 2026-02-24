@@ -1,6 +1,13 @@
 import { useEffect, useState } from 'react';
 import { useWorkspaceStore } from '../store/workspace-store';
-import { ChevronRight, ChevronDown, Edit2, Plus, AlertCircle } from 'lucide-react';
+import { HugeiconsIcon } from '@hugeicons/react';
+import {
+  ArrowRight01Icon,
+  ArrowDown01Icon,
+  Edit02Icon,
+  Add01Icon,
+  Alert02Icon
+} from '@hugeicons/core-free-icons';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
@@ -120,7 +127,7 @@ export function Variables() {
           </p>
         </div>
         <Button>
-          <Plus className="h-4 w-4 mr-2" />
+          <HugeiconsIcon icon={Add01Icon} className="h-4 w-4 mr-2" />
           Add Variable
         </Button>
       </div>
@@ -185,9 +192,9 @@ export function Variables() {
                       className="w-full flex items-center gap-2 px-3 py-2 rounded-md hover:bg-accent transition text-left"
                     >
                       {expandedCollections.has(collection.id) ? (
-                        <ChevronDown className="h-4 w-4 text-muted-foreground" />
+                        <HugeiconsIcon icon={ArrowDown01Icon} className="h-4 w-4 text-muted-foreground" />
                       ) : (
-                        <ChevronRight className="h-4 w-4 text-muted-foreground" />
+                        <HugeiconsIcon icon={ArrowRight01Icon} className="h-4 w-4 text-muted-foreground" />
                       )}
                       <span className="font-medium">{collection.name}</span>
                       <Badge variant="secondary" className="ml-auto">
@@ -216,7 +223,7 @@ export function Variables() {
                             )}
                             <span className="text-sm flex-1">{variable.name}</span>
                             {variable.is_alias && (
-                              <AlertCircle className="h-4 w-4" />
+                              <HugeiconsIcon icon={Alert02Icon} className="h-4 w-4" />
                             )}
                           </button>
                         ))}
@@ -236,7 +243,7 @@ export function Variables() {
               <CardTitle>Variable Details</CardTitle>
               {selectedVariable && (
                 <Button variant="ghost" size="sm">
-                  <Edit2 className="h-4 w-4 mr-2" />
+                  <HugeiconsIcon icon={Edit02Icon} className="h-4 w-4 mr-2" />
                   Edit
                 </Button>
               )}

@@ -1,6 +1,14 @@
 import { ReactNode } from 'react';
 import { Link, useLocation } from 'react-router-dom';
-import { LayoutDashboard, Palette, Package, AlertTriangle } from 'lucide-react';
+import { HugeiconsIcon } from '@hugeicons/react';
+import {
+  DashboardSquare01Icon,
+  PaintBoardIcon,
+  PackageIcon,
+  Alert02Icon,
+  SidebarLeft01Icon,
+  SidebarRight01Icon
+} from '@hugeicons/core-free-icons';
 import { Separator } from '@/components/ui/separator';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import {
@@ -9,6 +17,7 @@ import {
   TooltipProvider,
   TooltipTrigger,
 } from '@/components/ui/tooltip';
+import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
 import { useLayout } from '@/contexts/LayoutContext';
 import { Header } from './Header';
@@ -18,15 +27,15 @@ interface LayoutProps {
 }
 
 const navigation = [
-  { name: 'Dashboard', path: '/', icon: LayoutDashboard },
-  { name: 'Variables', path: '/variables', icon: Palette },
-  { name: 'Components', path: '/components', icon: Package },
-  { name: 'Conflicts', path: '/conflicts', icon: AlertTriangle },
+  { name: 'Dashboard', path: '/', icon: DashboardSquare01Icon },
+  { name: 'Variables', path: '/variables', icon: PaintBoardIcon },
+  { name: 'Components', path: '/components', icon: PackageIcon },
+  { name: 'Conflicts', path: '/conflicts', icon: Alert02Icon },
 ];
 
 export function Layout({ children }: LayoutProps) {
   const location = useLocation();
-  const { sidebarCollapsed } = useLayout();
+  const { sidebarCollapsed, toggleSidebar } = useLayout();
 
   return (
     <TooltipProvider delayDuration={0}>
@@ -39,16 +48,48 @@ export function Layout({ children }: LayoutProps) {
           )}
         >
           <div className="flex h-full flex-col">
-            {/* Logo */}
-            <div className={cn('flex items-center border-b h-16 px-4 transition-all', sidebarCollapsed ? 'justify-center' : 'gap-3')}>
-              <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-primary text-primary-foreground text-xl font-bold">
-                DS
+            {/* Logo with Collapse Button */}
+            <div className={cn(
+              'flex items-center justify-between border-b h-16 px-4 transition-all',
+              sidebarCollapsed && 'justify-center px-2'
+            )}>
+              <div className="flex items-center gap-3">
+                <div className="flex h-10 w-10 items-center justify-center flex-shrink-0">
+                  <img src="/logo.svg" alt="Logo" className="h-8 w-8" />
+                </div>
+                {!sidebarCollapsed && (
+                  <div className="flex flex-col">
+                    <span className="text-sm font-semibold">Stokehaus</span>
+                    <span className="text-xs text-muted-foreground">Design System</span>
+                  </div>
+                )}
               </div>
               {!sidebarCollapsed && (
-                <div className="flex flex-col">
-                  <span className="text-sm font-semibold">DS Agent</span>
-                  <span className="text-xs text-muted-foreground">Design System</span>
-                </div>
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  onClick={toggleSidebar}
+                  className="h-8 w-8 flex-shrink-0"
+                >
+                  <HugeiconsIcon icon={SidebarLeft01Icon} size={18} />
+                </Button>
+              )}
+              {sidebarCollapsed && (
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      onClick={toggleSidebar}
+                      className="h-8 w-8 absolute right-2"
+                    >
+                      <HugeiconsIcon icon={SidebarRight01Icon} size={18} />
+                    </Button>
+                  </TooltipTrigger>
+                  <TooltipContent side="right">
+                    Expand sidebar
+                  </TooltipContent>
+                </Tooltip>
               )}
             </div>
 
@@ -64,14 +105,25 @@ export function Layout({ children }: LayoutProps) {
                       key={item.path}
                       to={item.path}
                       className={cn(
-                        'flex items-center gap-3 rounded-md px-3 py-2.5 text-sm font-medium transition-all',
-                        'hover:bg-accent hover:text-accent-foreground',
-                        isActive && 'bg-primary text-primary-foreground shadow-sm',
-                        sidebarCollapsed && 'justify-center'
+                        'flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm transition-all',
+                        'hover:bg-accent/50',
+                        isActive
+                          ? 'bg-primary text-primary-foreground font-semibold shadow-sm'
+                          : 'text-muted-foreground font-normal hover:text-foreground',
+                        sidebarCollapsed && 'justify-center px-2'
                       )}
                     >
-                      <Icon className="h-5 w-5 flex-shrink-0" />
-                      {!sidebarCollapsed && <span>{item.name}</span>}
+                      <HugeiconsIcon
+                        icon={Icon}
+                        size={20}
+                        className={cn(
+                          'flex-shrink-0 transition-all',
+                          isActive ? 'opacity-100' : 'opacity-70'
+                        )}
+                      />
+                      {!sidebarCollapsed && (
+                        <span className="truncate">{item.name}</span>
+                      )}
                     </Link>
                   );
 
@@ -81,7 +133,7 @@ export function Layout({ children }: LayoutProps) {
                         <TooltipTrigger asChild>
                           {linkContent}
                         </TooltipTrigger>
-                        <TooltipContent side="right">
+                        <TooltipContent side="right" className="font-medium">
                           {item.name}
                         </TooltipContent>
                       </Tooltip>

@@ -17,13 +17,17 @@
     "agent:init": "node scripts/init-agent.js"
   },
   "devDependencies": {
+    "@types/node": "^20.11.0",
     "turbo": "^2.0.0",
-    "typescript": "^5.3.3",
-    "@types/node": "^20.11.0"
+    "typescript": "^5.3.3"
   },
   "engines": {
     "node": ">=18.0.0",
     "npm": ">=9.0.0"
   },
-  "packageManager": "npm@10.2.4"
+  "packageManager": "npm@10.2.4",
+  "dependencies": {
+    "@hugeicons/core-free-icons": "^3.1.1",
+    "lucide-react": "^0.575.0"
+  }
 }

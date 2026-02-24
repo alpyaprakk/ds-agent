@@ -1,4 +1,11 @@
-import { Search, Bell, Settings, LogOut, User, ChevronLeft } from 'lucide-react';
+import { HugeiconsIcon } from '@hugeicons/react';
+import {
+  Search01Icon,
+  Notification03Icon,
+  Settings02Icon,
+  Logout03Icon,
+  User02Icon
+} from '@hugeicons/core-free-icons';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import {
@@ -10,28 +17,17 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
-import { useLayout } from '@/contexts/LayoutContext';
 import { useWorkspaceStore } from '../store/workspace-store';
 
 export function Header() {
-  const { toggleSidebar, sidebarCollapsed } = useLayout();
   const { currentWorkspace } = useWorkspaceStore();
 
   return (
     <header className="sticky top-0 z-40 border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
       <div className="flex h-16 items-center gap-4 px-6">
-        {/* Sidebar Toggle */}
-        <Button
-          variant="ghost"
-          size="icon"
-          onClick={toggleSidebar}
-          className="h-9 w-9"
-        >
-          <ChevronLeft className={`h-5 w-5 transition-transform ${sidebarCollapsed ? 'rotate-180' : ''}`} />
-        </Button>
 
         {/* Workspace Name */}
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-3">
           <span className="text-2xl">{currentWorkspace?.icon || '📦'}</span>
           <div>
             <h2 className="text-sm font-semibold">{currentWorkspace?.name || 'Select Workspace'}</h2>
@@ -43,26 +39,26 @@ export function Header() {
 
         {/* Search */}
         <div className="relative w-64">
-          <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+          <HugeiconsIcon icon={Search01Icon} className="absolute left-3 top-1/2 h-5 w-5 -translate-y-1/2 text-muted-foreground" />
           <Input
             type="search"
             placeholder="Search..."
-            className="pl-9 pr-4"
+            className="pl-10 pr-4 h-10"
           />
         </div>
 
         {/* Notifications */}
-        <Button variant="ghost" size="icon" className="h-9 w-9">
-          <Bell className="h-5 w-5" />
+        <Button variant="ghost" size="icon" className="h-10 w-10">
+          <HugeiconsIcon icon={Notification03Icon} size={20} />
         </Button>
 
         {/* User Menu */}
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
-            <Button variant="ghost" className="h-9 w-9 rounded-full p-0">
-              <Avatar className="h-9 w-9">
+            <Button variant="ghost" className="h-10 w-10 rounded-full p-0">
+              <Avatar className="h-10 w-10">
                 <AvatarImage src="" alt="User" />
-                <AvatarFallback className="bg-primary text-primary-foreground text-sm">
+                <AvatarFallback className="bg-primary text-primary-foreground text-sm font-semibold">
                   U
                 </AvatarFallback>
               </Avatar>
@@ -71,23 +67,23 @@ export function Header() {
           <DropdownMenuContent align="end" className="w-56">
             <DropdownMenuLabel>
               <div className="flex flex-col space-y-1">
-                <p className="text-sm font-medium">User Account</p>
-                <p className="text-xs text-muted-foreground">user@example.com</p>
+                <p className="text-sm font-semibold">User Account</p>
+                <p className="text-xs text-muted-foreground font-normal">user@example.com</p>
               </div>
             </DropdownMenuLabel>
             <DropdownMenuSeparator />
             <DropdownMenuItem>
-              <User className="mr-2 h-4 w-4" />
-              Profile
+              <HugeiconsIcon icon={User02Icon} size={16} className="mr-2" />
+              <span className="font-medium">Profile</span>
             </DropdownMenuItem>
             <DropdownMenuItem>
-              <Settings className="mr-2 h-4 w-4" />
-              Settings
+              <HugeiconsIcon icon={Settings02Icon} size={16} className="mr-2" />
+              <span className="font-medium">Settings</span>
             </DropdownMenuItem>
             <DropdownMenuSeparator />
             <DropdownMenuItem className="text-destructive focus:text-destructive">
-              <LogOut className="mr-2 h-4 w-4" />
-              Log out
+              <HugeiconsIcon icon={Logout03Icon} size={16} className="mr-2" />
+              <span className="font-medium">Log out</span>
             </DropdownMenuItem>
           </DropdownMenuContent>
         </DropdownMenu>

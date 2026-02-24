@@ -1,6 +1,7 @@
 import { useEffect } from 'react';
 import { useWorkspaceStore } from '../store/workspace-store';
-import { CheckCircle2 } from 'lucide-react';
+import { HugeiconsIcon } from '@hugeicons/react';
+import { CheckmarkCircle02Icon } from '@hugeicons/core-free-icons';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
@@ -106,7 +107,7 @@ export function Conflicts() {
             <div className="p-6 text-center text-muted-foreground">Loading...</div>
           ) : conflicts.length === 0 ? (
             <div className="p-12 text-center">
-              <CheckCircle2 className="h-16 w-16 mx-auto mb-4 text-green-500" />
+              <HugeiconsIcon icon={CheckmarkCircle02Icon} className="h-16 w-16 mx-auto mb-4 text-green-500" />
               <h3 className="text-xl font-semibold mb-2">
                 No Active Conflicts
               </h3>
