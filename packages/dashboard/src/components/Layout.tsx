@@ -106,9 +106,9 @@ export function Layout({ children }: LayoutProps) {
                       key={item.path}
                       to={item.path}
                       className={cn(
-                        'flex items-center rounded-lg text-xs transition-all duration-300 overflow-hidden',
+                        'flex items-center rounded-lg text-xs transition-all duration-300 overflow-hidden w-full',
                         'hover:bg-accent/50',
-                        sidebarCollapsed ? 'justify-center w-10 h-10' : 'justify-start px-3 py-2.5',
+                        sidebarCollapsed ? 'justify-center py-2' : 'justify-start px-3 py-2.5 gap-3',
                         isActive
                           ? 'bg-primary text-primary-foreground font-semibold shadow-sm hover:bg-primary/90'
                           : 'text-muted-foreground font-medium hover:text-foreground hover:bg-muted/50'
@@ -118,13 +118,13 @@ export function Layout({ children }: LayoutProps) {
                         icon={Icon}
                         size={20}
                         className={cn(
-                          'flex-shrink-0',
+                          'flex-shrink-0 transition-all duration-300',
                           isActive ? 'opacity-100' : 'opacity-70'
                         )}
                       />
                       <span className={cn(
                         'truncate transition-all duration-300 whitespace-nowrap',
-                        sidebarCollapsed ? 'w-0 opacity-0 ml-0' : 'w-auto opacity-100 ml-3'
+                        sidebarCollapsed ? 'w-0 opacity-0' : 'w-auto opacity-100'
                       )}>
                         {item.name}
                       </span>
