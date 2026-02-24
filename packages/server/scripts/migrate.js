@@ -16,16 +16,29 @@ async function migrate() {
     await pool.query('SELECT NOW()');
     console.log('✅ Database connection successful');
 
-    // Read schema file
-    const schemaPath = path.join(__dirname, '../database/schema.sql');
-    const schema = fs.readFileSync(schemaPath, 'utf-8');
+    // Check if tables already exist
+    const checkResult = await pool.query(`
+      SELECT COUNT(*) as count
+      FROM information_schema.tables
+      WHERE table_schema = 'public' AND table_name = 'workspaces';
+    `);
 
-    console.log('📄 Running schema.sql...');
+    const tablesExist = parseInt(checkResult.rows[0].count) > 0;
 
-    // Execute schema
-    await pool.query(schema);
+    if (tablesExist) {
+      console.log('ℹ️  Database tables already exist, skipping migration');
+    } else {
+      // Read schema file
+      const schemaPath = path.join(__dirname, '../database/schema.sql');
+      const schema = fs.readFileSync(schemaPath, 'utf-8');
 
-    console.log('✅ Database migration completed successfully!');
+      console.log('📄 Running schema.sql...');
+
+      // Execute schema
+      await pool.query(schema);
+
+      console.log('✅ Database migration completed successfully!');
+    }
 
     // Verify tables
     const result = await pool.query(`
@@ -35,7 +48,7 @@ async function migrate() {
       ORDER BY table_name;
     `);
 
-    console.log('📊 Created tables:');
+    console.log('📊 Database tables:');
     result.rows.forEach(row => console.log(`  - ${row.table_name}`));
 
     process.exit(0);
