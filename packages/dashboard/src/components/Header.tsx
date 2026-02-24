@@ -52,7 +52,7 @@ export function Header() {
         </div>
 
         {/* Theme Toggle */}
-        <Button variant="ghost" size="icon" className="h-10 w-10" onClick={toggleTheme}>
+        <Button variant="ghost" size="icon" className="h-10 w-10 rounded-lg" onClick={toggleTheme}>
           {theme === 'dark' ? (
             <HugeiconsIcon icon={Sun03Icon} size={20} />
           ) : (
@@ -61,7 +61,7 @@ export function Header() {
         </Button>
 
         {/* Notifications */}
-        <Button variant="ghost" size="icon" className="h-10 w-10">
+        <Button variant="ghost" size="icon" className="h-10 w-10 rounded-lg">
           <HugeiconsIcon icon={Notification03Icon} size={20} />
         </Button>
 
