@@ -17,7 +17,7 @@ async function migrate() {
     console.log('✅ Database connection successful');
 
     // Read schema file
-    const schemaPath = path.join(__dirname, '../../../database/schema.sql');
+    const schemaPath = path.join(__dirname, '../database/schema.sql');
     const schema = fs.readFileSync(schemaPath, 'utf-8');
 
     console.log('📄 Running schema.sql...');
