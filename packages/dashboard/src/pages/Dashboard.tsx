@@ -72,28 +72,30 @@ export function Dashboard() {
       </div>
 
       {/* Stats Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-8">
-        <Card className="hover:shadow-lg transition-shadow cursor-pointer border-t-4 border-t-primary">
+      <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-8">
+        <Card className="hover:border-border/60 transition-all">
           <CardHeader className="pb-3">
             <div className="flex items-center justify-between">
-              <CardDescription>Health Score</CardDescription>
-              <HugeiconsIcon icon={Activity01Icon} className="h-4 w-4 text-muted-foreground" />
+              <CardDescription className="text-xs font-medium">Health Score</CardDescription>
+              <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary/10">
+                <HugeiconsIcon icon={Activity01Icon} className="h-4 w-4 text-primary" />
+              </div>
             </div>
           </CardHeader>
           <CardContent>
             <div className="flex items-baseline gap-2">
-              <div className="text-xl font-bold">
+              <div className="text-2xl font-bold">
                 {currentWorkspace.health_score || 0}%
               </div>
-              <div className="flex items-center text-sm text-green-600">
-                <HugeiconsIcon icon={ChartUpIcon} className="h-4 w-4 mr-1" />
+              <div className="flex items-center text-xs text-emerald-600 dark:text-emerald-400">
+                <HugeiconsIcon icon={ChartUpIcon} className="h-3 w-3 mr-0.5" />
                 <span>+5%</span>
               </div>
             </div>
             <div className="mt-3">
-              <div className="w-full bg-secondary rounded-full h-2">
+              <div className="w-full bg-muted rounded-full h-1.5">
                 <div
-                  className="bg-gradient-to-r from-blue-500 to-primary h-2 rounded-full transition-all"
+                  className="bg-primary h-1.5 rounded-full transition-all"
                   style={{ width: `${currentWorkspace.health_score || 0}%` }}
                 />
               </div>
@@ -101,80 +103,86 @@ export function Dashboard() {
           </CardContent>
         </Card>
 
-        <Card className="hover:shadow-lg transition-shadow cursor-pointer border-t-4 border-t-blue-500">
+        <Card className="hover:border-border/60 transition-all">
           <CardHeader className="pb-3">
             <div className="flex items-center justify-between">
-              <CardDescription>Components</CardDescription>
-              <HugeiconsIcon icon={PackageIcon} className="h-4 w-4 text-muted-foreground" />
+              <CardDescription className="text-xs font-medium">Components</CardDescription>
+              <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-blue-500/10">
+                <HugeiconsIcon icon={PackageIcon} className="h-4 w-4 text-blue-600 dark:text-blue-400" />
+              </div>
             </div>
           </CardHeader>
           <CardContent>
             <div className="flex items-baseline gap-2">
-              <div className="text-xl font-bold">
+              <div className="text-2xl font-bold">
                 {currentWorkspace.total_components || 0}
               </div>
-              <div className="flex items-center text-sm text-green-600">
-                <HugeiconsIcon icon={ChartUpIcon} className="h-4 w-4 mr-1" />
+              <div className="flex items-center text-xs text-emerald-600 dark:text-emerald-400">
+                <HugeiconsIcon icon={ChartUpIcon} className="h-3 w-3 mr-0.5" />
                 <span>+3</span>
               </div>
             </div>
-            <p className="text-sm text-muted-foreground mt-2">
+            <p className="text-xs text-muted-foreground mt-2">
               Total components
             </p>
           </CardContent>
         </Card>
 
-        <Card className="hover:shadow-lg transition-shadow cursor-pointer border-t-4 border-t-purple-500">
+        <Card className="hover:border-border/60 transition-all">
           <CardHeader className="pb-3">
             <div className="flex items-center justify-between">
-              <CardDescription>Variables</CardDescription>
-              <HugeiconsIcon icon={ChartUpIcon} className="h-4 w-4 text-green-600" />
+              <CardDescription className="text-xs font-medium">Variables</CardDescription>
+              <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-purple-500/10">
+                <HugeiconsIcon icon={ChartUpIcon} className="h-4 w-4 text-purple-600 dark:text-purple-400" />
+              </div>
             </div>
           </CardHeader>
           <CardContent>
             <div className="flex items-baseline gap-2">
-              <div className="text-xl font-bold">
+              <div className="text-2xl font-bold">
                 {currentWorkspace.total_variables || 0}
               </div>
-              <div className="flex items-center text-sm text-green-600">
-                <HugeiconsIcon icon={ChartUpIcon} className="h-4 w-4 mr-1" />
+              <div className="flex items-center text-xs text-emerald-600 dark:text-emerald-400">
+                <HugeiconsIcon icon={ChartUpIcon} className="h-3 w-3 mr-0.5" />
                 <span>+12</span>
               </div>
             </div>
-            <p className="text-sm text-muted-foreground mt-2">
+            <p className="text-xs text-muted-foreground mt-2">
               Total variables
             </p>
           </CardContent>
         </Card>
 
-        <Card className={`hover:shadow-lg transition-shadow cursor-pointer border-t-4 ${conflicts.length > 0 ? 'border-t-red-500' : 'border-t-green-500'}`}>
+        <Card className="hover:border-border/60 transition-all">
           <CardHeader className="pb-3">
             <div className="flex items-center justify-between">
-              <CardDescription>Conflicts</CardDescription>
-              {conflicts.length > 0 ? (
-                <HugeiconsIcon icon={ChartDownIcon} className="h-4 w-4 text-red-600" />
-              ) : (
-                <HugeiconsIcon icon={ChartUpIcon} className="h-4 w-4 text-green-600" />
-              )}
+              <CardDescription className="text-xs font-medium">Conflicts</CardDescription>
+              <div className={`flex h-8 w-8 items-center justify-center rounded-lg ${conflicts.length > 0 ? 'bg-red-500/10' : 'bg-emerald-500/10'}`}>
+                {conflicts.length > 0 ? (
+                  <HugeiconsIcon icon={ChartDownIcon} className="h-4 w-4 text-red-600 dark:text-red-400" />
+                ) : (
+                  <HugeiconsIcon icon={ChartUpIcon} className="h-4 w-4 text-emerald-600 dark:text-emerald-400" />
+                )}
+              </div>
             </div>
           </CardHeader>
           <CardContent>
             <div className="flex items-baseline gap-2">
-              <div className="text-xl font-bold">
+              <div className="text-2xl font-bold">
                 {conflicts.length}
               </div>
               {conflicts.length > 0 ? (
-                <div className="flex items-center text-sm text-red-600">
-                  <HugeiconsIcon icon={ChartUpIcon} className="h-4 w-4 mr-1" />
+                <div className="flex items-center text-xs text-red-600 dark:text-red-400">
+                  <HugeiconsIcon icon={ChartUpIcon} className="h-3 w-3 mr-0.5" />
                   <span>+{conflicts.length}</span>
                 </div>
               ) : (
-                <div className="flex items-center text-sm text-green-600">
+                <div className="flex items-center text-xs text-emerald-600 dark:text-emerald-400">
                   <span>All clear</span>
                 </div>
               )}
             </div>
-            <p className="text-sm text-muted-foreground mt-2">
+            <p className="text-xs text-muted-foreground mt-2">
               Active conflicts
             </p>
           </CardContent>
