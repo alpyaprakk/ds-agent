@@ -60,29 +60,43 @@ VITE_WS_URL=https://ds-agent.alpy.io
   - Docker Compose: Enabled
   - Docker Compose File: `docker-compose.yml`
 
-### 4. Dokploy Environment Variables
+### 4. Figma Access Token Oluşturma
+
+Figma API ile senkronizasyon için Personal Access Token oluşturun:
+
+1. Figma'da [Settings](https://www.figma.com/settings) sayfasına gidin
+2. Sağ menüden **Personal access tokens** sekmesini açın
+3. **Generate new token** butonuna tıklayın
+4. Token'a bir isim verin (örn: "DS Agent Production")
+5. Token'ı kopyalayın (bir daha gösterilmeyecek!)
+6. Bu token'ı `FIGMA_ACCESS_TOKEN` environment variable olarak kullanın
+
+**Not:** Token'ınızı güvenli bir yerde saklayın ve asla public repository'lere commit etmeyin.
+
+### 5. Dokploy Environment Variables
 
 Dokploy'da aşağıdaki environment variable'ları ekleyin:
 
 
-| Key                 | Value                          | Example                        |
-| ------------------- | ------------------------------ | ------------------------------ |
-| `POSTGRES_PASSWORD` | Database şifreniz              | `your_strong_password`         |
-| `POSTGRES_DB`       | `dsagent`                      | `dsagent`                      |
-| `POSTGRES_USER`     | `dsagent`                      | `dsagent`                      |
-| `CORS_ORIGIN`       | `https://ds-agent.alpy.io`     | `https://ds-agent.alpy.io`     |
-| `VITE_API_URL`      | `https://ds-agent.alpy.io/api` | `https://ds-agent.alpy.io/api` |
-| `VITE_WS_URL`       | `https://ds-agent.alpy.io`     | `https://ds-agent.alpy.io`     |
+| Key                  | Value                            | Example                                  |
+| -------------------- | -------------------------------- | ---------------------------------------- |
+| `POSTGRES_PASSWORD`  | Database şifreniz                | `your_strong_password`                   |
+| `POSTGRES_DB`        | `dsagent`                        | `dsagent`                                |
+| `POSTGRES_USER`      | `dsagent`                        | `dsagent`                                |
+| `CORS_ORIGIN`        | `https://ds-agent.alpy.io`       | `https://ds-agent.alpy.io`               |
+| `VITE_API_URL`       | `https://ds-agent.alpy.io`       | `https://ds-agent.alpy.io`               |
+| `VITE_WS_URL`        | `https://ds-agent.alpy.io`       | `https://ds-agent.alpy.io`               |
+| `FIGMA_ACCESS_TOKEN` | Figma Personal Access Token      | `figd_xxxxxxxxxxxxxxxxxxxxxxxxxxxxx`     |
 
 
-### 5. Port Configuration
+### 6. Port Configuration
 
 Dokploy'da port ayarlarını yapın:
 
 - **HTTP Port**: 80 → Container Port 80 (Dashboard)
 - **WebSocket Port**: 3000 → Container Port 3000 (Server)
 
-### 6. Deploy
+### 7. Deploy
 
 Dokploy'da **Deploy** butonuna tıklayın. İlk deployment 3-5 dakika sürebilir.
 

@@ -2,7 +2,7 @@ import { Router } from 'express';
 import { FigmaFileRepository } from '../../db/repositories';
 import { SyncOrchestrator } from '../../sync/orchestrator';
 import { figmaApi } from '../../services/figma-api';
-import { pool } from '../../db/pool';
+import pool from '../../db/connection';
 
 const router = Router();
 const figmaFileRepo = new FigmaFileRepository();

@@ -67,11 +67,11 @@ export class FigmaApiService {
     });
 
     if (!response.ok) {
-      const error = await response.json().catch(() => ({}));
+      const error: any = await response.json().catch(() => ({}));
       throw new Error(error.message || `Figma API error: ${response.status}`);
     }
 
-    return response.json();
+    return response.json() as Promise<T>;
   }
 
   /**
@@ -90,7 +90,7 @@ export class FigmaApiService {
       const collections = Object.values(data.meta.variableCollections || {});
 
       return { variables, collections };
-    } catch (error) {
+    } catch (error: unknown) {
       console.error('Error fetching Figma variables:', error);
       throw error;
     }
@@ -106,7 +106,7 @@ export class FigmaApiService {
       );
 
       return data.meta.components || [];
-    } catch (error) {
+    } catch (error: unknown) {
       console.error('Error fetching Figma components:', error);
       throw error;
     }

@@ -11,7 +11,7 @@ import {
   ChartUpIcon,
   ChartDownIcon,
   Activity01Icon,
-  Reload01Icon
+  ReloadIcon
 } from '@hugeicons/core-free-icons';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -84,15 +84,6 @@ export function Dashboard() {
 
   return (
     <div className="p-8">
-      <div className="mb-8">
-        <h1 className="text-lg font-bold tracking-tight">
-          {currentWorkspace.icon} {currentWorkspace.name}
-        </h1>
-        {currentWorkspace.description && (
-          <p className="text-muted-foreground text-xs mt-2">{currentWorkspace.description}</p>
-        )}
-      </div>
-
       {/* Stats Cards */}
       <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-8">
         <Card className="hover:border-border/60 transition-all">
@@ -251,7 +242,7 @@ export function Dashboard() {
                       className="h-8 w-8 p-0"
                     >
                       <HugeiconsIcon
-                        icon={Reload01Icon}
+                        icon={ReloadIcon}
                         className={`h-4 w-4 ${syncingFileId === file.id ? 'animate-spin' : ''}`}
                       />
                     </Button>
