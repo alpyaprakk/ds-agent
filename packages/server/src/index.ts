@@ -4,6 +4,8 @@ import { Server as SocketIOServer } from 'socket.io';
 import cors from 'cors';
 import helmet from 'helmet';
 import dotenv from 'dotenv';
+import apiRoutes from './api/routes';
+import { setupWebSocketHandlers } from './websocket/handlers';
 
 // Load environment variables
 dotenv.config();
@@ -18,7 +20,6 @@ const io = new SocketIOServer(httpServer, {
 });
 
 const PORT = process.env.PORT || 3000;
-const WS_PORT = process.env.WS_PORT || 3001;
 
 // Middleware
 app.use(helmet());
@@ -34,28 +35,27 @@ app.get('/health', (_req, res) => {
 });
 
 // API routes
-app.get('/api/workspaces', (_req, res) => {
-  res.json({ workspaces: [] });
-});
+app.use('/api', apiRoutes);
 
-// WebSocket connection
-io.on('connection', (socket) => {
-  console.log('Client connected:', socket.id);
+// WebSocket handlers
+setupWebSocketHandlers(io);
 
-  socket.on('disconnect', () => {
-    console.log('Client disconnected:', socket.id);
-  });
-
-  socket.on('ping', () => {
-    socket.emit('pong', { timestamp: Date.now() });
-  });
-});
-
-// Start servers
+// Start server
 httpServer.listen(PORT, () => {
-  console.log(`🚀 HTTP Server running on port ${PORT}`);
-  console.log(`🔌 WebSocket server running on port ${WS_PORT}`);
+  console.log('🚀 DS Agent Server Started');
+  console.log(`📡 HTTP Server: http://localhost:${PORT}`);
+  console.log(`🔌 WebSocket: ws://localhost:${PORT}`);
   console.log(`📊 Environment: ${process.env.NODE_ENV || 'development'}`);
+  console.log(`💾 Database: ${process.env.DATABASE_URL ? 'Connected' : 'Not configured'}`);
+});
+
+// Graceful shutdown
+process.on('SIGTERM', () => {
+  console.log('SIGTERM received, shutting down gracefully...');
+  httpServer.close(() => {
+    console.log('Server closed');
+    process.exit(0);
+  });
 });
 
 export { app, io };
