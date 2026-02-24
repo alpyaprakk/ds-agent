@@ -209,10 +209,10 @@ export function Variables() {
                             key={variable.id}
                             onClick={() => setSelectedVariable(variable)}
                             className={cn(
-                              'w-full flex items-center gap-3 px-3 py-2 rounded-md transition text-left',
+                              'w-full flex items-center gap-3 px-3 py-2 rounded-lg transition text-left',
                               selectedVariable?.id === variable.id
-                                ? 'bg-primary text-primary-foreground'
-                                : 'hover:bg-accent'
+                                ? 'bg-muted border border-primary'
+                                : 'hover:bg-muted/50'
                             )}
                           >
                             {variable.type === 'COLOR' && (

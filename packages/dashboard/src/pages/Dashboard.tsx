@@ -2,13 +2,16 @@ import { useEffect, useState } from 'react';
 import { useWorkspaceStore } from '../store/workspace-store';
 import { AddFigmaFileModal } from '../components/AddFigmaFileModal';
 import { CreateWorkspaceModal } from '../components/CreateWorkspaceModal';
+import { apiClient } from '../lib/api-client';
+import { toast } from 'sonner';
 import { HugeiconsIcon } from '@hugeicons/react';
 import {
   Add01Icon,
   PackageIcon,
   ChartUpIcon,
   ChartDownIcon,
-  Activity01Icon
+  Activity01Icon,
+  Reload01Icon
 } from '@hugeicons/core-free-icons';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -23,6 +26,25 @@ export function Dashboard() {
   } = useWorkspaceStore();
   const [showAddFileModal, setShowAddFileModal] = useState(false);
   const [showCreateWorkspaceModal, setShowCreateWorkspaceModal] = useState(false);
+  const [syncingFileId, setSyncingFileId] = useState<string | null>(null);
+
+  const handleSyncFile = async (fileId: string, fileName: string) => {
+    setSyncingFileId(fileId);
+    try {
+      const result = await apiClient.syncFile(fileId);
+      toast.success(result.message || `"${fileName}" synced successfully`);
+
+      // Refresh data after sync
+      if (currentWorkspace) {
+        // This will be handled by the store in a real implementation
+      }
+    } catch (error) {
+      toast.error(`Failed to sync "${fileName}"`);
+      console.error('Sync error:', error);
+    } finally {
+      setSyncingFileId(null);
+    }
+  };
 
   useEffect(() => {
     // Auto-refresh data
@@ -212,7 +234,7 @@ export function Dashboard() {
               {figmaFiles.map((file) => (
                 <div
                   key={file.id}
-                  className="flex items-center justify-between p-4 bg-card rounded-lg hover:bg-muted/50 transition-colors cursor-pointer border border-border/50 hover:border-border"
+                  className="flex items-center justify-between p-4 bg-card rounded-lg hover:bg-muted/50 transition-colors border border-border/50 hover:border-border"
                 >
                   <div>
                     <div className="font-medium">{file.name}</div>
@@ -220,17 +242,31 @@ export function Dashboard() {
                       Role: {file.role} • Status: {file.sync_status}
                     </div>
                   </div>
-                  <Badge
-                    variant={
-                      file.sync_status === 'success'
-                        ? 'default'
-                        : file.sync_status === 'syncing'
-                        ? 'secondary'
-                        : 'outline'
-                    }
-                  >
-                    {file.sync_status}
-                  </Badge>
+                  <div className="flex items-center gap-2">
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => handleSyncFile(file.id, file.name)}
+                      disabled={syncingFileId === file.id}
+                      className="h-8 w-8 p-0"
+                    >
+                      <HugeiconsIcon
+                        icon={Reload01Icon}
+                        className={`h-4 w-4 ${syncingFileId === file.id ? 'animate-spin' : ''}`}
+                      />
+                    </Button>
+                    <Badge
+                      variant={
+                        file.sync_status === 'success'
+                          ? 'default'
+                          : file.sync_status === 'syncing'
+                          ? 'secondary'
+                          : 'outline'
+                      }
+                    >
+                      {file.sync_status}
+                    </Badge>
+                  </div>
                 </div>
               ))}
             </div>

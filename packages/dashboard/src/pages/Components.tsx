@@ -133,11 +133,11 @@ export function Components() {
   const getStatusIcon = (status: string) => {
     switch (status) {
       case 'healthy':
-        return <HugeiconsIcon icon={CheckmarkCircle02Icon} size={16} className="text-green-600" />;
+        return <HugeiconsIcon icon={CheckmarkCircle02Icon} size={16} className="text-emerald-600 dark:text-emerald-400" />;
       case 'warning':
-        return <HugeiconsIcon icon={Alert02Icon} size={16} className="text-yellow-600" />;
+        return <HugeiconsIcon icon={Alert02Icon} size={16} className="text-yellow-600 dark:text-yellow-400" />;
       case 'error':
-        return <HugeiconsIcon icon={Alert02Icon} size={16} className="text-red-600" />;
+        return <HugeiconsIcon icon={Alert02Icon} size={16} className="text-red-600 dark:text-red-400" />;
       default:
         return null;
     }
@@ -163,49 +163,55 @@ export function Components() {
       </div>
 
       {/* Status Summary */}
-      <div className="grid grid-cols-4 gap-6 mb-8">
-        <Card>
+      <div className="grid grid-cols-4 gap-4 mb-8">
+        <Card className="hover:border-border/60 transition-all">
           <CardHeader className="pb-3">
-            <CardDescription>Total Components</CardDescription>
+            <CardDescription className="text-xs font-medium">Total Components</CardDescription>
           </CardHeader>
           <CardContent>
-            <div className="text-xl font-bold">{components.length}</div>
+            <div className="text-2xl font-bold">{components.length}</div>
           </CardContent>
         </Card>
 
-        <Card className="border-green-200 bg-green-50">
+        <Card className="hover:border-border/60 transition-all">
           <CardHeader className="pb-3">
-            <CardDescription className="flex items-center gap-2 text-green-600">
-              <HugeiconsIcon icon={CheckmarkCircle02Icon} className="h-4 w-4" />
+            <CardDescription className="flex items-center gap-2 text-xs font-medium">
+              <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-emerald-500/10">
+                <HugeiconsIcon icon={CheckmarkCircle02Icon} className="h-4 w-4 text-emerald-600 dark:text-emerald-400" />
+              </div>
               Healthy
             </CardDescription>
           </CardHeader>
           <CardContent>
-            <div className="text-xl font-bold text-green-900">{statusCounts.healthy}</div>
+            <div className="text-2xl font-bold">{statusCounts.healthy}</div>
           </CardContent>
         </Card>
 
-        <Card className="border-yellow-200 bg-yellow-50">
+        <Card className="hover:border-border/60 transition-all">
           <CardHeader className="pb-3">
-            <CardDescription className="flex items-center gap-2 text-yellow-600">
-              <HugeiconsIcon icon={Alert02Icon} className="h-4 w-4" />
+            <CardDescription className="flex items-center gap-2 text-xs font-medium">
+              <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-yellow-500/10">
+                <HugeiconsIcon icon={Alert02Icon} className="h-4 w-4 text-yellow-600 dark:text-yellow-400" />
+              </div>
               Warning
             </CardDescription>
           </CardHeader>
           <CardContent>
-            <div className="text-xl font-bold text-yellow-900">{statusCounts.warning}</div>
+            <div className="text-2xl font-bold">{statusCounts.warning}</div>
           </CardContent>
         </Card>
 
-        <Card className="border-red-200 bg-red-50">
+        <Card className="hover:border-border/60 transition-all">
           <CardHeader className="pb-3">
-            <CardDescription className="flex items-center gap-2 text-red-600">
-              <HugeiconsIcon icon={Alert02Icon} className="h-4 w-4" />
+            <CardDescription className="flex items-center gap-2 text-xs font-medium">
+              <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-red-500/10">
+                <HugeiconsIcon icon={Alert02Icon} className="h-4 w-4 text-red-600 dark:text-red-400" />
+              </div>
               Error
             </CardDescription>
           </CardHeader>
           <CardContent>
-            <div className="text-xl font-bold text-red-900">{statusCounts.error}</div>
+            <div className="text-2xl font-bold">{statusCounts.error}</div>
           </CardContent>
         </Card>
       </div>
@@ -277,15 +283,15 @@ export function Components() {
 
                     {/* Coverage Bar */}
                     <div className="mt-3">
-                      <div className="w-full bg-secondary rounded-full h-1.5">
+                      <div className="w-full bg-muted rounded-full h-1.5">
                         <div
                           className={cn(
                             'h-1.5 rounded-full transition-all',
                             component.variable_coverage >= 90
-                              ? 'bg-green-600'
+                              ? 'bg-emerald-600 dark:bg-emerald-500'
                               : component.variable_coverage >= 70
-                              ? 'bg-yellow-600'
-                              : 'bg-red-600'
+                              ? 'bg-yellow-600 dark:bg-yellow-500'
+                              : 'bg-red-600 dark:bg-red-500'
                           )}
                           style={{ width: `${component.variable_coverage}%` }}
                         />
@@ -323,12 +329,12 @@ export function Components() {
                   <label className="text-xs font-medium text-muted-foreground">Status</label>
                   <div className="mt-1">
                     <Badge
-                      variant={selectedComponent.status === 'healthy' ? 'default' : 'secondary'}
+                      variant="secondary"
                       className={cn(
                         'gap-2',
-                        selectedComponent.status === 'healthy' && 'bg-green-100 text-green-700 hover:bg-green-100',
-                        selectedComponent.status === 'warning' && 'bg-yellow-100 text-yellow-700 hover:bg-yellow-100',
-                        selectedComponent.status === 'error' && 'bg-red-100 text-red-700 hover:bg-red-100'
+                        selectedComponent.status === 'healthy' && 'bg-emerald-500/10 text-emerald-700 dark:text-emerald-400 hover:bg-emerald-500/20',
+                        selectedComponent.status === 'warning' && 'bg-yellow-500/10 text-yellow-700 dark:text-yellow-400 hover:bg-yellow-500/20',
+                        selectedComponent.status === 'error' && 'bg-red-500/10 text-red-700 dark:text-red-400 hover:bg-red-500/20'
                       )}
                     >
                       {getStatusIcon(selectedComponent.status)}
@@ -349,15 +355,15 @@ export function Components() {
                         {selectedComponent.missing_variables.length} missing
                       </Badge>
                     </div>
-                    <div className="w-full bg-secondary rounded-full h-3">
+                    <div className="w-full bg-muted rounded-full h-3">
                       <div
                         className={cn(
                           'h-3 rounded-full transition-all',
                           selectedComponent.variable_coverage >= 90
-                            ? 'bg-green-600'
+                            ? 'bg-emerald-600 dark:bg-emerald-500'
                             : selectedComponent.variable_coverage >= 70
-                            ? 'bg-yellow-600'
-                            : 'bg-red-600'
+                            ? 'bg-yellow-600 dark:bg-yellow-500'
+                            : 'bg-red-600 dark:bg-red-500'
                         )}
                         style={{ width: `${selectedComponent.variable_coverage}%` }}
                       />
@@ -375,10 +381,10 @@ export function Components() {
                       {selectedComponent.missing_variables.map((variable, index) => (
                         <div
                           key={index}
-                          className="flex items-center justify-between px-3 py-2 bg-red-50 border border-red-200 rounded-md"
+                          className="flex items-center justify-between px-3 py-2 bg-red-500/10 border border-red-500/20 rounded-lg"
                         >
-                          <span className="text-sm font-mono text-red-700">{variable}</span>
-                          <Button variant="ghost" size="sm" className="text-red-600 hover:text-red-700 h-auto py-1">
+                          <span className="text-sm font-mono text-red-700 dark:text-red-400">{variable}</span>
+                          <Button variant="ghost" size="sm" className="text-red-600 dark:text-red-400 hover:text-red-700 dark:hover:text-red-300 h-auto py-1">
                             Create
                           </Button>
                         </div>

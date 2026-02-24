@@ -62,35 +62,50 @@ export function Conflicts() {
       </div>
 
       {/* Summary */}
-      <div className="grid grid-cols-3 gap-6 mb-8">
-        <Card className="border-red-200 bg-red-50">
+      <div className="grid grid-cols-3 gap-4 mb-8">
+        <Card className="hover:border-border/60 transition-all">
           <CardHeader className="pb-3">
-            <CardDescription className="text-red-600">High Priority</CardDescription>
+            <CardDescription className="flex items-center gap-2 text-xs font-medium">
+              <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-red-500/10">
+                <span className="text-lg">🔴</span>
+              </div>
+              High Priority
+            </CardDescription>
           </CardHeader>
           <CardContent>
-            <div className="text-xl font-bold text-red-900">
+            <div className="text-2xl font-bold">
               {conflicts.filter((c) => c.severity === 'high').length}
             </div>
           </CardContent>
         </Card>
 
-        <Card className="border-yellow-200 bg-yellow-50">
+        <Card className="hover:border-border/60 transition-all">
           <CardHeader className="pb-3">
-            <CardDescription className="text-yellow-600">Medium Priority</CardDescription>
+            <CardDescription className="flex items-center gap-2 text-xs font-medium">
+              <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-yellow-500/10">
+                <span className="text-lg">🟡</span>
+              </div>
+              Medium Priority
+            </CardDescription>
           </CardHeader>
           <CardContent>
-            <div className="text-xl font-bold text-yellow-900">
+            <div className="text-2xl font-bold">
               {conflicts.filter((c) => c.severity === 'medium').length}
             </div>
           </CardContent>
         </Card>
 
-        <Card className="border-blue-200 bg-blue-50">
+        <Card className="hover:border-border/60 transition-all">
           <CardHeader className="pb-3">
-            <CardDescription className="text-blue-600">Low Priority</CardDescription>
+            <CardDescription className="flex items-center gap-2 text-xs font-medium">
+              <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-blue-500/10">
+                <span className="text-lg">🔵</span>
+              </div>
+              Low Priority
+            </CardDescription>
           </CardHeader>
           <CardContent>
-            <div className="text-xl font-bold text-blue-900">
+            <div className="text-2xl font-bold">
               {conflicts.filter((c) => c.severity === 'low').length}
             </div>
           </CardContent>
@@ -107,7 +122,7 @@ export function Conflicts() {
             <div className="p-6 text-center text-muted-foreground">Loading...</div>
           ) : conflicts.length === 0 ? (
             <div className="p-12 text-center">
-              <HugeiconsIcon icon={CheckmarkCircle02Icon} className="h-16 w-16 mx-auto mb-4 text-green-500" />
+              <HugeiconsIcon icon={CheckmarkCircle02Icon} className="h-16 w-16 mx-auto mb-4 text-emerald-600 dark:text-emerald-400" />
               <h3 className="text-lg font-semibold mb-2">
                 No Active Conflicts
               </h3>
@@ -123,10 +138,11 @@ export function Conflicts() {
                     <div className="flex-1">
                       <div className="flex items-center gap-3 mb-2">
                         <Badge
-                          variant={conflict.severity === 'high' ? 'destructive' : 'secondary'}
+                          variant="secondary"
                           className={cn(
-                            conflict.severity === 'medium' && 'bg-yellow-100 text-yellow-700 hover:bg-yellow-100',
-                            conflict.severity === 'low' && 'bg-blue-100 text-blue-700 hover:bg-blue-100'
+                            conflict.severity === 'high' && 'bg-red-500/10 text-red-700 dark:text-red-400 hover:bg-red-500/20',
+                            conflict.severity === 'medium' && 'bg-yellow-500/10 text-yellow-700 dark:text-yellow-400 hover:bg-yellow-500/20',
+                            conflict.severity === 'low' && 'bg-blue-500/10 text-blue-700 dark:text-blue-400 hover:bg-blue-500/20'
                           )}
                         >
                           {conflict.severity.toUpperCase()}
