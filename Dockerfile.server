@@ -41,7 +41,7 @@ COPY --from=builder --chown=nodejs:nodejs /app/database ./database
 COPY --from=builder --chown=nodejs:nodejs /app/packages/server/scripts ./scripts
 
 # Install production dependencies only
-RUN npm ci --only=production
+RUN npm install --omit=dev
 
 USER nodejs
 
