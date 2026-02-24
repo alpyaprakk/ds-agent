@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { useWorkspaceStore } from '../store/workspace-store';
 import { AddFigmaFileModal } from '../components/AddFigmaFileModal';
+import { CreateWorkspaceModal } from '../components/CreateWorkspaceModal';
 import { HugeiconsIcon } from '@hugeicons/react';
 import {
   Add01Icon,
@@ -21,6 +22,7 @@ export function Dashboard() {
     loading,
   } = useWorkspaceStore();
   const [showAddFileModal, setShowAddFileModal] = useState(false);
+  const [showCreateWorkspaceModal, setShowCreateWorkspaceModal] = useState(false);
 
   useEffect(() => {
     // Auto-refresh data
@@ -44,8 +46,16 @@ export function Dashboard() {
           <p className="text-muted-foreground text-xs mb-6">
             Create or select a workspace to get started with your design system.
           </p>
-          <Button>Create Workspace</Button>
+          <Button onClick={() => setShowCreateWorkspaceModal(true)}>
+            Create Workspace
+          </Button>
         </div>
+
+        {/* Create Workspace Modal */}
+        <CreateWorkspaceModal
+          isOpen={showCreateWorkspaceModal}
+          onClose={() => setShowCreateWorkspaceModal(false)}
+        />
       </div>
     );
   }

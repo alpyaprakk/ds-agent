@@ -1,31 +1,29 @@
 import { useState } from 'react';
 import { useWorkspaceStore } from '../store/workspace-store';
-import { X } from 'lucide-react';
 import { toast } from 'sonner';
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import { Textarea } from '@/components/ui/textarea';
 
 interface CreateWorkspaceModalProps {
   isOpen: boolean;
   onClose: () => void;
 }
 
-const ICON_OPTIONS = ['📦', '🎨', '🚀', '⚡', '🎯', '💎', '🌟', '🔥', '🎪', '🎭'];
-const COLOR_OPTIONS = [
-  { name: 'Blue', value: '#3B82F6' },
-  { name: 'Purple', value: '#8B5CF6' },
-  { name: 'Pink', value: '#EC4899' },
-  { name: 'Green', value: '#10B981' },
-  { name: 'Orange', value: '#F59E0B' },
-  { name: 'Red', value: '#EF4444' },
-];
-
 export function CreateWorkspaceModal({ isOpen, onClose }: CreateWorkspaceModalProps) {
   const { createWorkspace, setCurrentWorkspace } = useWorkspaceStore();
   const [formData, setFormData] = useState({
     name: '',
+    icon: '🎨',
     description: '',
-    icon: '📦',
-    color: '#3B82F6',
-    team_name: '',
   });
   const [loading, setLoading] = useState(false);
 
@@ -39,17 +37,24 @@ export function CreateWorkspaceModal({ isOpen, onClose }: CreateWorkspaceModalPr
 
     setLoading(true);
     try {
-      const workspace = await createWorkspace(formData);
-      toast.success('Workspace created successfully');
+      const workspace = await createWorkspace({
+        name: formData.name.trim(),
+        icon: formData.icon,
+        description: formData.description.trim() || undefined,
+      });
+
+      toast.success(`Workspace "${workspace.name}" created successfully`);
+
+      // Set as current workspace
       setCurrentWorkspace(workspace);
+
       onClose();
+
       // Reset form
       setFormData({
         name: '',
+        icon: '🎨',
         description: '',
-        icon: '📦',
-        color: '#3B82F6',
-        team_name: '',
       });
     } catch (error) {
       toast.error('Failed to create workspace');
@@ -65,157 +70,82 @@ export function CreateWorkspaceModal({ isOpen, onClose }: CreateWorkspaceModalPr
     }
   };
 
-  if (!isOpen) return null;
-
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center">
-      {/* Backdrop */}
-      <div
-        className="absolute inset-0 bg-black/50"
-        onClick={handleClose}
-      />
+    <Dialog open={isOpen} onOpenChange={handleClose}>
+      <DialogContent className="sm:max-w-md">
+        <DialogHeader>
+          <DialogTitle>Create Workspace</DialogTitle>
+          <DialogDescription>
+            Create a new workspace to manage your design system.
+          </DialogDescription>
+        </DialogHeader>
 
-      {/* Modal */}
-      <div className="relative bg-white rounded-lg shadow-xl w-full max-w-md mx-4 max-h-[90vh] overflow-y-auto">
-        {/* Header */}
-        <div className="flex items-center justify-between p-6 border-b border-gray-200">
-          <h2 className="text-xl font-bold text-gray-900">Create New Workspace</h2>
-          <button
-            onClick={handleClose}
-            disabled={loading}
-            className="text-gray-400 hover:text-gray-600 transition"
-          >
-            <X size={20} />
-          </button>
-        </div>
-
-        {/* Form */}
-        <form onSubmit={handleSubmit} className="p-6 space-y-5">
-          {/* Name */}
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">
-              Workspace Name *
-            </label>
-            <input
+        <form onSubmit={handleSubmit} className="space-y-5">
+          {/* Name Input */}
+          <div className="space-y-2">
+            <Label htmlFor="name">Workspace Name *</Label>
+            <Input
+              id="name"
               type="text"
               value={formData.name}
               onChange={(e) => setFormData({ ...formData, name: e.target.value })}
               placeholder="My Design System"
-              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
               disabled={loading}
+              autoFocus
             />
           </div>
 
-          {/* Description */}
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">
-              Description
-            </label>
-            <textarea
+          {/* Icon Input */}
+          <div className="space-y-2">
+            <Label htmlFor="icon">Icon (Emoji)</Label>
+            <Input
+              id="icon"
+              type="text"
+              value={formData.icon}
+              onChange={(e) => setFormData({ ...formData, icon: e.target.value })}
+              placeholder="🎨"
+              disabled={loading}
+              maxLength={2}
+            />
+            <p className="text-xs text-muted-foreground">
+              Choose an emoji to represent your workspace
+            </p>
+          </div>
+
+          {/* Description Textarea */}
+          <div className="space-y-2">
+            <Label htmlFor="description">Description (Optional)</Label>
+            <Textarea
+              id="description"
               value={formData.description}
               onChange={(e) => setFormData({ ...formData, description: e.target.value })}
-              placeholder="A brief description of your design system"
+              placeholder="A brief description of your design system..."
+              disabled={loading}
               rows={3}
-              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent resize-none"
-              disabled={loading}
-            />
-          </div>
-
-          {/* Icon */}
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">
-              Icon
-            </label>
-            <div className="grid grid-cols-5 gap-2">
-              {ICON_OPTIONS.map((icon) => (
-                <button
-                  key={icon}
-                  type="button"
-                  onClick={() => setFormData({ ...formData, icon })}
-                  className={`
-                    p-3 text-2xl rounded-lg border-2 transition
-                    ${
-                      formData.icon === icon
-                        ? 'border-blue-500 bg-blue-50'
-                        : 'border-gray-200 hover:border-gray-300'
-                    }
-                  `}
-                  disabled={loading}
-                >
-                  {icon}
-                </button>
-              ))}
-            </div>
-          </div>
-
-          {/* Color */}
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">
-              Color
-            </label>
-            <div className="grid grid-cols-3 gap-2">
-              {COLOR_OPTIONS.map((color) => (
-                <button
-                  key={color.value}
-                  type="button"
-                  onClick={() => setFormData({ ...formData, color: color.value })}
-                  className={`
-                    px-3 py-2 rounded-lg border-2 transition flex items-center gap-2
-                    ${
-                      formData.color === color.value
-                        ? 'border-gray-900 bg-gray-50'
-                        : 'border-gray-200 hover:border-gray-300'
-                    }
-                  `}
-                  disabled={loading}
-                >
-                  <div
-                    className="w-4 h-4 rounded-full"
-                    style={{ backgroundColor: color.value }}
-                  />
-                  <span className="text-sm font-medium text-gray-700">
-                    {color.name}
-                  </span>
-                </button>
-              ))}
-            </div>
-          </div>
-
-          {/* Team Name */}
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">
-              Team Name
-            </label>
-            <input
-              type="text"
-              value={formData.team_name}
-              onChange={(e) => setFormData({ ...formData, team_name: e.target.value })}
-              placeholder="Design Team"
-              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-              disabled={loading}
             />
           </div>
 
           {/* Actions */}
           <div className="flex gap-3 pt-4">
-            <button
+            <Button
               type="button"
+              variant="outline"
               onClick={handleClose}
               disabled={loading}
-              className="flex-1 px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition font-medium"
+              className="flex-1"
             >
               Cancel
-            </button>
-            <button
+            </Button>
+            <Button
               type="submit"
-              disabled={loading}
-              className="flex-1 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition font-medium disabled:opacity-50"
+              disabled={loading || !formData.name.trim()}
+              className="flex-1"
             >
               {loading ? 'Creating...' : 'Create Workspace'}
-            </button>
+            </Button>
           </div>
         </form>
-      </div>
-    </div>
+      </DialogContent>
+    </Dialog>
   );
 }
