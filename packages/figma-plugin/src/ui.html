@@ -88,6 +88,7 @@
         socket = io(SERVER_URL, {
           path: '/api/socket.io', // Use /api prefix to work with proxy
           transports: ['polling'], // Force polling instead of websocket
+          query: { plugin: 'true' }, // Identify as plugin to bypass auth
           reconnection: true,
           reconnectionDelay: 5000,
           reconnectionAttempts: Infinity
