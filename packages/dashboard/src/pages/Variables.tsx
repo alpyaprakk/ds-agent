@@ -380,7 +380,7 @@ export function Variables() {
   };
 
   return (
-    <div className="flex h-[calc(100vh-3.5rem)]">
+    <div className="flex h-[calc(100vh-3.5rem)] overflow-hidden">
       {/* Left Sidebar */}
       <div className="w-56 border-r flex flex-col flex-shrink-0 bg-card overflow-hidden">
         {/* Search */}
