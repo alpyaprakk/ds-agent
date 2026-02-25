@@ -86,11 +86,11 @@ export function Settings() {
 
   return (
     <div className="p-8">
-      <div className="max-w-4xl mx-auto space-y-8">
+      <div className="max-w-4xl mx-auto space-y-10">
         {/* Header */}
         <div>
           <h1 className="text-3xl font-semibold tracking-tight">Settings</h1>
-          <p className="text-muted-foreground mt-2">
+          <p className="text-muted-foreground mt-3">
             Manage your profile, API keys, and preferences
           </p>
         </div>
@@ -99,19 +99,19 @@ export function Settings() {
 
         {/* Profile Card */}
         <Card>
-          <CardHeader>
+          <CardHeader className="pb-2">
             <div className="flex items-center gap-3">
               <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-primary/10">
                 <HugeiconsIcon icon={User02Icon} size={20} className="text-primary" />
               </div>
               <div>
-                <CardTitle>Profile</CardTitle>
-                <CardDescription>Your personal information</CardDescription>
+                <CardTitle className="text-base">Profile</CardTitle>
+                <CardDescription className="mt-1">Your personal information</CardDescription>
               </div>
             </div>
           </CardHeader>
-          <CardContent className="space-y-6">
-            <div className="flex items-center gap-4">
+          <CardContent className="space-y-6 pt-6">
+            <div className="flex items-center gap-5">
               <Avatar className="h-16 w-16">
                 <AvatarImage src={user?.avatar || ''} />
                 <AvatarFallback className="bg-primary text-primary-foreground text-lg font-semibold">
@@ -119,12 +119,14 @@ export function Settings() {
                 </AvatarFallback>
               </Avatar>
               <div>
-                <p className="font-semibold">{user?.name}</p>
-                <p className="text-sm text-muted-foreground">{user?.email}</p>
+                <p className="font-semibold text-base">{user?.name}</p>
+                <p className="text-sm text-muted-foreground mt-0.5">{user?.email}</p>
               </div>
             </div>
 
-            <div className="space-y-2">
+            <Separator />
+
+            <div className="space-y-3">
               <Label htmlFor="profile-name">Display Name</Label>
               <Input
                 id="profile-name"
@@ -142,27 +144,22 @@ export function Settings() {
 
         {/* Figma Token Card */}
         <Card>
-          <CardHeader>
+          <CardHeader className="pb-2">
             <div className="flex items-center gap-3">
               <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-purple-500/10">
                 <HugeiconsIcon icon={FigmaIcon} size={20} className="text-purple-500" />
               </div>
               <div>
-                <CardTitle>Figma Access Token</CardTitle>
-                <CardDescription>
+                <CardTitle className="text-base">Figma Access Token</CardTitle>
+                <CardDescription className="mt-1">
                   Required for direct Figma API access
                 </CardDescription>
               </div>
             </div>
           </CardHeader>
-          <CardContent className="space-y-4">
-            <div className="space-y-2">
-              <Label htmlFor="figma-token">
-                <div className="flex items-center gap-2">
-                  <HugeiconsIcon icon={Key01Icon} size={16} />
-                  Personal Access Token
-                </div>
-              </Label>
+          <CardContent className="space-y-6 pt-6">
+            <div className="space-y-3">
+              <Label htmlFor="figma-token">Personal Access Token</Label>
               <Input
                 id="figma-token"
                 type="password"
@@ -183,7 +180,7 @@ export function Settings() {
               </p>
             </div>
 
-            <div className="flex items-center gap-3 p-3 bg-muted/50 rounded-lg">
+            <div className="flex items-center gap-3 p-4 bg-muted/50 rounded-lg">
               <div className={`h-2 w-2 rounded-full ${userSettings?.has_figma_token ? 'bg-green-500 animate-pulse' : 'bg-red-500'}`} />
               <span className="text-sm font-medium">
                 {userSettings?.has_figma_token ? 'Figma Token Configured' : 'Token Required'}
@@ -199,20 +196,20 @@ export function Settings() {
 
         {/* AI Configuration */}
         <Card>
-          <CardHeader>
+          <CardHeader className="pb-2">
             <div className="flex items-center gap-3">
               <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-primary/10">
                 <HugeiconsIcon icon={AiCloudIcon} size={20} className="text-primary" />
               </div>
               <div>
-                <CardTitle>AI Configuration</CardTitle>
-                <CardDescription>
+                <CardTitle className="text-base">AI Configuration</CardTitle>
+                <CardDescription className="mt-1">
                   Configure AI providers for design system analysis
                 </CardDescription>
               </div>
             </div>
           </CardHeader>
-          <CardContent className="space-y-6">
+          <CardContent className="space-y-6 pt-6">
             {/* Provider Selection */}
             <div className="space-y-3">
               <Label>AI Provider</Label>
@@ -242,12 +239,7 @@ export function Settings() {
             {/* API Keys */}
             {aiProvider === 'anthropic' && (
               <div className="space-y-3">
-                <Label htmlFor="anthropic-key">
-                  <div className="flex items-center gap-2">
-                    <HugeiconsIcon icon={Key01Icon} size={16} />
-                    Anthropic API Key
-                  </div>
-                </Label>
+                <Label htmlFor="anthropic-key">Anthropic API Key</Label>
                 <Input
                   id="anthropic-key"
                   type="password"
@@ -271,12 +263,7 @@ export function Settings() {
 
             {aiProvider === 'openai' && (
               <div className="space-y-3">
-                <Label htmlFor="openai-key">
-                  <div className="flex items-center gap-2">
-                    <HugeiconsIcon icon={Key01Icon} size={16} />
-                    OpenAI API Key
-                  </div>
-                </Label>
+                <Label htmlFor="openai-key">OpenAI API Key</Label>
                 <Input
                   id="openai-key"
                   type="password"
@@ -321,19 +308,18 @@ export function Settings() {
                 <Badge variant="secondary" className="text-xs">{userSettings.openai_api_key_preview}</Badge>
               )}
             </div>
+
+            {/* Save Button inside card */}
+            <Button
+              onClick={saveApiKeys}
+              disabled={savingKeys}
+              className="w-full"
+            >
+              <HugeiconsIcon icon={SaveMoneyDollarIcon} size={18} className="mr-2" />
+              {savingKeys ? 'Saving...' : 'Save API Keys & Tokens'}
+            </Button>
           </CardContent>
         </Card>
-
-        {/* Save All Keys */}
-        <Button
-          onClick={saveApiKeys}
-          disabled={savingKeys}
-          className="w-full"
-          size="lg"
-        >
-          <HugeiconsIcon icon={SaveMoneyDollarIcon} size={18} className="mr-2" />
-          {savingKeys ? 'Saving...' : 'Save All API Keys'}
-        </Button>
       </div>
     </div>
   );
