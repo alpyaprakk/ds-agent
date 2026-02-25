@@ -234,6 +234,7 @@ export function Variables() {
     setSelectedCollectionId(figmaId);
     setSelectedGroup(null);
     setExpandedGroups(new Set());
+    setVariables([]);
 
     if (!currentWorkspace) return;
     try {
@@ -381,9 +382,9 @@ export function Variables() {
   return (
     <div className="flex h-[calc(100vh-3.5rem)]">
       {/* Left Sidebar */}
-      <div className="w-56 border-r flex flex-col flex-shrink-0 bg-card">
+      <div className="w-56 border-r flex flex-col flex-shrink-0 bg-card overflow-hidden">
         {/* Search */}
-        <div className="p-2.5 border-b">
+        <div className="p-2.5 border-b flex-shrink-0">
           <div className="relative">
             <HugeiconsIcon icon={Search01Icon} size={14} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-muted-foreground" />
             <Input
@@ -395,7 +396,7 @@ export function Variables() {
           </div>
         </div>
 
-        <ScrollArea className="flex-1">
+        <ScrollArea className="flex-1 min-h-0">
           {/* Collections */}
           <div className="p-1.5">
             <div className="px-2 py-1.5">
@@ -503,7 +504,7 @@ export function Variables() {
         </div>
 
         {/* Table Body */}
-        <ScrollArea className="flex-1">
+        <ScrollArea className="flex-1 min-h-0">
           {loading ? (
             <div className="flex items-center justify-center py-20 text-muted-foreground text-sm">
               Loading variables...
