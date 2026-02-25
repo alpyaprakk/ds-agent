@@ -78,7 +78,8 @@ figma.ui.onmessage = async (msg) => {
             modeId: m.modeId,
             name: m.name
           })),
-          defaultModeId: c.defaultModeId
+          defaultModeId: c.defaultModeId,
+          variableIds: c.variableIds
         })),
         components: components.map(c => ({
           id: c.id,
