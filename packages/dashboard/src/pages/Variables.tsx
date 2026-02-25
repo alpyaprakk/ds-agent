@@ -539,16 +539,16 @@ export function Variables() {
                         {/* Value column */}
                         <div className="w-[320px] flex items-center gap-2.5 px-4 py-2 border-l border-border/30 flex-shrink-0">
                           {isAlias ? (
-                            <div className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-md border border-border/60 bg-muted/40 max-w-full">
+                            <div className="inline-flex items-center gap-2.5 rounded-md outline outline-1 outline-border/60 -outline-offset-1 px-2.5 py-1 -mx-2.5 -my-1 max-w-full">
                               {color ? (
                                 <div
-                                  className="w-3.5 h-3.5 rounded-[3px] border border-border/50 flex-shrink-0"
+                                  className="w-4 h-4 rounded-[3px] border border-border/50 flex-shrink-0"
                                   style={{ backgroundColor: color }}
                                 />
                               ) : (
-                                <HugeiconsIcon icon={Icon} size={12} className="text-muted-foreground flex-shrink-0 opacity-60" />
+                                <HugeiconsIcon icon={Icon} size={14} className="text-muted-foreground flex-shrink-0 opacity-60" />
                               )}
-                              <span className="text-[12px] text-primary/80 truncate">
+                              <span className="text-[13px] text-primary/80 truncate">
                                 {label}
                               </span>
                             </div>
