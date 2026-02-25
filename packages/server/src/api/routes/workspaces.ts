@@ -400,4 +400,37 @@ router.get('/:id/variables', async (req: AuthRequest, res) => {
   }
 });
 
+// ==========================================
+// Components
+// ==========================================
+
+// GET /api/workspaces/:id/components - Get all components (with optional search)
+router.get('/:id/components', async (req: AuthRequest, res) => {
+  try {
+    const isMember = await UserRepository.isWorkspaceMember(req.user!.id, req.params.id);
+    if (!isMember) return res.status(403).json({ error: 'Access denied' });
+
+    const search = req.query.search as string | undefined;
+
+    let queryText = `SELECT c.*, ff.name as file_name
+       FROM components c
+       LEFT JOIN figma_files ff ON ff.id = c.figma_file_id
+       WHERE c.workspace_id = $1`;
+    const params: any[] = [req.params.id];
+
+    if (search) {
+      queryText += ` AND c.name ILIKE $2`;
+      params.push(`%${search}%`);
+    }
+
+    queryText += ` ORDER BY c.name ASC`;
+
+    const result = await pool.query(queryText, params);
+    return res.json({ components: result.rows });
+  } catch (error) {
+    console.error('Error fetching components:', error);
+    return res.status(500).json({ error: 'Failed to fetch components' });
+  }
+});
+
 export default router;

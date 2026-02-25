@@ -1,36 +1,72 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useMemo } from 'react';
 import { useWorkspaceStore } from '../store/workspace-store';
+import { apiClient, DesignComponent } from '../lib/api-client';
 import { HugeiconsIcon } from '@hugeicons/react';
 import {
+  ArrowRight01Icon,
+  ArrowDown01Icon,
+  Search01Icon,
   PackageIcon,
-  Alert02Icon,
-  CheckmarkCircle02Icon,
-  Clock01Icon
+  Layers01Icon,
+  TextIcon,
 } from '@hugeicons/core-free-icons';
-import { Button } from '@/components/ui/button';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
+import { Input } from '@/components/ui/input';
+import { ScrollArea } from '@/components/ui/scroll-area';
+import { Separator } from '@/components/ui/separator';
 import { cn } from '@/lib/utils';
 
-interface Component {
-  id: string;
+// Group components by their parent (from properties.parent)
+function groupByParent(components: DesignComponent[]): Map<string, DesignComponent[]> {
+  const groups = new Map<string, DesignComponent[]>();
+
+  for (const c of components) {
+    const parent = c.properties?.parent || '';
+    if (!groups.has(parent)) {
+      groups.set(parent, []);
+    }
+    groups.get(parent)!.push(c);
+  }
+
+  return groups;
+}
+
+// Build sidebar tree from parent names
+interface ParentNode {
   name: string;
-  type: string;
-  description?: string;
-  variable_coverage: number;
-  missing_variables: string[];
-  status: 'healthy' | 'warning' | 'error';
-  last_synced?: string;
-  total_variants?: number;
-  total_properties?: number;
+  count: number;
+  children: Map<string, ParentNode>;
+}
+
+function buildParentTree(components: DesignComponent[]): ParentNode {
+  const root: ParentNode = { name: '', count: components.length, children: new Map() };
+
+  // Group by parent
+  const parentCounts = new Map<string, number>();
+  for (const c of components) {
+    const parent = c.properties?.parent || '';
+    parentCounts.set(parent, (parentCounts.get(parent) || 0) + 1);
+  }
+
+  // Sort parents alphabetically and add as flat children
+  const sortedParents = Array.from(parentCounts.entries()).sort(([a], [b]) => a.localeCompare(b));
+  for (const [parent, count] of sortedParents) {
+    if (parent) {
+      root.children.set(parent, { name: parent, count, children: new Map() });
+    }
+  }
+
+  return root;
 }
 
 export function Components() {
   const { currentWorkspace } = useWorkspaceStore();
-  const [components, setComponents] = useState<Component[]>([]);
-  const [selectedComponent, setSelectedComponent] = useState<Component | null>(null);
-  const [filterStatus, setFilterStatus] = useState<'all' | 'healthy' | 'warning' | 'error'>('all');
+  const [components, setComponents] = useState<DesignComponent[]>([]);
+  const [searchQuery, setSearchQuery] = useState('');
   const [loading, setLoading] = useState(false);
+  const [selectedParent, setSelectedParent] = useState<string | null>(null);
+  const [selectedComponent, setSelectedComponent] = useState<DesignComponent | null>(null);
+  const [expandedGroups, setExpandedGroups] = useState<Set<string>>(new Set());
 
   useEffect(() => {
     if (currentWorkspace) {
@@ -40,78 +76,10 @@ export function Components() {
 
   const loadComponents = async () => {
     if (!currentWorkspace) return;
-
     setLoading(true);
     try {
-      // TODO: Replace with actual API call
-      // const response = await apiClient.getComponents(currentWorkspace.id);
-
-      // Mock data for now
-      const mockComponents: Component[] = [
-        {
-          id: '1',
-          name: 'Button',
-          type: 'Component',
-          description: 'Primary button component with variants',
-          variable_coverage: 100,
-          missing_variables: [],
-          status: 'healthy',
-          last_synced: new Date().toISOString(),
-          total_variants: 4,
-          total_properties: 8,
-        },
-        {
-          id: '2',
-          name: 'Input',
-          type: 'Component',
-          description: 'Text input field with validation states',
-          variable_coverage: 85,
-          missing_variables: ['border-radius-lg', 'shadow-focus'],
-          status: 'warning',
-          last_synced: new Date(Date.now() - 300000).toISOString(),
-          total_variants: 3,
-          total_properties: 6,
-        },
-        {
-          id: '3',
-          name: 'Card',
-          type: 'Component',
-          description: 'Container card component',
-          variable_coverage: 100,
-          missing_variables: [],
-          status: 'healthy',
-          last_synced: new Date().toISOString(),
-          total_variants: 2,
-          total_properties: 5,
-        },
-        {
-          id: '4',
-          name: 'Badge',
-          type: 'Component',
-          description: 'Status badge with color variants',
-          variable_coverage: 60,
-          missing_variables: ['color-info', 'color-warning-dark', 'spacing-badge'],
-          status: 'error',
-          last_synced: new Date(Date.now() - 600000).toISOString(),
-          total_variants: 5,
-          total_properties: 4,
-        },
-        {
-          id: '5',
-          name: 'Avatar',
-          type: 'Component',
-          description: 'User avatar component with sizes',
-          variable_coverage: 90,
-          missing_variables: ['border-avatar'],
-          status: 'warning',
-          last_synced: new Date().toISOString(),
-          total_variants: 3,
-          total_properties: 4,
-        },
-      ];
-
-      setComponents(mockComponents);
-      setSelectedComponent(mockComponents[0]);
+      const res = await apiClient.getComponents(currentWorkspace.id);
+      setComponents(res.components);
     } catch (error) {
       console.error('Failed to load components:', error);
     } finally {
@@ -119,28 +87,54 @@ export function Components() {
     }
   };
 
-  const filteredComponents = components.filter((comp) => {
-    if (filterStatus === 'all') return true;
-    return comp.status === filterStatus;
-  });
+  // Filter by search
+  const filteredComponents = useMemo(() => {
+    if (!searchQuery) return components;
+    const q = searchQuery.toLowerCase();
+    return components.filter(c =>
+      c.name.toLowerCase().includes(q) ||
+      c.description?.toLowerCase().includes(q) ||
+      c.properties?.parent?.toLowerCase().includes(q)
+    );
+  }, [components, searchQuery]);
 
-  const statusCounts = {
-    healthy: components.filter((c) => c.status === 'healthy').length,
-    warning: components.filter((c) => c.status === 'warning').length,
-    error: components.filter((c) => c.status === 'error').length,
-  };
+  // Build parent tree for sidebar
+  const parentTree = useMemo(() => buildParentTree(filteredComponents), [filteredComponents]);
 
-  const getStatusIcon = (status: string) => {
-    switch (status) {
-      case 'healthy':
-        return <HugeiconsIcon icon={CheckmarkCircle02Icon} size={16} className="text-emerald-600 dark:text-emerald-400" />;
-      case 'warning':
-        return <HugeiconsIcon icon={Alert02Icon} size={16} className="text-yellow-600 dark:text-yellow-400" />;
-      case 'error':
-        return <HugeiconsIcon icon={Alert02Icon} size={16} className="text-red-600 dark:text-red-400" />;
-      default:
-        return null;
+  // Visible components (filtered by selected parent)
+  const visibleComponents = useMemo(() => {
+    if (!selectedParent) return filteredComponents;
+    return filteredComponents.filter(c => (c.properties?.parent || '') === selectedParent);
+  }, [filteredComponents, selectedParent]);
+
+  // Group visible components by parent for main display
+  const groupedComponents = useMemo(() => groupByParent(visibleComponents), [visibleComponents]);
+
+  // Stats
+  const totalCount = components.length;
+  const withDescription = components.filter(c => c.description && c.description.trim()).length;
+  const withoutDescription = totalCount - withDescription;
+
+  // Unique parent count
+  const uniqueParents = useMemo(() => {
+    const parents = new Set<string>();
+    for (const c of components) {
+      const p = c.properties?.parent;
+      if (p) parents.add(p);
     }
+    return parents.size;
+  }, [components]);
+
+  const toggleGroup = (name: string) => {
+    setExpandedGroups(prev => {
+      const next = new Set(prev);
+      if (next.has(name)) {
+        next.delete(name);
+      } else {
+        next.add(name);
+      }
+      return next;
+    });
   };
 
   if (!currentWorkspace) {
@@ -154,281 +148,303 @@ export function Components() {
   }
 
   return (
-    <div className="p-8">
-      <div className="mb-8">
-        <h1 className="text-lg font-bold tracking-tight">Components</h1>
-        <p className="text-muted-foreground mt-2 text-xs">
-          Explore and manage components in your design system
-        </p>
-      </div>
+    <div className="flex h-[calc(100vh-3.5rem)]">
+      {/* Left Sidebar */}
+      <div className="w-56 border-r flex flex-col flex-shrink-0 bg-card">
+        {/* Search */}
+        <div className="p-2.5 border-b">
+          <div className="relative">
+            <HugeiconsIcon icon={Search01Icon} size={14} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-muted-foreground" />
+            <Input
+              placeholder="Search"
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              className="pl-8 h-7 text-xs"
+            />
+          </div>
+        </div>
 
-      {/* Status Summary */}
-      <div className="grid grid-cols-4 gap-4 mb-8">
-        <Card className="hover:border-border/60 transition-all">
-          <CardHeader className="pb-3">
-            <CardDescription className="text-xs font-medium">Total Components</CardDescription>
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">{components.length}</div>
-          </CardContent>
-        </Card>
-
-        <Card className="hover:border-border/60 transition-all">
-          <CardHeader className="pb-3">
-            <CardDescription className="flex items-center gap-2 text-xs font-medium">
-              <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-emerald-500/10">
-                <HugeiconsIcon icon={CheckmarkCircle02Icon} className="h-4 w-4 text-emerald-600 dark:text-emerald-400" />
-              </div>
-              Healthy
-            </CardDescription>
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">{statusCounts.healthy}</div>
-          </CardContent>
-        </Card>
-
-        <Card className="hover:border-border/60 transition-all">
-          <CardHeader className="pb-3">
-            <CardDescription className="flex items-center gap-2 text-xs font-medium">
-              <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-yellow-500/10">
-                <HugeiconsIcon icon={Alert02Icon} className="h-4 w-4 text-yellow-600 dark:text-yellow-400" />
-              </div>
-              Warning
-            </CardDescription>
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">{statusCounts.warning}</div>
-          </CardContent>
-        </Card>
-
-        <Card className="hover:border-border/60 transition-all">
-          <CardHeader className="pb-3">
-            <CardDescription className="flex items-center gap-2 text-xs font-medium">
-              <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-red-500/10">
-                <HugeiconsIcon icon={Alert02Icon} className="h-4 w-4 text-red-600 dark:text-red-400" />
-              </div>
-              Error
-            </CardDescription>
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">{statusCounts.error}</div>
-          </CardContent>
-        </Card>
-      </div>
-
-      {/* Filter Tabs */}
-      <div className="mb-6 flex gap-2 border-b">
-        {(['all', 'healthy', 'warning', 'error'] as const).map((status) => (
-          <button
-            key={status}
-            onClick={() => setFilterStatus(status)}
-            className={cn(
-              'px-4 py-2 font-medium transition border-b-2 -mb-px',
-              filterStatus === status
-                ? 'border-primary text-primary'
-                : 'border-transparent text-muted-foreground hover:text-foreground'
+        <ScrollArea className="flex-1">
+          {/* Parent Groups */}
+          <div className="p-1.5">
+            <div className="px-2 py-1.5">
+              <span className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wider">Groups</span>
+            </div>
+            <button
+              onClick={() => {
+                setSelectedParent(null);
+                setSelectedComponent(null);
+              }}
+              className={cn(
+                'w-full flex items-center gap-1.5 px-2 py-1.5 text-[13px] rounded-md transition-colors text-left',
+                selectedParent === null
+                  ? 'bg-primary text-primary-foreground font-medium'
+                  : 'text-foreground hover:bg-muted/50'
+              )}
+            >
+              <span className="flex-1">All Components</span>
+              <span className={cn(
+                'text-[11px] tabular-nums',
+                selectedParent === null ? 'text-primary-foreground/70' : 'text-muted-foreground'
+              )}>
+                {filteredComponents.length}
+              </span>
+            </button>
+            {Array.from(parentTree.children.entries()).map(([name, node]) => (
+              <button
+                key={name}
+                onClick={() => {
+                  setSelectedParent(selectedParent === name ? null : name);
+                  setSelectedComponent(null);
+                }}
+                className={cn(
+                  'w-full flex items-center gap-1.5 px-2 py-1.5 text-[13px] rounded-md transition-colors text-left',
+                  selectedParent === name
+                    ? 'bg-primary text-primary-foreground font-medium'
+                    : 'text-foreground hover:bg-muted/50'
+                )}
+              >
+                <span className="flex-1 truncate">{name}</span>
+                <span className={cn(
+                  'text-[11px] tabular-nums',
+                  selectedParent === name ? 'text-primary-foreground/70' : 'text-muted-foreground'
+                )}>
+                  {node.count}
+                </span>
+              </button>
+            ))}
+            {components.length === 0 && !loading && (
+              <p className="px-2 py-3 text-xs text-muted-foreground">
+                No components yet. Sync a Figma file to get started.
+              </p>
             )}
-          >
-            {status.charAt(0).toUpperCase() + status.slice(1)}
-            <Badge variant="secondary" className="ml-2">
-              {status === 'all' ? components.length : statusCounts[status as keyof typeof statusCounts] || 0}
-            </Badge>
-          </button>
-        ))}
+          </div>
+
+          {/* Summary */}
+          {totalCount > 0 && (
+            <>
+              <Separator className="mx-2" />
+              <div className="p-1.5 pb-4">
+                <div className="px-2 py-1.5">
+                  <span className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wider">Summary</span>
+                </div>
+                <div className="flex items-center gap-2 px-2 py-1 text-[13px] text-muted-foreground">
+                  <HugeiconsIcon icon={PackageIcon} size={12} className="flex-shrink-0 opacity-60" />
+                  <span className="flex-1">Components</span>
+                  <span className="text-[11px] tabular-nums">{totalCount}</span>
+                </div>
+                <div className="flex items-center gap-2 px-2 py-1 text-[13px] text-muted-foreground">
+                  <HugeiconsIcon icon={Layers01Icon} size={12} className="flex-shrink-0 opacity-60" />
+                  <span className="flex-1">Groups</span>
+                  <span className="text-[11px] tabular-nums">{uniqueParents}</span>
+                </div>
+                <div className="flex items-center gap-2 px-2 py-1 text-[13px] text-muted-foreground">
+                  <HugeiconsIcon icon={TextIcon} size={12} className="flex-shrink-0 opacity-60" />
+                  <span className="flex-1">With description</span>
+                  <span className="text-[11px] tabular-nums">{withDescription}</span>
+                </div>
+                {withoutDescription > 0 && (
+                  <div className="flex items-center gap-2 px-2 py-1 text-[13px] text-yellow-600 dark:text-yellow-400">
+                    <span className="w-3 h-3 flex items-center justify-center text-[9px] font-bold flex-shrink-0">!</span>
+                    <span className="flex-1">Missing description</span>
+                    <span className="text-[11px] tabular-nums">{withoutDescription}</span>
+                  </div>
+                )}
+              </div>
+            </>
+          )}
+        </ScrollArea>
       </div>
 
-      <div className="grid grid-cols-2 gap-8">
-        {/* Components List */}
-        <Card>
-          <CardHeader>
-            <CardTitle>Components ({filteredComponents.length})</CardTitle>
-          </CardHeader>
-          <CardContent className="p-0">
+      {/* Main Content */}
+      <div className="flex-1 flex min-w-0">
+        {/* Component List */}
+        <div className="flex-1 flex flex-col min-w-0">
+          {/* Table Header */}
+          <div className="flex items-center border-b bg-muted/30 text-[11px] font-medium text-muted-foreground uppercase tracking-wider flex-shrink-0">
+            <div className="flex-1 px-4 py-2.5">Name</div>
+            <div className="w-[300px] px-4 py-2.5 border-l flex-shrink-0">Description</div>
+          </div>
+
+          {/* Table Body */}
+          <ScrollArea className="flex-1">
             {loading ? (
-              <div className="p-6 text-center text-muted-foreground">Loading...</div>
-            ) : filteredComponents.length === 0 ? (
-              <div className="p-12 text-center text-muted-foreground">
-                No components found with selected filter
+              <div className="flex items-center justify-center py-20 text-muted-foreground text-sm">
+                Loading components...
+              </div>
+            ) : visibleComponents.length === 0 ? (
+              <div className="flex flex-col items-center justify-center py-20 text-muted-foreground">
+                <div className="flex h-12 w-12 items-center justify-center rounded-lg bg-muted mb-3">
+                  <HugeiconsIcon icon={PackageIcon} size={24} className="text-muted-foreground" />
+                </div>
+                <p className="text-sm">
+                  {searchQuery ? 'No components match your search' : 'No components found'}
+                </p>
+                {!searchQuery && (
+                  <p className="text-xs mt-1">Sync a Figma file to populate components</p>
+                )}
               </div>
             ) : (
-              <div className="divide-y">
-                {filteredComponents.map((component) => (
-                  <button
-                    key={component.id}
-                    onClick={() => setSelectedComponent(component)}
-                    className={cn(
-                      'w-full px-6 py-4 text-left transition',
-                      selectedComponent?.id === component.id
-                        ? 'bg-accent'
-                        : 'hover:bg-accent/50'
-                    )}
-                  >
-                    <div className="flex items-start justify-between mb-2">
-                      <div className="flex items-center gap-3">
-                        <HugeiconsIcon icon={PackageIcon} className="h-5 w-5 text-muted-foreground" />
-                        <span className="font-medium">{component.name}</span>
+              <div>
+                {Array.from(groupedComponents.entries())
+                  .sort(([a], [b]) => a.localeCompare(b))
+                  .map(([parentName, comps]) => {
+                    const groupKey = parentName || '__ungrouped__';
+                    const isExpanded = !parentName || expandedGroups.has(groupKey) || selectedParent !== null;
+
+                    return (
+                      <div key={groupKey}>
+                        {/* Group Header */}
+                        {parentName && !selectedParent && (
+                          <button
+                            onClick={() => toggleGroup(groupKey)}
+                            className="w-full flex items-center gap-2 px-4 py-2 bg-muted/20 border-b border-border/40 hover:bg-muted/30 transition-colors"
+                          >
+                            <HugeiconsIcon
+                              icon={isExpanded ? ArrowDown01Icon : ArrowRight01Icon}
+                              size={12}
+                              className="text-muted-foreground flex-shrink-0"
+                            />
+                            <span className="text-[12px] font-medium text-muted-foreground">
+                              {parentName}
+                            </span>
+                            <Badge variant="secondary" className="text-[10px] px-1.5 py-0 h-4">
+                              {comps.length}
+                            </Badge>
+                          </button>
+                        )}
+
+                        {/* Components in this group */}
+                        {isExpanded && comps.map((component) => (
+                          <button
+                            key={component.id}
+                            onClick={() => setSelectedComponent(
+                              selectedComponent?.id === component.id ? null : component
+                            )}
+                            className={cn(
+                              'w-full flex items-center border-b border-border/30 hover:bg-muted/30 transition-colors text-left',
+                              selectedComponent?.id === component.id && 'bg-primary/5'
+                            )}
+                          >
+                            {/* Name column */}
+                            <div className="flex-1 flex items-center gap-2.5 px-4 py-2.5 min-w-0">
+                              <HugeiconsIcon icon={PackageIcon} size={14} className="text-muted-foreground flex-shrink-0 opacity-60" />
+                              <span className="text-[13px] truncate">{component.name}</span>
+                            </div>
+
+                            {/* Description column */}
+                            <div className="w-[300px] flex items-center px-4 py-2.5 border-l border-border/30 flex-shrink-0">
+                              {component.description ? (
+                                <span className="text-[13px] text-muted-foreground truncate">
+                                  {component.description}
+                                </span>
+                              ) : (
+                                <span className="text-[12px] text-muted-foreground/50 italic">
+                                  No description
+                                </span>
+                              )}
+                            </div>
+                          </button>
+                        ))}
                       </div>
-                      {getStatusIcon(component.status)}
-                    </div>
-
-                    {component.description && (
-                      <p className="text-sm text-muted-foreground mb-3">{component.description}</p>
-                    )}
-
-                    <div className="flex items-center gap-4 text-xs text-muted-foreground">
-                      <span>{component.total_variants} variants</span>
-                      <span>•</span>
-                      <span>{component.variable_coverage}% coverage</span>
-                    </div>
-
-                    {/* Coverage Bar */}
-                    <div className="mt-3">
-                      <div className="w-full bg-muted rounded-full h-1.5">
-                        <div
-                          className={cn(
-                            'h-1.5 rounded-full transition-all',
-                            component.variable_coverage >= 90
-                              ? 'bg-emerald-600 dark:bg-emerald-500'
-                              : component.variable_coverage >= 70
-                              ? 'bg-yellow-600 dark:bg-yellow-500'
-                              : 'bg-red-600 dark:bg-red-500'
-                          )}
-                          style={{ width: `${component.variable_coverage}%` }}
-                        />
-                      </div>
-                    </div>
-                  </button>
-                ))}
+                    );
+                  })}
               </div>
             )}
-          </CardContent>
-        </Card>
+          </ScrollArea>
 
-        {/* Component Details */}
-        <Card>
-          <CardHeader>
-            <CardTitle>Component Details</CardTitle>
-          </CardHeader>
-          <CardContent>
-            {selectedComponent ? (
-              <div className="space-y-6">
-                <div>
-                  <div className="flex items-center gap-3 mb-2">
-                    <HugeiconsIcon icon={PackageIcon} className="h-5 w-5 text-muted-foreground" />
-                    <h3 className="text-lg font-bold">
-                      {selectedComponent.name}
-                    </h3>
-                  </div>
-                  {selectedComponent.description && (
-                    <p className="text-muted-foreground text-xs">{selectedComponent.description}</p>
+          {/* Footer status bar */}
+          <div className="flex items-center justify-between px-4 py-1.5 border-t bg-muted/20 text-[11px] text-muted-foreground flex-shrink-0">
+            <span>
+              {visibleComponents.length} component{visibleComponents.length !== 1 ? 's' : ''}
+              {selectedParent && ` in ${selectedParent}`}
+            </span>
+            <span>{uniqueParents} group{uniqueParents !== 1 ? 's' : ''}</span>
+          </div>
+        </div>
+
+        {/* Detail Panel */}
+        {selectedComponent && (
+          <div className="w-80 border-l bg-card flex flex-col flex-shrink-0">
+            <div className="p-4 border-b">
+              <div className="flex items-center gap-2.5 mb-2">
+                <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-muted">
+                  <HugeiconsIcon icon={PackageIcon} size={16} className="text-muted-foreground" />
+                </div>
+                <div className="flex-1 min-w-0">
+                  <h3 className="text-sm font-semibold truncate">{selectedComponent.name}</h3>
+                  {selectedComponent.properties?.parent && (
+                    <p className="text-[11px] text-muted-foreground truncate">
+                      {selectedComponent.properties.parent}
+                    </p>
                   )}
                 </div>
+              </div>
+            </div>
 
-                {/* Status Badge */}
+            <ScrollArea className="flex-1">
+              <div className="p-4 space-y-4">
+                {/* Description */}
                 <div>
-                  <label className="text-xs font-medium text-muted-foreground">Status</label>
+                  <label className="text-[11px] font-medium text-muted-foreground uppercase tracking-wider">
+                    Description
+                  </label>
+                  <p className="mt-1 text-[13px] text-foreground">
+                    {selectedComponent.description || (
+                      <span className="text-muted-foreground/50 italic">No description</span>
+                    )}
+                  </p>
+                </div>
+
+                <Separator />
+
+                {/* Type */}
+                <div>
+                  <label className="text-[11px] font-medium text-muted-foreground uppercase tracking-wider">
+                    Type
+                  </label>
                   <div className="mt-1">
-                    <Badge
-                      variant="secondary"
-                      className={cn(
-                        'gap-2',
-                        selectedComponent.status === 'healthy' && 'bg-emerald-500/10 text-emerald-700 dark:text-emerald-400 hover:bg-emerald-500/20',
-                        selectedComponent.status === 'warning' && 'bg-yellow-500/10 text-yellow-700 dark:text-yellow-400 hover:bg-yellow-500/20',
-                        selectedComponent.status === 'error' && 'bg-red-500/10 text-red-700 dark:text-red-400 hover:bg-red-500/20'
-                      )}
-                    >
-                      {getStatusIcon(selectedComponent.status)}
-                      {selectedComponent.status.toUpperCase()}
+                    <Badge variant="secondary" className="text-[11px]">
+                      {selectedComponent.type}
                     </Badge>
                   </div>
                 </div>
 
-                {/* Variable Coverage */}
+                {/* Figma Key */}
                 <div>
-                  <label className="text-xs font-medium text-muted-foreground">Variable Coverage</label>
-                  <div className="mt-2">
-                    <div className="flex items-center justify-between mb-2">
-                      <span className="text-xl font-bold">
-                        {selectedComponent.variable_coverage}%
-                      </span>
-                      <Badge variant="outline">
-                        {selectedComponent.missing_variables.length} missing
-                      </Badge>
-                    </div>
-                    <div className="w-full bg-muted rounded-full h-3">
-                      <div
-                        className={cn(
-                          'h-3 rounded-full transition-all',
-                          selectedComponent.variable_coverage >= 90
-                            ? 'bg-emerald-600 dark:bg-emerald-500'
-                            : selectedComponent.variable_coverage >= 70
-                            ? 'bg-yellow-600 dark:bg-yellow-500'
-                            : 'bg-red-600 dark:bg-red-500'
-                        )}
-                        style={{ width: `${selectedComponent.variable_coverage}%` }}
-                      />
-                    </div>
-                  </div>
+                  <label className="text-[11px] font-medium text-muted-foreground uppercase tracking-wider">
+                    Figma Key
+                  </label>
+                  <p className="mt-1 text-[12px] text-muted-foreground font-mono break-all">
+                    {selectedComponent.figma_key}
+                  </p>
                 </div>
 
-                {/* Missing Variables */}
-                {selectedComponent.missing_variables.length > 0 && (
+                {/* Source File */}
+                {selectedComponent.file_name && (
                   <div>
-                    <label className="text-xs font-medium text-muted-foreground mb-2 block">
-                      Missing Variables
+                    <label className="text-[11px] font-medium text-muted-foreground uppercase tracking-wider">
+                      Source File
                     </label>
-                    <div className="space-y-2">
-                      {selectedComponent.missing_variables.map((variable, index) => (
-                        <div
-                          key={index}
-                          className="flex items-center justify-between px-3 py-2 bg-red-500/10 border border-red-500/20 rounded-lg"
-                        >
-                          <span className="text-sm font-mono text-red-700 dark:text-red-400">{variable}</span>
-                          <Button variant="ghost" size="sm" className="text-red-600 dark:text-red-400 hover:text-red-700 dark:hover:text-red-300 h-auto py-1">
-                            Create
-                          </Button>
-                        </div>
-                      ))}
-                    </div>
+                    <p className="mt-1 text-[13px] text-foreground">
+                      {selectedComponent.file_name}
+                    </p>
                   </div>
                 )}
 
-                {/* Stats */}
-                <div className="grid grid-cols-2 gap-4">
-                  <div>
-                    <label className="text-xs font-medium text-muted-foreground">Variants</label>
-                    <div className="text-lg font-bold">
-                      {selectedComponent.total_variants}
-                    </div>
-                  </div>
-                  <div>
-                    <label className="text-xs font-medium text-muted-foreground">Properties</label>
-                    <div className="text-lg font-bold">
-                      {selectedComponent.total_properties}
-                    </div>
-                  </div>
+                {/* Timestamps */}
+                <div>
+                  <label className="text-[11px] font-medium text-muted-foreground uppercase tracking-wider">
+                    Last Updated
+                  </label>
+                  <p className="mt-1 text-[12px] text-muted-foreground">
+                    {new Date(selectedComponent.updated_at).toLocaleString()}
+                  </p>
                 </div>
-
-                {/* Last Synced */}
-                {selectedComponent.last_synced && (
-                  <div>
-                    <label className="text-xs font-medium text-muted-foreground">Last Synced</label>
-                    <div className="mt-1 flex items-center gap-2">
-                      <HugeiconsIcon icon={Clock01Icon} className="h-4 w-4" />
-                      <span className="text-sm">
-                        {new Date(selectedComponent.last_synced).toLocaleString()}
-                      </span>
-                    </div>
-                  </div>
-                )}
               </div>
-            ) : (
-              <div className="py-12 text-center text-muted-foreground">
-                Select a component to view details
-              </div>
-            )}
-          </CardContent>
-        </Card>
+            </ScrollArea>
+          </div>
+        )}
       </div>
     </div>
   );

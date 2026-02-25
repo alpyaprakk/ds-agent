@@ -69,6 +69,20 @@ export interface DesignVariable {
   updated_at: string;
 }
 
+export interface DesignComponent {
+  id: string;
+  workspace_id: string;
+  figma_file_id?: string;
+  name: string;
+  figma_key: string;
+  type: string;
+  description?: string;
+  properties: Record<string, any>;
+  file_name?: string;
+  created_at: string;
+  updated_at: string;
+}
+
 export interface FigmaFile {
   id: string;
   workspace_id: string;
@@ -240,6 +254,11 @@ class ApiClient {
   async getVariables(workspaceId: string, collectionKey?: string): Promise<{ variables: DesignVariable[] }> {
     const params = collectionKey ? `?collection=${encodeURIComponent(collectionKey)}` : '';
     return this.request(`/api/workspaces/${workspaceId}/variables${params}`);
+  }
+
+  async getComponents(workspaceId: string, search?: string): Promise<{ components: DesignComponent[] }> {
+    const params = search ? `?search=${encodeURIComponent(search)}` : '';
+    return this.request(`/api/workspaces/${workspaceId}/components${params}`);
   }
 
   async addFigmaFile(
