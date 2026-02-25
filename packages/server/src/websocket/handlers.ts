@@ -220,6 +220,59 @@ export function setupWebSocketHandlers(io: SocketIOServer) {
       socket.emit('pong', { timestamp: Date.now() });
     });
 
+    // Apply fix request from dashboard
+    socket.on('apply-fix', (data: any) => {
+      console.log('🔧 Fix request received:', data);
+
+      // Find connected plugin
+      const plugin = Array.from(connectedPlugins.values())[0]; // Get first plugin
+      if (!plugin) {
+        socket.emit('fix-error', {
+          error: 'No plugin connected. Please open the Figma plugin.'
+        });
+        return;
+      }
+
+      // Forward fix to plugin
+      io.to(plugin.socketId).emit('apply-fix', data);
+      console.log(`📤 Fix forwarded to plugin: ${plugin.plugin}`);
+    });
+
+    // Fix applied notification from plugin
+    socket.on('fix-applied', async (data: { conflictId: string; success: boolean; error?: string }) => {
+      console.log('✅ Fix applied notification:', data);
+
+      if (data.success) {
+        // Mark conflict as resolved
+        try {
+          await pool.query(
+            `UPDATE conflicts SET
+              status = 'resolved',
+              resolution_method = 'auto',
+              resolution_chosen = 'auto-fix',
+              resolved_by = 'system',
+              resolved_at = NOW()
+             WHERE id = $1`,
+            [data.conflictId]
+          );
+
+          // Broadcast to all clients
+          io.emit('fix-success', {
+            conflictId: data.conflictId,
+            message: 'Fix applied successfully'
+          });
+        } catch (error) {
+          console.error('Failed to update conflict:', error);
+        }
+      } else {
+        // Broadcast fix error
+        io.emit('fix-error', {
+          conflictId: data.conflictId,
+          error: data.error || 'Fix application failed'
+        });
+      }
+    });
+
     // Handle disconnect
     socket.on('disconnect', () => {
       console.log(`Client disconnected: ${socket.id}`);

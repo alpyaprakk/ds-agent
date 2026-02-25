@@ -113,12 +113,15 @@
 
           if (msg.type === 'apply-fix') {
             // Server sent a fix to apply
+            console.log('Applying fix from server:', msg);
             parent.postMessage({
               pluginMessage: {
                 type: 'apply-fix',
-                fix: msg.fix
+                fix: msg
               }
             }, '*');
+
+            document.getElementById('status').textContent = '🔧 Applying fix...';
           }
         };
 
@@ -204,6 +207,33 @@
           document.getElementById('status').textContent = '✅ Synced with server';
         } else {
           document.getElementById('status').textContent = '❌ Not connected to server';
+        }
+      }
+
+      if (msg.type === 'fix-applied') {
+        document.getElementById('status').textContent = '✅ Fix applied successfully';
+
+        // Notify server
+        if (ws && ws.readyState === WebSocket.OPEN) {
+          ws.send(JSON.stringify({
+            type: 'fix-applied',
+            conflictId: msg.conflictId,
+            success: true
+          }));
+        }
+      }
+
+      if (msg.type === 'fix-error') {
+        document.getElementById('status').textContent = '❌ Fix failed: ' + msg.error;
+
+        // Notify server
+        if (ws && ws.readyState === WebSocket.OPEN) {
+          ws.send(JSON.stringify({
+            type: 'fix-applied',
+            conflictId: msg.conflictId,
+            success: false,
+            error: msg.error
+          }));
         }
       }
     };

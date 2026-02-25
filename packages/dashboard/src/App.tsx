@@ -109,6 +109,30 @@ function App() {
       });
     });
 
+    wsClient.on('fix-success', (data) => {
+      console.log('Fix applied successfully:', data);
+      toast.success('Fix applied!', {
+        description: data.message || 'The fix has been applied to your Figma file',
+        duration: 5000,
+      });
+
+      // Refresh conflicts
+      if (useWorkspaceStore.getState().currentWorkspace) {
+        useWorkspaceStore.getState().fetchConflicts(
+          useWorkspaceStore.getState().currentWorkspace!.id,
+          'active'
+        );
+      }
+    });
+
+    wsClient.on('fix-error', (data) => {
+      console.error('Fix failed:', data);
+      toast.error('Fix failed', {
+        description: data.error || 'Could not apply the fix',
+        duration: 5000,
+      });
+    });
+
     return () => {
       wsClient.disconnect();
     };

@@ -11,7 +11,10 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Separator } from '@/components/ui/separator';
+import { AIChatPanel } from '@/components/AIChatPanel';
 import { cn } from '@/lib/utils';
+import { wsClient } from '@/lib/websocket';
+import { toast } from 'sonner';
 
 interface ParsedIssue {
   title: string;
@@ -54,6 +57,8 @@ export function Conflicts() {
   } = useWorkspaceStore();
 
   const [selectedCategory, setSelectedCategory] = useState<string | null>(null);
+  const [chatOpen, setChatOpen] = useState(false);
+  const [chatContext, setChatContext] = useState<any>(null);
 
   useEffect(() => {
     if (currentWorkspace) {
@@ -70,8 +75,37 @@ export function Conflicts() {
   };
 
   const handleFixWithAI = (conflict: any) => {
-    // TODO: Open AI chat with this conflict context
-    console.log('Fix with AI:', conflict);
+    const parsed = parseIssueDescription(conflict.description || '');
+
+    setChatContext({
+      conflictId: conflict.id,
+      title: parsed.title || conflict.entity_name,
+      description: parsed.description,
+      suggestion: parsed.suggestion !== 'N/A' ? parsed.suggestion : undefined,
+      entityType: conflict.entity_type,
+      entityName: conflict.entity_name
+    });
+    setChatOpen(true);
+  };
+
+  const handleApplyFix = (fix: any) => {
+    console.log('Applying fix:', fix);
+
+    // Send fix to plugin via WebSocket
+    wsClient.emit('apply-fix', {
+      conflictId: fix.conflictId,
+      entityId: fix.entityId,
+      action: fix.action,
+      suggestion: fix.suggestion
+    });
+
+    toast.info('Fix request sent to plugin', {
+      description: 'Please make sure the Figma plugin is running',
+      duration: 5000
+    });
+
+    // Close chat after applying fix
+    setChatOpen(false);
   };
 
   if (!currentWorkspace) {
@@ -334,6 +368,14 @@ export function Conflicts() {
           )}
         </CardContent>
       </Card>
+
+      {/* AI Chat Panel */}
+      <AIChatPanel
+        isOpen={chatOpen}
+        onClose={() => setChatOpen(false)}
+        initialContext={chatContext}
+        onApplyFix={handleApplyFix}
+      />
     </div>
   );
 }

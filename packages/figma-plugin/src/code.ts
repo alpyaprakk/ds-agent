@@ -109,7 +109,73 @@ figma.ui.onmessage = async (msg) => {
 
   if (msg.type === 'apply-fix') {
     console.log('🔧 Applying fix:', msg.fix);
-    // TODO: Implement fix application logic
-    figma.notify('Fix applied!');
+
+    try {
+      const { conflictId, entityId, action, suggestion } = msg.fix;
+
+      // Find the entity (variable or component) by name
+      let fixed = false;
+
+      if (action === 'auto-fix') {
+        // Try to find and fix variable
+        const variables = figma.variables.getLocalVariables();
+        const variable = variables.find(v => v.name === entityId || v.id === entityId);
+
+        if (variable) {
+          // Example: Rename variable based on suggestion
+          if (suggestion && suggestion.includes('Rename to')) {
+            const newName = suggestion.match(/Rename to ["'](.+?)["']/)?.[1];
+            if (newName) {
+              variable.name = newName;
+              fixed = true;
+              figma.notify(`✅ Variable renamed to: ${newName}`);
+            }
+          }
+        }
+
+        // Try to find and fix component
+        const components = figma.root.findAll(node => node.type === 'COMPONENT') as ComponentNode[];
+        const component = components.find(c => c.name === entityId || c.id === entityId);
+
+        if (component && suggestion) {
+          // Example: Add description to component
+          if (suggestion.includes('Add description')) {
+            const description = suggestion.match(/Add description: ["'](.+?)["']/)?.[1];
+            if (description) {
+              component.description = description;
+              fixed = true;
+              figma.notify(`✅ Description added to component: ${component.name}`);
+            }
+          }
+
+          // Example: Set auto-layout
+          if (suggestion.includes('auto-layout') && 'layoutMode' in component) {
+            component.layoutMode = 'HORIZONTAL';
+            fixed = true;
+            figma.notify(`✅ Auto-layout applied to: ${component.name}`);
+          }
+        }
+      }
+
+      if (fixed) {
+        figma.ui.postMessage({
+          type: 'fix-applied',
+          conflictId
+        });
+      } else {
+        figma.ui.postMessage({
+          type: 'fix-error',
+          conflictId,
+          error: 'Could not apply fix - entity not found or unsupported fix type'
+        });
+      }
+    } catch (error) {
+      console.error('❌ Fix application error:', error);
+      figma.ui.postMessage({
+        type: 'fix-error',
+        conflictId: msg.fix?.conflictId,
+        error: error instanceof Error ? error.message : 'Unknown error'
+      });
+    }
   }
 };
