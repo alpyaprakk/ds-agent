@@ -1,8 +1,9 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useCallback } from 'react';
 import { useWorkspaceStore } from '../store/workspace-store';
 import { AddFigmaFileModal } from '../components/AddFigmaFileModal';
 import { CreateWorkspaceModal } from '../components/CreateWorkspaceModal';
 import { apiClient } from '../lib/api-client';
+import { wsClient } from '../lib/websocket';
 import { toast } from 'sonner';
 import { HugeiconsIcon } from '@hugeicons/react';
 import {
@@ -55,11 +56,44 @@ export function Dashboard() {
     isDeleting: false,
   });
 
+  const refreshFiles = useCallback(() => {
+    if (currentWorkspace) {
+      useWorkspaceStore.getState().fetchFigmaFiles(currentWorkspace.id);
+    }
+  }, [currentWorkspace]);
+
+  // Listen for figma_synced event to refresh file list when sync completes
+  useEffect(() => {
+    const onFigmaSynced = () => {
+      refreshFiles();
+    };
+
+    wsClient.on('figma_synced', onFigmaSynced);
+    return () => {
+      wsClient.off('figma_synced', onFigmaSynced);
+    };
+  }, [refreshFiles]);
+
   const handleSyncFile = async (fileId: string, fileName: string) => {
     setSyncingFileId(fileId);
     try {
       const result = await apiClient.syncFile(fileId);
       toast.success(result.message || `"${fileName}" synced successfully`);
+      // Poll for status updates since plugin sync is async
+      let attempts = 0;
+      const pollInterval = setInterval(async () => {
+        attempts++;
+        refreshFiles();
+        // Check if file status changed from 'syncing'
+        const files = useWorkspaceStore.getState().figmaFiles;
+        const file = files.find(f => f.id === fileId);
+        if (file && file.sync_status !== 'syncing') {
+          clearInterval(pollInterval);
+        }
+        if (attempts >= 20) { // ~60s max
+          clearInterval(pollInterval);
+        }
+      }, 3000);
     } catch (error) {
       toast.error(`Failed to sync "${fileName}"`);
       console.error('Sync error:', error);
