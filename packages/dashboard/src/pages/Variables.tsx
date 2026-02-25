@@ -1,104 +1,162 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useMemo } from 'react';
 import { useWorkspaceStore } from '../store/workspace-store';
+import { apiClient, VariableCollection, DesignVariable } from '../lib/api-client';
 import { HugeiconsIcon } from '@hugeicons/react';
 import {
   ArrowRight01Icon,
   ArrowDown01Icon,
-  Edit02Icon,
-  Add01Icon,
-  Alert02Icon,
   Search01Icon,
   PackageIcon,
-  GridIcon,
+  PaintBoardIcon,
   TextFontIcon,
+  GridIcon,
 } from '@hugeicons/core-free-icons';
-import { Button } from '@/components/ui/button';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
+import { ScrollArea } from '@/components/ui/scroll-area';
+import { Separator } from '@/components/ui/separator';
 import { cn } from '@/lib/utils';
 
-interface Variable {
-  id: string;
-  collection_id: string;
+// Build a tree structure from variable names (grouped by "/" path segments)
+interface GroupNode {
   name: string;
-  value: string;
-  type: string;
-  description?: string;
-  is_alias: boolean;
-  alias_target?: string;
-  usage_count?: number;
+  path: string;
+  children: Map<string, GroupNode>;
+  variables: DesignVariable[];
+  count: number;
 }
 
-interface Collection {
-  id: string;
-  name: string;
-  variables: Variable[];
+function buildGroupTree(variables: DesignVariable[]): GroupNode {
+  const root: GroupNode = { name: '', path: '', children: new Map(), variables: [], count: 0 };
+
+  for (const v of variables) {
+    const parts = v.name.split('/');
+    if (parts.length <= 1) {
+      root.variables.push(v);
+      continue;
+    }
+
+    let current = root;
+    // All parts except the last are group segments
+    for (let i = 0; i < parts.length - 1; i++) {
+      const segment = parts[i].trim();
+      if (!current.children.has(segment)) {
+        const childPath = current.path ? `${current.path}/${segment}` : segment;
+        current.children.set(segment, {
+          name: segment,
+          path: childPath,
+          children: new Map(),
+          variables: [],
+          count: 0,
+        });
+      }
+      current = current.children.get(segment)!;
+    }
+    current.variables.push(v);
+  }
+
+  // Compute counts bottom-up
+  function computeCount(node: GroupNode): number {
+    let count = node.variables.length;
+    for (const child of node.children.values()) {
+      count += computeCount(child);
+    }
+    node.count = count;
+    return count;
+  }
+  computeCount(root);
+
+  return root;
 }
 
-const collectionIcons: Record<string, typeof PackageIcon> = {
-  colors: PackageIcon,
-  spacing: GridIcon,
-  typography: TextFontIcon,
-};
+function getVariableLeafName(name: string): string {
+  const parts = name.split('/');
+  return parts[parts.length - 1].trim();
+}
+
+function renderValue(variable: DesignVariable): { color: string | null; label: string } {
+  const value = variable.value;
+  if (!value) return { color: null, label: '—' };
+
+  const modeValues = typeof value === 'object' && !Array.isArray(value) ? Object.values(value) : [value];
+  const firstVal = modeValues[0] as any;
+
+  if (firstVal === undefined || firstVal === null) return { color: null, label: '—' };
+
+  // Alias reference
+  if (typeof firstVal === 'object' && firstVal.type === 'VARIABLE_ALIAS') {
+    return { color: null, label: firstVal.name || firstVal.id || 'Alias' };
+  }
+
+  if (variable.type === 'COLOR') {
+    // Color object { r, g, b, a } — Figma uses 0-1 range
+    if (typeof firstVal === 'object' && 'r' in firstVal) {
+      const r = Math.round((firstVal.r ?? 0) * 255);
+      const g = Math.round((firstVal.g ?? 0) * 255);
+      const b = Math.round((firstVal.b ?? 0) * 255);
+      const hex = `#${r.toString(16).padStart(2, '0')}${g.toString(16).padStart(2, '0')}${b.toString(16).padStart(2, '0')}`;
+      return { color: hex, label: hex.toUpperCase() };
+    }
+
+    // String alias like "Colors/Base/white"
+    if (typeof firstVal === 'string') {
+      return { color: null, label: firstVal };
+    }
+  }
+
+  // FLOAT
+  if (typeof firstVal === 'number') {
+    return { color: null, label: String(firstVal) };
+  }
+
+  // STRING
+  if (typeof firstVal === 'string') {
+    return { color: null, label: firstVal };
+  }
+
+  // BOOLEAN
+  if (typeof firstVal === 'boolean') {
+    return { color: null, label: firstVal ? 'true' : 'false' };
+  }
+
+  return { color: null, label: JSON.stringify(firstVal) };
+}
+
+function getTypeIcon(type: string) {
+  switch (type) {
+    case 'COLOR': return PaintBoardIcon;
+    case 'FLOAT': return GridIcon;
+    case 'STRING': return TextFontIcon;
+    default: return PackageIcon;
+  }
+}
 
 export function Variables() {
   const { currentWorkspace } = useWorkspaceStore();
-  const [collections, setCollections] = useState<Collection[]>([]);
-  const [expandedCollections, setExpandedCollections] = useState<Set<string>>(new Set());
-  const [selectedVariable, setSelectedVariable] = useState<Variable | null>(null);
+  const [collections, setCollections] = useState<VariableCollection[]>([]);
+  const [variables, setVariables] = useState<DesignVariable[]>([]);
+  const [selectedCollectionKey, setSelectedCollectionKey] = useState<string | null>(null);
+  const [expandedGroups, setExpandedGroups] = useState<Set<string>>(new Set());
   const [searchQuery, setSearchQuery] = useState('');
   const [loading, setLoading] = useState(false);
+  const [selectedGroup, setSelectedGroup] = useState<string | null>(null);
 
   useEffect(() => {
     if (currentWorkspace) {
-      loadVariables();
+      loadData();
     }
   }, [currentWorkspace]);
 
-  const loadVariables = async () => {
+  const loadData = async () => {
     if (!currentWorkspace) return;
-
     setLoading(true);
     try {
-      // TODO: Replace with actual API call
-      // const response = await apiClient.getVariables(currentWorkspace.id);
-
-      // Mock data for now
-      const mockCollections: Collection[] = [
-        {
-          id: 'colors',
-          name: 'Colors',
-          variables: [
-            { id: '1', collection_id: 'colors', name: 'Primary', value: '#3B82F6', type: 'COLOR', is_alias: false, usage_count: 15 },
-            { id: '2', collection_id: 'colors', name: 'Secondary', value: '#6B7280', type: 'COLOR', is_alias: false, usage_count: 8 },
-            { id: '3', collection_id: 'colors', name: 'Success', value: '#10B981', type: 'COLOR', is_alias: false, usage_count: 5 },
-            { id: '4', collection_id: 'colors', name: 'Error', value: '#EF4444', type: 'COLOR', is_alias: false, usage_count: 3 },
-          ],
-        },
-        {
-          id: 'spacing',
-          name: 'Spacing',
-          variables: [
-            { id: '5', collection_id: 'spacing', name: 'XS', value: '4', type: 'FLOAT', is_alias: false, usage_count: 12 },
-            { id: '6', collection_id: 'spacing', name: 'SM', value: '8', type: 'FLOAT', is_alias: false, usage_count: 18 },
-            { id: '7', collection_id: 'spacing', name: 'MD', value: '16', type: 'FLOAT', is_alias: false, usage_count: 22 },
-            { id: '8', collection_id: 'spacing', name: 'LG', value: '24', type: 'FLOAT', is_alias: false, usage_count: 14 },
-          ],
-        },
-        {
-          id: 'typography',
-          name: 'Typography',
-          variables: [
-            { id: '9', collection_id: 'typography', name: 'Font Size SM', value: '14', type: 'FLOAT', is_alias: false, usage_count: 10 },
-            { id: '10', collection_id: 'typography', name: 'Font Size MD', value: '16', type: 'FLOAT', is_alias: false, usage_count: 15 },
-            { id: '11', collection_id: 'typography', name: 'Font Size LG', value: '18', type: 'FLOAT', is_alias: false, usage_count: 8 },
-          ],
-        },
-      ];
-
-      setCollections(mockCollections);
-      setExpandedCollections(new Set(['colors']));
+      const [colRes, varRes] = await Promise.all([
+        apiClient.getCollections(currentWorkspace.id),
+        apiClient.getVariables(currentWorkspace.id),
+      ]);
+      setCollections(colRes.collections);
+      setVariables(varRes.variables);
     } catch (error) {
       console.error('Failed to load variables:', error);
     } finally {
@@ -106,30 +164,73 @@ export function Variables() {
     }
   };
 
-  const toggleCollection = (collectionId: string) => {
-    setExpandedCollections((prev) => {
+  const handleCollectionSelect = async (figmaKey: string | null) => {
+    setSelectedCollectionKey(figmaKey);
+    setSelectedGroup(null);
+    setExpandedGroups(new Set());
+
+    if (!currentWorkspace) return;
+    try {
+      const res = await apiClient.getVariables(currentWorkspace.id, figmaKey || undefined);
+      setVariables(res.variables);
+    } catch (error) {
+      console.error('Failed to load variables:', error);
+    }
+  };
+
+  // Filter variables by search
+  const filteredVariables = useMemo(() => {
+    if (!searchQuery) return variables;
+    const q = searchQuery.toLowerCase();
+    return variables.filter(v => v.name.toLowerCase().includes(q));
+  }, [variables, searchQuery]);
+
+  // Build group tree
+  const groupTree = useMemo(() => buildGroupTree(filteredVariables), [filteredVariables]);
+
+  // Get visible variables based on selected group
+  const visibleVariables = useMemo(() => {
+    if (!selectedGroup) return filteredVariables;
+    return filteredVariables.filter(v => {
+      const parts = v.name.split('/');
+      const varGroupPath = parts.slice(0, -1).map(p => p.trim()).join('/');
+      return varGroupPath === selectedGroup || varGroupPath.startsWith(selectedGroup + '/');
+    });
+  }, [filteredVariables, selectedGroup]);
+
+  // Group visible variables by their parent path for display
+  const groupedVariables = useMemo(() => {
+    const groups = new Map<string, DesignVariable[]>();
+
+    for (const v of visibleVariables) {
+      const parts = v.name.split('/');
+      const groupPath = parts.length > 1 ? parts.slice(0, -1).map(p => p.trim()).join(' / ') : '';
+      if (!groups.has(groupPath)) {
+        groups.set(groupPath, []);
+      }
+      groups.get(groupPath)!.push(v);
+    }
+
+    return groups;
+  }, [visibleVariables]);
+
+  const toggleGroup = (path: string) => {
+    setExpandedGroups(prev => {
       const next = new Set(prev);
-      if (next.has(collectionId)) {
-        next.delete(collectionId);
+      if (next.has(path)) {
+        next.delete(path);
       } else {
-        next.add(collectionId);
+        next.add(path);
       }
       return next;
     });
   };
 
-  const filteredCollections = collections.map((col) => ({
-    ...col,
-    variables: searchQuery
-      ? col.variables.filter((v) =>
-          v.name.toLowerCase().includes(searchQuery.toLowerCase())
-        )
-      : col.variables,
-  })).filter((col) => !searchQuery || col.variables.length > 0);
-
-  const totalVariables = collections.reduce((sum, col) => sum + col.variables.length, 0);
-  const totalAliases = collections.reduce((sum, col) => sum + col.variables.filter((v) => v.is_alias).length, 0);
-  const totalUsage = collections.reduce((sum, col) => sum + col.variables.reduce((s, v) => s + (v.usage_count || 0), 0), 0);
+  const totalVariables = variables.length;
+  const colorCount = variables.filter(v => v.type === 'COLOR').length;
+  const floatCount = variables.filter(v => v.type === 'FLOAT').length;
+  const stringCount = variables.filter(v => v.type === 'STRING').length;
+  const booleanCount = variables.filter(v => v.type === 'BOOLEAN').length;
 
   if (!currentWorkspace) {
     return (
@@ -141,278 +242,254 @@ export function Variables() {
     );
   }
 
-  return (
-    <div className="p-8">
-      <div className="mb-8 flex items-center justify-between">
-        <div>
-          <h1 className="text-lg font-bold tracking-tight">Variables</h1>
-          <p className="text-muted-foreground mt-2 text-xs">
-            Manage design tokens and variables across your design system
-          </p>
-        </div>
-        <Button>
-          <HugeiconsIcon icon={Add01Icon} className="h-4 w-4 mr-2" />
-          Add Variable
-        </Button>
-      </div>
+  // Render the sidebar group tree recursively
+  const renderGroupTree = (node: GroupNode, depth: number = 0): React.ReactNode => {
+    const entries = Array.from(node.children.entries()).sort(([a], [b]) => a.localeCompare(b));
+    if (entries.length === 0) return null;
 
-      {/* Summary Stats */}
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-8">
-        <Card className="hover:border-border/60 transition-all">
-          <CardHeader className="pb-3">
-            <div className="flex items-center justify-between">
-              <CardDescription className="text-xs font-medium">Total Variables</CardDescription>
-              <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-blue-500/10">
-                <HugeiconsIcon icon={PackageIcon} className="h-4 w-4 text-blue-600 dark:text-blue-400" />
-              </div>
-            </div>
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">{totalVariables}</div>
-            <p className="text-xs text-muted-foreground mt-2">Across {collections.length} collections</p>
-          </CardContent>
-        </Card>
+    return entries.map(([, child]) => {
+      const hasChildren = child.children.size > 0;
+      const isExpanded = expandedGroups.has(child.path);
+      const isSelected = selectedGroup === child.path;
 
-        <Card className="hover:border-border/60 transition-all">
-          <CardHeader className="pb-3">
-            <div className="flex items-center justify-between">
-              <CardDescription className="text-xs font-medium">Collections</CardDescription>
-              <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-purple-500/10">
-                <HugeiconsIcon icon={GridIcon} className="h-4 w-4 text-purple-600 dark:text-purple-400" />
-              </div>
-            </div>
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">{collections.length}</div>
-            <p className="text-xs text-muted-foreground mt-2">Variable groups</p>
-          </CardContent>
-        </Card>
-
-        <Card className="hover:border-border/60 transition-all">
-          <CardHeader className="pb-3">
-            <div className="flex items-center justify-between">
-              <CardDescription className="text-xs font-medium">Aliases</CardDescription>
-              <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-amber-500/10">
-                <HugeiconsIcon icon={Alert02Icon} className="h-4 w-4 text-amber-600 dark:text-amber-400" />
-              </div>
-            </div>
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">{totalAliases}</div>
-            <p className="text-xs text-muted-foreground mt-2">Linked references</p>
-          </CardContent>
-        </Card>
-
-        <Card className="hover:border-border/60 transition-all">
-          <CardHeader className="pb-3">
-            <div className="flex items-center justify-between">
-              <CardDescription className="text-xs font-medium">Total Usage</CardDescription>
-              <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-emerald-500/10">
-                <HugeiconsIcon icon={TextFontIcon} className="h-4 w-4 text-emerald-600 dark:text-emerald-400" />
-              </div>
-            </div>
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">{totalUsage}</div>
-            <p className="text-xs text-muted-foreground mt-2">Component references</p>
-          </CardContent>
-        </Card>
-      </div>
-
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        {/* Collections Tree */}
-        <Card>
-          <CardHeader>
-            <div className="flex items-center justify-between">
-              <CardTitle>Collections</CardTitle>
-              <Badge variant="secondary">{filteredCollections.length}</Badge>
-            </div>
-            <div className="relative mt-3">
-              <HugeiconsIcon icon={Search01Icon} className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-              <Input
-                placeholder="Search variables..."
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-                className="pl-9"
-              />
-            </div>
-          </CardHeader>
-          <CardContent>
-            {loading ? (
-              <div className="text-center py-6 text-muted-foreground text-sm">Loading...</div>
-            ) : filteredCollections.length === 0 ? (
-              <div className="text-center py-8 text-muted-foreground text-sm">
-                {searchQuery ? 'No variables match your search' : 'No variables found'}
-              </div>
-            ) : (
-              <div className="space-y-1">
-                {filteredCollections.map((collection) => {
-                  const IconComp = collectionIcons[collection.id] || PackageIcon;
-                  return (
-                    <div key={collection.id}>
-                      <button
-                        onClick={() => toggleCollection(collection.id)}
-                        className="w-full flex items-center gap-2.5 px-3 py-2.5 rounded-lg hover:bg-muted/50 transition-colors text-left group"
-                      >
-                        <HugeiconsIcon
-                          icon={expandedCollections.has(collection.id) ? ArrowDown01Icon : ArrowRight01Icon}
-                          className="h-3.5 w-3.5 text-muted-foreground"
-                        />
-                        <div className="flex h-6 w-6 items-center justify-center rounded-md bg-muted">
-                          <HugeiconsIcon icon={IconComp} className="h-3.5 w-3.5 text-muted-foreground" />
-                        </div>
-                        <span className="font-medium text-sm flex-1">{collection.name}</span>
-                        <Badge variant="secondary" className="text-[10px] px-1.5 py-0">
-                          {collection.variables.length}
-                        </Badge>
-                      </button>
-
-                      {expandedCollections.has(collection.id) && (
-                        <div className="ml-6 mt-0.5 mb-1 space-y-0.5 border-l border-border/50 pl-3">
-                          {collection.variables.map((variable) => (
-                            <button
-                              key={variable.id}
-                              onClick={() => setSelectedVariable(variable)}
-                              className={cn(
-                                'w-full flex items-center gap-3 px-3 py-2 rounded-lg transition-colors text-left',
-                                selectedVariable?.id === variable.id
-                                  ? 'bg-primary/10 border border-primary/20'
-                                  : 'hover:bg-muted/50'
-                              )}
-                            >
-                              {variable.type === 'COLOR' ? (
-                                <div
-                                  className="w-4 h-4 rounded-sm border border-border/50 flex-shrink-0"
-                                  style={{ backgroundColor: variable.value }}
-                                />
-                              ) : (
-                                <div className="w-4 h-4 rounded-sm bg-muted border border-border/50 flex-shrink-0 flex items-center justify-center">
-                                  <span className="text-[8px] font-mono text-muted-foreground">
-                                    {variable.type === 'FLOAT' ? '#' : 'T'}
-                                  </span>
-                                </div>
-                              )}
-                              <span className="text-sm flex-1 truncate">{variable.name}</span>
-                              <span className="text-[11px] font-mono text-muted-foreground">
-                                {variable.type === 'COLOR' ? variable.value : `${variable.value}px`}
-                              </span>
-                              {variable.is_alias && (
-                                <HugeiconsIcon icon={Alert02Icon} className="h-3.5 w-3.5 text-amber-500" />
-                              )}
-                            </button>
-                          ))}
-                        </div>
-                      )}
-                    </div>
-                  );
-                })}
-              </div>
+      return (
+        <div key={child.path}>
+          <button
+            onClick={() => {
+              if (hasChildren) toggleGroup(child.path);
+              setSelectedGroup(child.path);
+            }}
+            className={cn(
+              'w-full flex items-center gap-1.5 py-1.5 pr-2 text-left text-[13px] rounded-md transition-colors hover:bg-muted/50',
+              isSelected && 'bg-primary/10 text-primary font-medium',
             )}
-          </CardContent>
-        </Card>
+            style={{ paddingLeft: `${depth * 16 + 8}px` }}
+          >
+            {hasChildren ? (
+              <HugeiconsIcon
+                icon={isExpanded ? ArrowDown01Icon : ArrowRight01Icon}
+                size={12}
+                className="text-muted-foreground flex-shrink-0"
+              />
+            ) : (
+              <span className="w-3 flex-shrink-0" />
+            )}
+            <span className="flex-1 truncate">{child.name}</span>
+            <span className="text-[11px] text-muted-foreground tabular-nums">{child.count}</span>
+          </button>
+          {hasChildren && isExpanded && renderGroupTree(child, depth + 1)}
+        </div>
+      );
+    });
+  };
 
-        {/* Variable Details */}
-        <Card>
-          <CardHeader>
-            <div className="flex items-center justify-between">
-              <CardTitle>Variable Details</CardTitle>
-              {selectedVariable && (
-                <Button variant="ghost" size="sm">
-                  <HugeiconsIcon icon={Edit02Icon} className="h-4 w-4 mr-2" />
-                  Edit
-                </Button>
+  return (
+    <div className="flex h-[calc(100vh-3.5rem)]">
+      {/* Left Sidebar */}
+      <div className="w-56 border-r flex flex-col flex-shrink-0 bg-card">
+        {/* Search */}
+        <div className="p-2.5 border-b">
+          <div className="relative">
+            <HugeiconsIcon icon={Search01Icon} size={14} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-muted-foreground" />
+            <Input
+              placeholder="Search"
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              className="pl-8 h-7 text-xs"
+            />
+          </div>
+        </div>
+
+        <ScrollArea className="flex-1">
+          {/* Collections */}
+          <div className="p-1.5">
+            <div className="px-2 py-1.5">
+              <span className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wider">Collections</span>
+            </div>
+            {collections.map((col) => (
+              <button
+                key={col.id}
+                onClick={() => handleCollectionSelect(
+                  selectedCollectionKey === col.figma_key ? null : col.figma_key
+                )}
+                className={cn(
+                  'w-full flex items-center gap-2 px-2 py-1.5 text-[13px] rounded-md transition-colors text-left',
+                  selectedCollectionKey === col.figma_key
+                    ? 'bg-primary text-primary-foreground font-medium'
+                    : 'text-foreground hover:bg-muted/50'
+                )}
+              >
+                <span className="flex-1 truncate">{col.name}</span>
+                <span className={cn(
+                  'text-[11px] tabular-nums',
+                  selectedCollectionKey === col.figma_key ? 'text-primary-foreground/70' : 'text-muted-foreground'
+                )}>
+                  {col.variable_count}
+                </span>
+              </button>
+            ))}
+            {collections.length === 0 && !loading && (
+              <p className="px-2 py-3 text-xs text-muted-foreground">
+                No collections yet. Sync a Figma file to get started.
+              </p>
+            )}
+          </div>
+
+          <Separator className="mx-2" />
+
+          {/* Groups */}
+          <div className="p-1.5">
+            <div className="px-2 py-1.5">
+              <span className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wider">Groups</span>
+            </div>
+            <button
+              onClick={() => setSelectedGroup(null)}
+              className={cn(
+                'w-full flex items-center gap-1.5 px-2 py-1.5 text-[13px] rounded-md transition-colors text-left',
+                selectedGroup === null
+                  ? 'bg-primary/10 text-primary font-medium'
+                  : 'text-foreground hover:bg-muted/50'
+              )}
+            >
+              <span className="flex-1">All</span>
+              <span className="text-[11px] text-muted-foreground tabular-nums">{filteredVariables.length}</span>
+            </button>
+            {renderGroupTree(groupTree)}
+          </div>
+
+          {/* Type summary */}
+          {totalVariables > 0 && (
+            <>
+              <Separator className="mx-2" />
+              <div className="p-1.5 pb-4">
+                <div className="px-2 py-1.5">
+                  <span className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wider">Types</span>
+                </div>
+                {colorCount > 0 && (
+                  <div className="flex items-center gap-2 px-2 py-1 text-[13px] text-muted-foreground">
+                    <div className="w-3 h-3 rounded-sm bg-gradient-to-br from-blue-500 to-purple-500" />
+                    <span className="flex-1">Color</span>
+                    <span className="text-[11px] tabular-nums">{colorCount}</span>
+                  </div>
+                )}
+                {floatCount > 0 && (
+                  <div className="flex items-center gap-2 px-2 py-1 text-[13px] text-muted-foreground">
+                    <span className="w-3 h-3 flex items-center justify-center text-[8px] font-bold">#</span>
+                    <span className="flex-1">Number</span>
+                    <span className="text-[11px] tabular-nums">{floatCount}</span>
+                  </div>
+                )}
+                {stringCount > 0 && (
+                  <div className="flex items-center gap-2 px-2 py-1 text-[13px] text-muted-foreground">
+                    <span className="w-3 h-3 flex items-center justify-center text-[8px] font-bold">T</span>
+                    <span className="flex-1">String</span>
+                    <span className="text-[11px] tabular-nums">{stringCount}</span>
+                  </div>
+                )}
+                {booleanCount > 0 && (
+                  <div className="flex items-center gap-2 px-2 py-1 text-[13px] text-muted-foreground">
+                    <span className="w-3 h-3 flex items-center justify-center text-[8px] font-bold">B</span>
+                    <span className="flex-1">Boolean</span>
+                    <span className="text-[11px] tabular-nums">{booleanCount}</span>
+                  </div>
+                )}
+              </div>
+            </>
+          )}
+        </ScrollArea>
+      </div>
+
+      {/* Main Content - Variable Table */}
+      <div className="flex-1 flex flex-col min-w-0">
+        {/* Table Header */}
+        <div className="flex items-center border-b bg-muted/30 text-[11px] font-medium text-muted-foreground uppercase tracking-wider flex-shrink-0">
+          <div className="flex-1 px-4 py-2.5">Name</div>
+          <div className="w-[320px] px-4 py-2.5 border-l flex-shrink-0">Value</div>
+        </div>
+
+        {/* Table Body */}
+        <ScrollArea className="flex-1">
+          {loading ? (
+            <div className="flex items-center justify-center py-20 text-muted-foreground text-sm">
+              Loading variables...
+            </div>
+          ) : visibleVariables.length === 0 ? (
+            <div className="flex flex-col items-center justify-center py-20 text-muted-foreground">
+              <div className="flex h-12 w-12 items-center justify-center rounded-lg bg-muted mb-3">
+                <HugeiconsIcon icon={PackageIcon} size={24} className="text-muted-foreground" />
+              </div>
+              <p className="text-sm">
+                {searchQuery ? 'No variables match your search' : 'No variables found'}
+              </p>
+              {!searchQuery && (
+                <p className="text-xs mt-1">Sync a Figma file to populate variables</p>
               )}
             </div>
-          </CardHeader>
-          <CardContent>
-            {selectedVariable ? (
-              <div className="space-y-6">
-                {/* Name & Type Header */}
-                <div className="flex items-start gap-4 p-4 bg-muted/30 rounded-lg border border-border/50">
-                  {selectedVariable.type === 'COLOR' ? (
-                    <div
-                      className="w-12 h-12 rounded-lg border border-border/50 flex-shrink-0"
-                      style={{ backgroundColor: selectedVariable.value }}
-                    />
-                  ) : (
-                    <div className="w-12 h-12 rounded-lg bg-muted border border-border/50 flex-shrink-0 flex items-center justify-center">
-                      <span className="text-lg font-mono text-muted-foreground">
-                        {selectedVariable.value}
+          ) : (
+            <div>
+              {Array.from(groupedVariables.entries()).map(([groupPath, vars]) => (
+                <div key={groupPath || '__root__'}>
+                  {/* Group Header */}
+                  {groupPath && (
+                    <div className="flex items-center gap-2 px-4 py-2 bg-muted/20 border-b border-border/40">
+                      <span className="text-[12px] font-medium text-muted-foreground">
+                        {groupPath}
                       </span>
+                      <Badge variant="secondary" className="text-[10px] px-1.5 py-0 h-4">
+                        {vars.length}
+                      </Badge>
                     </div>
                   )}
-                  <div className="flex-1 min-w-0">
-                    <h3 className="text-sm font-semibold">{selectedVariable.name}</h3>
-                    <div className="flex items-center gap-2 mt-1.5">
-                      <Badge variant="secondary" className="text-[10px]">{selectedVariable.type}</Badge>
-                      {selectedVariable.is_alias && (
-                        <Badge variant="outline" className="text-[10px] text-amber-600 dark:text-amber-400 border-amber-500/30">
-                          Alias
-                        </Badge>
-                      )}
-                    </div>
-                  </div>
-                </div>
 
-                {/* Value */}
-                <div>
-                  <label className="text-xs font-medium text-muted-foreground uppercase tracking-wider">Value</label>
-                  <div className="mt-2 flex items-center gap-3 p-3 bg-muted/30 rounded-lg border border-border/50">
-                    {selectedVariable.type === 'COLOR' && (
+                  {/* Variables in this group */}
+                  {vars.map((variable) => {
+                    const { color, label } = renderValue(variable);
+                    const Icon = getTypeIcon(variable.type);
+                    const leafName = getVariableLeafName(variable.name);
+
+                    return (
                       <div
-                        className="w-8 h-8 rounded-md border border-border/50"
-                        style={{ backgroundColor: selectedVariable.value }}
-                      />
-                    )}
-                    <code className="text-sm font-mono text-foreground">
-                      {selectedVariable.value}
-                      {selectedVariable.type === 'FLOAT' && 'px'}
-                    </code>
-                  </div>
-                </div>
+                        key={variable.id}
+                        className="flex items-center border-b border-border/30 hover:bg-muted/30 transition-colors"
+                      >
+                        {/* Name column */}
+                        <div className="flex-1 flex items-center gap-2.5 px-4 py-2 min-w-0">
+                          <HugeiconsIcon icon={Icon} size={14} className="text-muted-foreground flex-shrink-0 opacity-60" />
+                          <span className="text-[13px] truncate">{leafName}</span>
+                        </div>
 
-                {selectedVariable.is_alias && (
-                  <div>
-                    <label className="text-xs font-medium text-muted-foreground uppercase tracking-wider">Alias Target</label>
-                    <div className="mt-2 p-3 bg-muted/30 rounded-lg border border-border/50">
-                      <code className="text-sm font-mono">{selectedVariable.alias_target || 'N/A'}</code>
-                    </div>
-                  </div>
-                )}
-
-                {/* Usage */}
-                <div>
-                  <label className="text-xs font-medium text-muted-foreground uppercase tracking-wider">Usage</label>
-                  <div className="mt-2 p-3 bg-muted/30 rounded-lg border border-border/50">
-                    <div className="text-xl font-bold">
-                      {selectedVariable.usage_count || 0}
-                    </div>
-                    <p className="text-xs text-muted-foreground mt-1">
-                      Used in {selectedVariable.usage_count || 0} component
-                      {selectedVariable.usage_count !== 1 ? 's' : ''}
-                    </p>
-                  </div>
+                        {/* Value column */}
+                        <div className="w-[320px] flex items-center gap-2.5 px-4 py-2 border-l border-border/30 flex-shrink-0">
+                          {color && (
+                            <div
+                              className="w-4 h-4 rounded-[3px] border border-border/50 flex-shrink-0"
+                              style={{ backgroundColor: color }}
+                            />
+                          )}
+                          {variable.type === 'COLOR' && !color && (
+                            <div className="w-4 h-4 rounded-[3px] border border-border/50 bg-muted flex-shrink-0" />
+                          )}
+                          <span className="text-[13px] text-muted-foreground truncate">
+                            {label}
+                          </span>
+                        </div>
+                      </div>
+                    );
+                  })}
                 </div>
+              ))}
+            </div>
+          )}
+        </ScrollArea>
 
-                {selectedVariable.description && (
-                  <div>
-                    <label className="text-xs font-medium text-muted-foreground uppercase tracking-wider">Description</label>
-                    <div className="mt-2 p-3 bg-muted/30 rounded-lg border border-border/50">
-                      <p className="text-sm">{selectedVariable.description}</p>
-                    </div>
-                  </div>
-                )}
-              </div>
-            ) : (
-              <div className="py-16 text-center">
-                <div className="flex h-12 w-12 items-center justify-center rounded-lg bg-muted mx-auto mb-3">
-                  <HugeiconsIcon icon={PackageIcon} className="h-6 w-6 text-muted-foreground" />
-                </div>
-                <p className="text-sm text-muted-foreground">Select a variable to view details</p>
-              </div>
-            )}
-          </CardContent>
-        </Card>
+        {/* Footer status bar */}
+        <div className="flex items-center justify-between px-4 py-1.5 border-t bg-muted/20 text-[11px] text-muted-foreground flex-shrink-0">
+          <span>
+            {visibleVariables.length} variable{visibleVariables.length !== 1 ? 's' : ''}
+            {selectedGroup && ` in ${selectedGroup}`}
+          </span>
+          <span>{collections.length} collection{collections.length !== 1 ? 's' : ''}</span>
+        </div>
       </div>
     </div>
   );

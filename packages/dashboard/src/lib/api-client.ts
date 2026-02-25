@@ -39,6 +39,34 @@ export interface WorkspaceInvitation {
   inviter_name?: string;
 }
 
+export interface VariableCollection {
+  id: string;
+  workspace_id: string;
+  figma_file_id?: string;
+  name: string;
+  figma_key: string;
+  modes: any[];
+  variable_count: number;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface DesignVariable {
+  id: string;
+  workspace_id: string;
+  figma_file_id?: string;
+  name: string;
+  figma_key: string;
+  type: string;
+  value: any;
+  collection_id: string;
+  collection_name?: string;
+  scopes: any[];
+  description?: string;
+  created_at: string;
+  updated_at: string;
+}
+
 export interface FigmaFile {
   id: string;
   workspace_id: string;
@@ -201,6 +229,15 @@ class ApiClient {
   // Figma Files
   async getFigmaFiles(workspaceId: string): Promise<{ files: FigmaFile[] }> {
     return this.request(`/api/workspaces/${workspaceId}/files`);
+  }
+
+  async getCollections(workspaceId: string): Promise<{ collections: VariableCollection[] }> {
+    return this.request(`/api/workspaces/${workspaceId}/collections`);
+  }
+
+  async getVariables(workspaceId: string, collectionKey?: string): Promise<{ variables: DesignVariable[] }> {
+    const params = collectionKey ? `?collection=${encodeURIComponent(collectionKey)}` : '';
+    return this.request(`/api/workspaces/${workspaceId}/variables${params}`);
   }
 
   async addFigmaFile(

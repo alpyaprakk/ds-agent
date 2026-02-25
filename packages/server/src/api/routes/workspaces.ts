@@ -1,6 +1,7 @@
 import { Router } from 'express';
 import { WorkspaceRepository, FigmaFileRepository, UserRepository } from '../../db/repositories';
 import { authMiddleware, AuthRequest } from '../../middleware/auth';
+import pool from '../../db/connection';
 
 const router = Router();
 const workspaceRepo = new WorkspaceRepository();
@@ -342,6 +343,60 @@ router.delete('/:id/members/:userId', async (req: AuthRequest, res) => {
   } catch (error) {
     console.error('Error removing member:', error);
     return res.status(500).json({ error: 'Failed to remove member' });
+  }
+});
+
+// ==========================================
+// Variables & Collections
+// ==========================================
+
+// GET /api/workspaces/:id/collections - Get variable collections with variable counts
+router.get('/:id/collections', async (req: AuthRequest, res) => {
+  try {
+    const isMember = await UserRepository.isWorkspaceMember(req.user!.id, req.params.id);
+    if (!isMember) return res.status(403).json({ error: 'Access denied' });
+
+    const result = await pool.query(
+      `SELECT vc.*,
+              (SELECT COUNT(*) FROM variables v WHERE v.workspace_id = vc.workspace_id AND v.collection_id = vc.figma_key) as variable_count
+       FROM variable_collections vc
+       WHERE vc.workspace_id = $1
+       ORDER BY vc.name ASC`,
+      [req.params.id]
+    );
+    return res.json({ collections: result.rows });
+  } catch (error) {
+    console.error('Error fetching collections:', error);
+    return res.status(500).json({ error: 'Failed to fetch collections' });
+  }
+});
+
+// GET /api/workspaces/:id/variables - Get all variables (with optional collection filter)
+router.get('/:id/variables', async (req: AuthRequest, res) => {
+  try {
+    const isMember = await UserRepository.isWorkspaceMember(req.user!.id, req.params.id);
+    if (!isMember) return res.status(403).json({ error: 'Access denied' });
+
+    const collectionKey = req.query.collection as string | undefined;
+
+    let queryText = `SELECT v.*, vc.name as collection_name
+       FROM variables v
+       LEFT JOIN variable_collections vc ON vc.figma_key = v.collection_id AND vc.workspace_id = v.workspace_id
+       WHERE v.workspace_id = $1`;
+    const params: any[] = [req.params.id];
+
+    if (collectionKey) {
+      queryText += ` AND v.collection_id = $2`;
+      params.push(collectionKey);
+    }
+
+    queryText += ` ORDER BY v.name ASC`;
+
+    const result = await pool.query(queryText, params);
+    return res.json({ variables: result.rows });
+  } catch (error) {
+    console.error('Error fetching variables:', error);
+    return res.status(500).json({ error: 'Failed to fetch variables' });
   }
 });
 
