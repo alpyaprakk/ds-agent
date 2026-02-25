@@ -1,4 +1,5 @@
 import { useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { HugeiconsIcon } from '@hugeicons/react';
 import {
   Notification03Icon,
@@ -47,14 +48,36 @@ function getTimeAgo(dateStr: string): string {
   return date.toLocaleDateString();
 }
 
+function getNotificationRoute(type: string): string | null {
+  switch (type) {
+    case 'workspace_invitation':
+    case 'invitation_accepted':
+    case 'invitation_rejected':
+    case 'member_removed':
+    case 'role_changed':
+      return '/settings';
+    case 'conflict_detected':
+    case 'conflict_resolved':
+      return '/conflicts';
+    case 'figma_file_added':
+    case 'figma_file_removed':
+    case 'figma_synced':
+      return '/';
+    default:
+      return null;
+  }
+}
+
 function NotificationItem({
   notification,
   onRead,
   onDelete,
+  onClick,
 }: {
   notification: AppNotification;
   onRead: (id: string) => void;
   onDelete: (id: string) => void;
+  onClick: (notification: AppNotification) => void;
 }) {
   const Icon = notificationIcons[notification.type] || Notification03Icon;
 
@@ -63,9 +86,7 @@ function NotificationItem({
       className={`flex items-start gap-3 px-4 py-3 border-b last:border-b-0 transition-colors cursor-pointer hover:bg-accent/50 ${
         !notification.read ? 'bg-accent/30' : ''
       }`}
-      onClick={() => {
-        if (!notification.read) onRead(notification.id);
-      }}
+      onClick={() => onClick(notification)}
     >
       <div className={`mt-0.5 flex-shrink-0 rounded-full p-1.5 ${
         !notification.read ? 'bg-primary/10 text-primary' : 'bg-muted text-muted-foreground'
@@ -111,6 +132,7 @@ function NotificationItem({
 }
 
 export function NotificationPanel() {
+  const navigate = useNavigate();
   const {
     notifications,
     unreadCount,
@@ -123,6 +145,15 @@ export function NotificationPanel() {
     markAllAsRead,
     deleteNotification,
   } = useNotificationStore();
+
+  const handleNotificationClick = (notification: AppNotification) => {
+    if (!notification.read) markAsRead(notification.id);
+    const route = getNotificationRoute(notification.type);
+    if (route) {
+      setOpen(false);
+      navigate(route);
+    }
+  };
 
   // Fetch unread count on mount
   useEffect(() => {
@@ -149,7 +180,7 @@ export function NotificationPanel() {
         </Button>
       </PopoverTrigger>
 
-      <PopoverContent align="end" className="w-96 p-0">
+      <PopoverContent align="end" className="w-96 p-0 overflow-hidden">
         {/* Header */}
         <div className="flex items-center justify-between px-4 py-3 border-b">
           <div className="flex items-center gap-2">
@@ -191,6 +222,7 @@ export function NotificationPanel() {
                   notification={notification}
                   onRead={markAsRead}
                   onDelete={deleteNotification}
+                  onClick={handleNotificationClick}
                 />
               ))}
             </div>
