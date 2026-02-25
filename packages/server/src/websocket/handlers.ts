@@ -143,11 +143,28 @@ export function setupWebSocketHandlers(io: SocketIOServer) {
               [file.name]
             );
           }
+          // Fallback: if still not found, match any file currently in 'syncing' status
+          // (dashboard triggered sync sets status to 'syncing' before plugin responds)
+          if (figmaFileResult.rows.length === 0) {
+            figmaFileResult = await pool.query(
+              `SELECT * FROM figma_files WHERE sync_status = 'syncing' ORDER BY updated_at DESC LIMIT 1`
+            );
+            if (figmaFileResult.rows.length > 0) {
+              console.log(`⚠️ Matched syncing file by status fallback: ${figmaFileResult.rows[0].name}`);
+            }
+          }
         } else {
           figmaFileResult = await pool.query(
             'SELECT * FROM figma_files WHERE figma_key = $1 LIMIT 1',
             [file.key]
           );
+          // Fallback: if key doesn't match, try by name
+          if (figmaFileResult.rows.length === 0) {
+            figmaFileResult = await pool.query(
+              `SELECT * FROM figma_files WHERE name = $1 LIMIT 1`,
+              [file.name]
+            );
+          }
         }
 
         // Auto-register: if file not found, create it in the first available workspace

@@ -51,14 +51,15 @@ router.post('/files/:fileId', async (req, res) => {
       console.log(`🔄 Triggering sync via plugin for: ${file.name} (${file.figma_key})`);
       await figmaFileRepo.updateSyncStatus(file.id, 'syncing');
 
-      // Send sync request to the first connected plugin
+      // Send sync request to the first connected plugin (include file info for matching)
       const ioInstance = getIO();
       const pluginSocketId = pluginStatus.plugins[0]?.socketId;
+      const syncRequestData = { fileId: file.id, figmaKey: file.figma_key, fileName: file.name };
       if (ioInstance && pluginSocketId) {
-        ioInstance.to(pluginSocketId).emit('sync-request');
+        ioInstance.to(pluginSocketId).emit('sync-request', syncRequestData);
       } else if (ioInstance) {
         // Broadcast to all - fallback
-        ioInstance.emit('sync-request');
+        ioInstance.emit('sync-request', syncRequestData);
       }
 
       // Safety timeout: if sync doesn't complete in 60s, reset status
