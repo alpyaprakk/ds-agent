@@ -70,12 +70,10 @@ function getNotificationRoute(type: string): string | null {
 
 function NotificationItem({
   notification,
-  onRead,
   onDelete,
   onClick,
 }: {
   notification: AppNotification;
-  onRead: (id: string) => void;
   onDelete: (id: string) => void;
   onClick: (notification: AppNotification) => void;
 }) {
@@ -220,7 +218,6 @@ export function NotificationPanel() {
                 <NotificationItem
                   key={notification.id}
                   notification={notification}
-                  onRead={markAsRead}
                   onDelete={deleteNotification}
                   onClick={handleNotificationClick}
                 />
