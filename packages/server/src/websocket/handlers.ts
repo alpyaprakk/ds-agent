@@ -1,7 +1,7 @@
 import { Server as SocketIOServer, Socket } from 'socket.io';
 import { WorkspaceRepository } from '../db/repositories';
 import { NotificationService } from '../services/notification.service';
-import pool from '../db/connection';
+import pool, { query } from '../db/connection';
 import { randomUUID } from 'crypto';
 import { AIAnalyzer, DesignSystemData } from '../services/ai-analyzer';
 import { verifyToken } from '../middleware/auth';
@@ -632,24 +632,29 @@ async function analyzeDesignSystemAsync(
   console.log('🤖 Starting AI analysis...');
 
   try {
-    // Get workspace settings for AI configuration
-    const workspace = await workspaceRepo.findById(workspaceId);
-    if (!workspace) {
-      console.log('⚠️ Workspace not found, skipping AI analysis');
-      return;
-    }
+    // Get workspace owner's AI settings from user_settings table
+    const ownerResult = await query(
+      `SELECT us.ai_provider, us.anthropic_api_key, us.openai_api_key
+       FROM workspace_members wm
+       INNER JOIN user_settings us ON us.user_id = wm.user_id
+       WHERE wm.workspace_id = $1 AND wm.role = 'owner'
+       LIMIT 1`,
+      [workspaceId]
+    );
 
-    const aiSettings = workspace.settings?.ai;
-    if (!aiSettings || (!aiSettings.anthropicApiKey && !aiSettings.openaiApiKey)) {
+    const ownerSettings = ownerResult.rows[0];
+    if (!ownerSettings || (!ownerSettings.anthropic_api_key && !ownerSettings.openai_api_key)) {
       console.log('⚠️ AI not configured, skipping analysis');
       return;
     }
 
-    // Initialize AI analyzer
+    const provider = ownerSettings.ai_provider || 'anthropic';
+
+    // Initialize AI analyzer with workspace owner's keys
     const analyzer = new AIAnalyzer({
-      provider: aiSettings.provider || 'anthropic',
-      anthropicApiKey: aiSettings.anthropicApiKey,
-      openaiApiKey: aiSettings.openaiApiKey
+      provider: provider as 'anthropic' | 'openai',
+      anthropicApiKey: ownerSettings.anthropic_api_key,
+      openaiApiKey: ownerSettings.openai_api_key
     });
 
     // Broadcast analysis started
