@@ -61,6 +61,19 @@ router.post('/files/:fileId', async (req, res) => {
         ioInstance.emit('sync-request');
       }
 
+      // Safety timeout: if sync doesn't complete in 60s, reset status
+      setTimeout(async () => {
+        try {
+          const currentFile = await figmaFileRepo.findById(file.id);
+          if (currentFile && currentFile.sync_status === 'syncing') {
+            console.log(`⚠️ Sync timeout for file ${file.name}, resetting status to pending`);
+            await figmaFileRepo.updateSyncStatus(file.id, 'pending');
+          }
+        } catch (err) {
+          console.error('Failed to check sync timeout:', err);
+        }
+      }, 60000);
+
       return res.json({
         success: true,
         message: 'Sync triggered via Figma plugin. Data will be synced momentarily.',
@@ -91,7 +104,7 @@ router.post('/files/:fileId', async (req, res) => {
         await pool.query(
           `INSERT INTO variable_collections (id, workspace_id, figma_file_id, name, figma_key, modes)
            VALUES ($1, $2, $3, $4, $5, $6)
-           ON CONFLICT (figma_key) DO UPDATE SET
+           ON CONFLICT (workspace_id, figma_key) DO UPDATE SET
              name = EXCLUDED.name,
              modes = EXCLUDED.modes,
              updated_at = NOW()`,
@@ -111,7 +124,7 @@ router.post('/files/:fileId', async (req, res) => {
         await pool.query(
           `INSERT INTO variables (id, workspace_id, figma_file_id, name, figma_key, type, value, collection_id, scopes)
            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
-           ON CONFLICT (figma_key) DO UPDATE SET
+           ON CONFLICT (workspace_id, figma_key) DO UPDATE SET
              name = EXCLUDED.name,
              type = EXCLUDED.type,
              value = EXCLUDED.value,
@@ -135,7 +148,7 @@ router.post('/files/:fileId', async (req, res) => {
         await pool.query(
           `INSERT INTO components (id, workspace_id, figma_file_id, name, figma_key, description, type, properties)
            VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
-           ON CONFLICT (figma_key) DO UPDATE SET
+           ON CONFLICT (workspace_id, figma_key) DO UPDATE SET
              name = EXCLUDED.name,
              description = EXCLUDED.description,
              updated_at = NOW()`,

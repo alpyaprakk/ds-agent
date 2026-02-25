@@ -154,6 +154,12 @@ export function setupWebSocketHandlers(io: SocketIOServer) {
 
         const figmaFile = figmaFileResult.rows[0];
 
+        // Set sync status to 'syncing' at the beginning
+        await pool.query(
+          `UPDATE figma_files SET sync_status = 'syncing', sync_error = NULL, updated_at = NOW() WHERE id = $1`,
+          [figmaFile.id]
+        );
+
         // Start transaction for batch inserts
         const client = await pool.connect();
         try {
@@ -317,9 +323,23 @@ export function setupWebSocketHandlers(io: SocketIOServer) {
 
       } catch (error) {
         console.error('❌ Sync error:', error);
-        socket.emit('sync-error', {
-          error: error instanceof Error ? error.message : 'Unknown error'
-        });
+        const errorMsg = error instanceof Error ? error.message : 'Unknown error';
+
+        // Update file status to 'error' so it doesn't stay stuck on 'syncing'
+        try {
+          // Try to find the file by key to update its status
+          const syncPayloadForError = data.data || data;
+          if (syncPayloadForError?.file?.key) {
+            await pool.query(
+              `UPDATE figma_files SET sync_status = 'error', sync_error = $2, updated_at = NOW() WHERE figma_key = $1`,
+              [syncPayloadForError.file.key, errorMsg]
+            );
+          }
+        } catch (updateErr) {
+          console.error('❌ Failed to update sync status on error:', updateErr);
+        }
+
+        socket.emit('sync-error', { error: errorMsg });
       }
     });
 
