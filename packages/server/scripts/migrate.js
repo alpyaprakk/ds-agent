@@ -82,6 +82,13 @@ async function runMigrations() {
     .filter(f => f.endsWith('.sql'))
     .sort();
 
+  // Check if tables exist (pre-existing deployment without schema_migrations)
+  const tablesExist = await pool.query(`
+    SELECT COUNT(*) as count FROM information_schema.tables
+    WHERE table_schema = 'public' AND table_name = 'users';
+  `);
+  const hasExistingSchema = parseInt(tablesExist.rows[0].count) > 0;
+
   for (const file of files) {
     const version = file.replace('.sql', '');
 
@@ -93,6 +100,18 @@ async function runMigrations() {
 
     if (applied.rows.length > 0) {
       console.log(`⏭️  Skipping already applied migration: ${file}`);
+      continue;
+    }
+
+    // If DB already has tables and this migration number is <= 009,
+    // it was applied before schema_migrations tracking existed — mark as applied without running
+    const migrationNumber = parseInt(file.split('_')[0], 10);
+    if (hasExistingSchema && migrationNumber <= 9) {
+      await pool.query(
+        'INSERT INTO schema_migrations (version) VALUES ($1) ON CONFLICT DO NOTHING',
+        [version]
+      );
+      console.log(`📌 Marked pre-existing migration as applied: ${file}`);
       continue;
     }
 
