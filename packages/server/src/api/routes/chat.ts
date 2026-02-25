@@ -3,6 +3,8 @@ import { authMiddleware, AuthRequest } from '../../middleware/auth';
 import { AIAnalyzer, ChatMessage, ChatAction } from '../../services/ai-analyzer';
 import { query } from '../../db/connection';
 import { UserRepository } from '../../db/repositories';
+import { getConnectedPluginsStatus, emitToPlugin } from '../../websocket/handlers';
+import { randomUUID } from 'crypto';
 
 const router = Router();
 router.use(authMiddleware);
@@ -54,7 +56,8 @@ function routeToAgent(message: string): 'uiux' | 'design-system' {
     'variable', 'token', 'create component', 'add component',
     'new component', 'component set', 'naming', 'collection',
     'binding', 'property', 'variant', 'color value', 'spacing value',
-    'create a button', 'add a button', 'build a', 'create a', 'add a'
+    'create a button', 'add a button', 'build a', 'create a', 'add a',
+    'oluştur', 'yap', 'ekle', 'component', 'bileşen', 'sayfa'
   ];
 
   const uiuxKeywords = [
@@ -122,39 +125,85 @@ When a user asks about creating or modifying components or variables, acknowledg
 Respond conversationally. Be specific and reference the actual design system data above when relevant. Keep responses focused and practical. Respond in the same language the user writes in.`;
   }
 
-  return `You are the Design System Agent, a specialist in Figma design systems, design tokens, and component architecture.
-
-Your expertise includes:
-- Variable/token naming conventions and structure (primitive → semantic → component hierarchy)
-- Component creation with proper variable bindings
-- Collection organization and mode management (light/dark, mobile/desktop)
-- Design token best practices for scalable systems
-- Figma component variants and properties
+  return `You are the Design System Agent. You have DIRECT CONTROL over the Figma file through the plugin bridge. When asked to create or modify anything, you DO IT — you don't give instructions to the user.
 
 ${contextBlock}
 
-When asked to create a component, analyze the existing variables above and describe:
-1. What existing variables you would bind to the component
-2. Any missing variables that need to be created first
-3. The component structure, variants, and properties
+## Your Capabilities (via plugin)
+You can execute these commands directly in Figma:
+- **create_component**: Create a component with variants on a dedicated page
+- **rename_variable**: Rename a variable
+- **set_variable_value**: Change a variable's value
 
-If the user asks conceptual UI/UX questions, acknowledge them and suggest the UI/UX Agent would be better suited, but still answer from a technical perspective.
+## How to Execute
+When the user asks you to create/modify something, respond with:
+1. A brief confirmation of what you're about to do
+2. A JSON command block (will be auto-executed):
 
-Respond conversationally. Reference actual variable names and component names from the context above. Be specific and actionable. Respond in the same language the user writes in.`;
+\`\`\`json
+EXECUTE:
+{
+  "type": "create_component",
+  "spec": {
+    "pageName": "Button",
+    "componentName": "Button",
+    "description": "Primary action button",
+    "width": 120,
+    "height": 40,
+    "layoutMode": "HORIZONTAL",
+    "padding": { "top": 8, "right": 16, "bottom": 8, "left": 16 },
+    "itemSpacing": 8,
+    "fills": [{ "variableName": "Colors/Base/white" }],
+    "cornerRadius": "radius-xs",
+    "variants": [
+      { "properties": { "Type": "Primary", "State": "Default" } },
+      { "properties": { "Type": "Primary", "State": "Hover" } },
+      { "properties": { "Type": "Secondary", "State": "Default" } },
+      { "properties": { "Type": "Secondary", "State": "Hover" } }
+    ],
+    "properties": [
+      { "name": "Type", "type": "VARIANT", "values": ["Primary", "Secondary"] },
+      { "name": "State", "type": "VARIANT", "values": ["Default", "Hover"] }
+    ]
+  }
+}
+\`\`\`
+
+## Rules
+- Always use existing variable names from the context above for fills, cornerRadius etc.
+- Page name = component name (one component per page)
+- Always add relevant variants (Type, State, Size etc.)
+- After executing, briefly explain what was created
+
+## Variable names available
+${context.variables.slice(0, 20).map(v => `- ${v.name} (${v.type})`).join('\n') || '(none synced yet)'}
+
+Respond in the same language the user writes in. Be concise — act, don't lecture.`;
 }
 
-function parseReplyForActions(rawReply: string, agentType: 'uiux' | 'design-system'): { reply: string; actions?: ChatAction[] } {
-  const actions: ChatAction[] = [];
-
-  if (agentType === 'design-system') {
-    const createMatch = rawReply.match(/create (?:a |the )?(?:new )?component[:\s]+["']?([A-Za-z/\s]+?)["']?(?:\n|\.|\s*$)/i);
-    if (createMatch) {
-      actions.push({
-        type: 'create_component',
-        label: `Create component: ${createMatch[1].trim()}`,
-        payload: { componentName: createMatch[1].trim() }
-      });
+function parseReplyForCommands(rawReply: string): { reply: string; command?: any; actions?: ChatAction[] } {
+  // Look for EXECUTE: JSON block
+  const executeMatch = rawReply.match(/```json\s*\nEXECUTE:\s*\n([\s\S]*?)```/);
+  if (executeMatch) {
+    try {
+      const command = JSON.parse(executeMatch[1].trim());
+      // Remove the JSON block from reply text
+      const cleanReply = rawReply.replace(/```json\s*\nEXECUTE:\s*\n[\s\S]*?```/, '').trim();
+      return { reply: cleanReply, command };
+    } catch {
+      // JSON parse failed, return as-is
     }
+  }
+
+  // Fallback: legacy text-based action detection
+  const actions: ChatAction[] = [];
+  const createMatch = rawReply.match(/create (?:a |the )?(?:new )?component[:\s]+["']?([A-Za-z/\s]+?)["']?(?:\n|\.|\s*$)/i);
+  if (createMatch) {
+    actions.push({
+      type: 'create_component',
+      label: `Create component: ${createMatch[1].trim()}`,
+      payload: { componentName: createMatch[1].trim() }
+    });
   }
 
   return { reply: rawReply, actions: actions.length > 0 ? actions : undefined };
@@ -173,13 +222,11 @@ router.post('/', async (req: AuthRequest, res) => {
       return res.status(400).json({ error: 'message and workspaceId are required' });
     }
 
-    // Access check
     const isMember = await UserRepository.isWorkspaceMember(req.user!.id, workspaceId);
     if (!isMember) {
       return res.status(403).json({ error: 'Access denied' });
     }
 
-    // Get workspace owner's AI keys (same pattern as analyzeDesignSystemAsync in handlers.ts)
     const ownerResult = await query(
       `SELECT us.ai_provider, us.anthropic_api_key, us.openai_api_key
        FROM workspace_members wm
@@ -196,22 +243,15 @@ router.post('/', async (req: AuthRequest, res) => {
       });
     }
 
-    // Fetch workspace design system context for prompt injection
     const context = await fetchWorkspaceContext(workspaceId);
-
-    // Route to agent
     const agentType = routeToAgent(message);
-
-    // Build system prompt
     const systemPrompt = buildSystemPrompt(agentType, context);
 
-    // Build full history including new user message
     const fullHistory: ChatMessage[] = [
       ...(history || []),
       { role: 'user', content: message }
     ];
 
-    // Call AI
     const analyzer = new AIAnalyzer({
       provider: (ownerSettings.ai_provider as 'anthropic' | 'openai') || 'anthropic',
       anthropicApiKey: ownerSettings.anthropic_api_key,
@@ -219,11 +259,22 @@ router.post('/', async (req: AuthRequest, res) => {
     });
 
     const aiReply = await analyzer.chat(systemPrompt, fullHistory);
+    const { reply, command, actions } = parseReplyForCommands(aiReply);
 
-    // Parse for optional action buttons
-    const { reply, actions } = parseReplyForActions(aiReply, agentType);
+    // If AI produced a command and plugin is connected, execute it
+    let commandStatus: 'sent' | 'no_plugin' | undefined;
+    if (command) {
+      const pluginStatus = getConnectedPluginsStatus();
+      if (pluginStatus.count > 0) {
+        const commandId = randomUUID();
+        emitToPlugin('execute-command', { command, commandId });
+        commandStatus = 'sent';
+      } else {
+        commandStatus = 'no_plugin';
+      }
+    }
 
-    return res.json({ reply, agentType, actions });
+    return res.json({ reply, agentType, actions, command, commandStatus });
   } catch (error: any) {
     console.error('Chat route error:', error);
     return res.status(500).json({ error: 'Failed to process chat message' });

@@ -510,6 +510,23 @@ export function setupWebSocketHandlers(io: SocketIOServer) {
       console.log(`📤 Fix forwarded to plugin: ${plugin.plugin}`);
     });
 
+    // Execute AI command — forward to plugin
+    socket.on('execute-command', (data: any) => {
+      console.log('🤖 Execute command received:', data.command?.type);
+      const plugin = Array.from(connectedPlugins.values())[0];
+      if (!plugin) {
+        socket.emit('command-error', { error: 'No plugin connected. Please open the Figma plugin.' });
+        return;
+      }
+      io.to(plugin.socketId).emit('execute-command', data);
+    });
+
+    // Command result from plugin
+    socket.on('command-result', (data: any) => {
+      console.log('✅ Command result:', data);
+      io.emit('command-result', data);
+    });
+
     // Fix applied notification from plugin
     socket.on('fix-applied', async (data: { conflictId: string; success: boolean; error?: string }) => {
       console.log('✅ Fix applied notification:', data);
@@ -566,6 +583,14 @@ export function setupWebSocketHandlers(io: SocketIOServer) {
   });
 
   return io;
+}
+
+// Emit event to first connected plugin
+export function emitToPlugin(event: string, data: any): boolean {
+  const plugin = Array.from(connectedPlugins.values())[0];
+  if (!plugin || !ioInstance) return false;
+  ioInstance.to(plugin.socketId).emit(event, data);
+  return true;
 }
 
 // Get connected plugins status

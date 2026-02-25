@@ -182,10 +182,17 @@ export function AIChatPanel({ isOpen, onClose, workspaceId: workspaceIdProp, ini
         workspaceId: workspaceId || ''
       });
 
+      let content = response.reply;
+      if (response.command && response.commandStatus === 'sent') {
+        content += '\n\n⚙️ *Command sent to Figma plugin — executing...*';
+      } else if (response.command && response.commandStatus === 'no_plugin') {
+        content += '\n\n⚠️ *Plugin not connected. Open the DS Agent plugin in Figma to execute this command.*';
+      }
+
       const assistantMessage: Message = {
         id: `assistant-${Date.now()}`,
         role: 'assistant',
-        content: response.reply,
+        content,
         timestamp: new Date(),
         agentType: response.agentType,
         actions: response.actions

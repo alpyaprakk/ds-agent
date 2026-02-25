@@ -22,6 +22,8 @@ export interface ChatResponse {
   reply: string;
   agentType: 'uiux' | 'design-system';
   actions?: ChatAction[];
+  command?: any;
+  commandStatus?: 'sent' | 'no_plugin';
 }
 
 export interface Workspace {

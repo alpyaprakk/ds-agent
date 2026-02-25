@@ -59,6 +59,12 @@ function connectToServer() {
       setStatus('🔧 Applying fix...');
     });
 
+    socket.on('execute-command', (msg: any) => {
+      console.log('🤖 Execute command from server:', msg.command?.type);
+      parent.postMessage({ pluginMessage: { type: 'execute-command', command: msg.command, commandId: msg.commandId } }, '*');
+      setStatus(`🤖 Executing: ${msg.command?.type}...`);
+    });
+
     socket.on('sync-complete', (data: any) => {
       console.log('✅ Sync complete:', data);
       setStatus(`✅ Synced: ${data.stats.variables} variables, ${data.stats.components} components`);
@@ -145,6 +151,15 @@ window.onmessage = (event: MessageEvent) => {
         success: false,
         error: msg.error,
       });
+    }
+  }
+
+  if (msg.type === 'command-result') {
+    const status = msg.result?.success ? `✅ Done: ${msg.result.message}` : `❌ Failed: ${msg.result?.message}`;
+    setStatus(status);
+    console.log('Command result:', msg.result);
+    if (socket && socket.connected) {
+      socket.emit('command-result', { commandId: msg.commandId, result: msg.result });
     }
   }
 };
