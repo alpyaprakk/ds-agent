@@ -94,7 +94,6 @@ function AppContent() {
     // Setup WebSocket listeners
     wsClient.on('workspace_joined', (data) => {
       console.log('Joined workspace:', data.workspace_id);
-      toast.success('Connected to workspace');
     });
 
     wsClient.on('conflict_detected', (data) => {
