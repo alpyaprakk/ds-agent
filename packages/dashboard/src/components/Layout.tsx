@@ -44,7 +44,9 @@ export function Layout({ children }: LayoutProps) {
   useEffect(() => {
     // Connect to WebSocket server
     const WS_URL = import.meta.env.VITE_WS_URL || 'http://localhost:3000';
-    const socket = io(WS_URL);
+    const socket = io(WS_URL, {
+      path: '/api/socket.io' // Use /api prefix to work with proxy
+    });
 
     socket.on('connect', () => {
       console.log('✅ Connected to server');

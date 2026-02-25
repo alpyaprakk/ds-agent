@@ -12,7 +12,8 @@ class WebSocketClient {
     if (this.socket?.connected) return;
 
     this.socket = io(WS_URL, {
-      transports: ['websocket'],
+      path: '/api/socket.io', // Use /api prefix to work with proxy
+      transports: ['websocket', 'polling'],
       reconnection: true,
       reconnectionDelay: 1000,
       reconnectionAttempts: 5,
