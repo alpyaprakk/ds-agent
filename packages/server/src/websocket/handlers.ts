@@ -95,10 +95,27 @@ export function setupWebSocketHandlers(io: SocketIOServer) {
         console.log(`📦 Variables: ${variables.length}, Collections: ${collections.length}, Components: ${components.length}`);
 
         // Find Figma file in database by key
-        let figmaFileResult = await pool.query(
-          'SELECT * FROM figma_files WHERE figma_key = $1 LIMIT 1',
-          [file.key]
-        );
+        // If key is "unknown" (dev mode), try to match by file name first
+        let figmaFileResult;
+        if (file.key === 'unknown') {
+          console.log(`⚠️ File key is "unknown" (dev mode plugin). Matching by name: ${file.name}`);
+          figmaFileResult = await pool.query(
+            `SELECT * FROM figma_files WHERE name = $1 AND figma_key != 'unknown' LIMIT 1`,
+            [file.name]
+          );
+          // If no match by name with real key, try the unknown one
+          if (figmaFileResult.rows.length === 0) {
+            figmaFileResult = await pool.query(
+              `SELECT * FROM figma_files WHERE name = $1 LIMIT 1`,
+              [file.name]
+            );
+          }
+        } else {
+          figmaFileResult = await pool.query(
+            'SELECT * FROM figma_files WHERE figma_key = $1 LIMIT 1',
+            [file.key]
+          );
+        }
 
         // Auto-register: if file not found, create it in the first available workspace
         if (figmaFileResult.rows.length === 0) {

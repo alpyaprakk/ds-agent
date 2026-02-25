@@ -108,6 +108,20 @@ router.post('/:id/files', async (req, res) => {
   }
 });
 
+// DELETE /api/workspaces/:workspaceId/files/:fileId - Remove Figma file
+router.delete('/:workspaceId/files/:fileId', async (req, res) => {
+  try {
+    const deleted = await figmaFileRepo.delete(req.params.fileId);
+    if (!deleted) {
+      return res.status(404).json({ error: 'File not found' });
+    }
+    return res.json({ success: true });
+  } catch (error) {
+    console.error('Error deleting Figma file:', error);
+    return res.status(500).json({ error: 'Failed to delete Figma file' });
+  }
+});
+
 // GET /api/workspaces/:id/settings - Get workspace settings
 router.get('/:id/settings', async (req, res) => {
   try {
