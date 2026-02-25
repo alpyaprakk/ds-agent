@@ -163,30 +163,13 @@ export function setupWebSocketHandlers(io: SocketIOServer) {
         // Build variable ID → name lookup for resolving aliases in valuesByMode
         const varIdToName = new Map<string, string>();
         for (const v of variables) {
-          // Store both the raw id and potential prefixed forms
           varIdToName.set(v.id, v.name);
-          // If id doesn't start with "VariableID:", also store the prefixed version
           if (!v.id.startsWith('VariableID:')) {
             varIdToName.set(`VariableID:${v.id}`, v.name);
           }
         }
 
-        // Debug: Log a sample variable ID and alias to understand format mismatch
-        const sampleAlias = variables.find((v: any) => {
-          if (!v.valuesByMode) return false;
-          return Object.values(v.valuesByMode).some(
-            (val: any) => val && typeof val === 'object' && val.type === 'VARIABLE_ALIAS'
-          );
-        });
-        if (sampleAlias) {
-          const aliasVal = Object.values(sampleAlias.valuesByMode).find(
-            (val: any) => val && typeof val === 'object' && val.type === 'VARIABLE_ALIAS'
-          ) as any;
-          console.log(`🔍 Alias debug — alias ref id: "${aliasVal?.id}", sample var ids: [${variables.slice(0, 3).map((v: any) => `"${v.id}"`).join(', ')}], map has alias id: ${varIdToName.has(aliasVal?.id)}`);
-        }
-
         // Enrich alias references with resolved variable names
-        let aliasResolved = 0, aliasUnresolved = 0;
         for (const v of variables) {
           if (v.valuesByMode && typeof v.valuesByMode === 'object') {
             for (const modeKey of Object.keys(v.valuesByMode)) {
@@ -195,15 +178,11 @@ export function setupWebSocketHandlers(io: SocketIOServer) {
                 const resolved = varIdToName.get(modeVal.id);
                 if (resolved) {
                   modeVal.name = resolved;
-                  aliasResolved++;
-                } else {
-                  aliasUnresolved++;
                 }
               }
             }
           }
         }
-        console.log(`🔗 Alias resolution: ${aliasResolved} resolved, ${aliasUnresolved} unresolved out of ${varIdToName.size} known IDs`);
 
         // Start transaction for batch inserts
         const client = await pool.connect();

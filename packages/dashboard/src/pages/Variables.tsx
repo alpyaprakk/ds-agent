@@ -74,9 +74,20 @@ function getVariableLeafName(name: string): string {
   return parts[parts.length - 1].trim();
 }
 
+function extractColor(val: any): string | null {
+  if (val && typeof val === 'object' && 'r' in val) {
+    const r = Math.round((val.r ?? 0) * 255);
+    const g = Math.round((val.g ?? 0) * 255);
+    const b = Math.round((val.b ?? 0) * 255);
+    return `#${r.toString(16).padStart(2, '0')}${g.toString(16).padStart(2, '0')}${b.toString(16).padStart(2, '0')}`;
+  }
+  return null;
+}
+
 function renderValue(
   variable: DesignVariable,
-  aliasMap: Map<string, string>
+  aliasMap: Map<string, string>,
+  variablesByFigmaId: Map<string, DesignVariable>
 ): { color: string | null; label: string; isAlias: boolean } {
   const value = variable.value;
   if (!value) return { color: null, label: '—', isAlias: false };
@@ -92,16 +103,22 @@ function renderValue(
     // firstVal.name is set by server during sync, aliasMap is a frontend fallback
     const resolvedName = firstVal.name || aliasMap.get(aliasId);
     const displayName = resolvedName && resolvedName !== aliasId ? resolvedName : aliasId;
-    return { color: null, label: displayName, isAlias: true };
+
+    // If this is a COLOR variable, resolve the target's color for the swatch
+    let resolvedColor: string | null = null;
+    if (variable.type === 'COLOR') {
+      const target = variablesByFigmaId.get(aliasId);
+      if (target) {
+        resolvedColor = resolveColor(target, variablesByFigmaId);
+      }
+    }
+
+    return { color: resolvedColor, label: displayName, isAlias: true };
   }
 
   if (variable.type === 'COLOR') {
-    // Color object { r, g, b, a } — Figma uses 0-1 range
-    if (typeof firstVal === 'object' && 'r' in firstVal) {
-      const r = Math.round((firstVal.r ?? 0) * 255);
-      const g = Math.round((firstVal.g ?? 0) * 255);
-      const b = Math.round((firstVal.b ?? 0) * 255);
-      const hex = `#${r.toString(16).padStart(2, '0')}${g.toString(16).padStart(2, '0')}${b.toString(16).padStart(2, '0')}`;
+    const hex = extractColor(firstVal);
+    if (hex) {
       return { color: hex, label: hex.toUpperCase(), isAlias: false };
     }
 
@@ -127,6 +144,29 @@ function renderValue(
   }
 
   return { color: null, label: JSON.stringify(firstVal), isAlias: false };
+}
+
+// Recursively resolve the actual color value, following alias chains (max 10 depth)
+function resolveColor(variable: DesignVariable, variablesByFigmaId: Map<string, DesignVariable>, depth = 0): string | null {
+  if (depth > 10) return null;
+  const val = variable.value;
+  if (!val) return null;
+
+  const modeValues = typeof val === 'object' && !Array.isArray(val) ? Object.values(val) : [val];
+  const firstVal = modeValues[0] as any;
+  if (!firstVal) return null;
+
+  // If it's a direct color value
+  const hex = extractColor(firstVal);
+  if (hex) return hex;
+
+  // If it's another alias, follow the chain
+  if (typeof firstVal === 'object' && firstVal.type === 'VARIABLE_ALIAS' && firstVal.id) {
+    const next = variablesByFigmaId.get(firstVal.id);
+    if (next) return resolveColor(next, variablesByFigmaId, depth + 1);
+  }
+
+  return null;
 }
 
 function getTypeIcon(type: string) {
@@ -231,9 +271,22 @@ export function Variables() {
       if (v.figma_id) {
         map.set(v.figma_id, v.name);
       }
-      // Also map figma_key as fallback (some alias references may use key format)
       if (v.figma_key) {
         map.set(v.figma_key, v.name);
+      }
+    }
+    return map;
+  }, [allVariables]);
+
+  // Build figma_id → variable lookup for resolving alias color values
+  const variablesByFigmaId = useMemo(() => {
+    const map = new Map<string, DesignVariable>();
+    for (const v of allVariables) {
+      if (v.figma_id) {
+        map.set(v.figma_id, v);
+      }
+      if (v.figma_key) {
+        map.set(v.figma_key, v);
       }
     }
     return map;
@@ -468,7 +521,7 @@ export function Variables() {
 
                   {/* Variables in this group */}
                   {vars.map((variable) => {
-                    const { color, label, isAlias } = renderValue(variable, aliasMap);
+                    const { color, label, isAlias } = renderValue(variable, aliasMap, variablesByFigmaId);
                     const Icon = getTypeIcon(variable.type);
                     const leafName = getVariableLeafName(variable.name);
 
@@ -494,7 +547,7 @@ export function Variables() {
                           {variable.type === 'COLOR' && !color && !isAlias && (
                             <div className="w-4 h-4 rounded-[3px] border border-border/50 bg-muted flex-shrink-0" />
                           )}
-                          {isAlias && (
+                          {isAlias && !color && (
                             <div className="w-4 h-4 rounded-[3px] border border-border/50 flex-shrink-0 flex items-center justify-center bg-muted">
                               <svg width="8" height="8" viewBox="0 0 8 8" className="text-muted-foreground">
                                 <path d="M1 7L4 1L7 7" fill="none" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round" strokeLinejoin="round"/>
