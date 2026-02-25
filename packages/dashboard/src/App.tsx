@@ -75,6 +75,21 @@ function App() {
       }
     });
 
+    wsClient.on('figma_synced', (data) => {
+      console.log('Figma synced:', data);
+      toast.success(`Synced: ${data.fileName}`, {
+        description: `${data.stats?.variables || 0} variables, ${data.stats?.components || 0} components`,
+        duration: 5000,
+      });
+
+      // Refresh file list and workspace data
+      const currentWorkspace = useWorkspaceStore.getState().currentWorkspace;
+      if (currentWorkspace) {
+        useWorkspaceStore.getState().fetchFigmaFiles(currentWorkspace.id);
+        useWorkspaceStore.getState().fetchConflicts(currentWorkspace.id, 'active');
+      }
+    });
+
     wsClient.on('analysis_started', (data) => {
       console.log('AI analysis started:', data);
       toast.info('AI Analysis in progress', {

@@ -264,17 +264,19 @@ export function setupWebSocketHandlers(io: SocketIOServer) {
           }
         });
 
-        // Broadcast to workspace
-        io.to(figmaFile.workspace_id).emit('figma_synced', {
+        // Broadcast to all clients so dashboard auto-refreshes
+        const syncedData = {
           fileId: figmaFile.id,
           fileName: file.name,
+          workspaceId: figmaFile.workspace_id,
           stats: {
             variables: variables.length,
             collections: collections.length,
             components: components.length
           },
           timestamp: new Date().toISOString()
-        });
+        };
+        io.emit('figma_synced', syncedData);
 
         // Trigger AI analysis (async, don't block sync response)
         analyzeDesignSystemAsync(io, figmaFile.workspace_id, figmaFile.id, data.data)

@@ -70,6 +70,27 @@ CREATE INDEX idx_figma_files_key ON figma_files(figma_key);
 CREATE INDEX idx_figma_files_role ON figma_files(role);
 
 -- ============================================================================
+-- VARIABLE COLLECTIONS
+-- ============================================================================
+
+CREATE TABLE variable_collections (
+  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  workspace_id UUID NOT NULL REFERENCES workspaces(id) ON DELETE CASCADE,
+  figma_file_id UUID REFERENCES figma_files(id) ON DELETE CASCADE,
+
+  name VARCHAR(255) NOT NULL,
+  figma_key VARCHAR(255) UNIQUE,
+  modes JSONB DEFAULT '[]',
+
+  created_at TIMESTAMP DEFAULT NOW(),
+  updated_at TIMESTAMP DEFAULT NOW()
+);
+
+CREATE INDEX idx_variable_collections_workspace ON variable_collections(workspace_id);
+CREATE INDEX idx_variable_collections_file ON variable_collections(figma_file_id);
+CREATE INDEX idx_variable_collections_key ON variable_collections(figma_key);
+
+-- ============================================================================
 -- VARIABLES
 -- ============================================================================
 
@@ -79,21 +100,16 @@ CREATE TABLE variables (
   figma_file_id UUID REFERENCES figma_files(id) ON DELETE CASCADE,
 
   -- Variable info
-  figma_variable_id VARCHAR(255),
   name VARCHAR(255) NOT NULL,
-  collection VARCHAR(255),
+  figma_key VARCHAR(255) UNIQUE,
   type VARCHAR(50), -- COLOR, FLOAT, STRING, BOOLEAN
+  collection_id VARCHAR(255),
 
   -- Value
   value JSONB NOT NULL,
-  resolved_value JSONB, -- For aliases
-
-  -- Alias
-  is_alias BOOLEAN DEFAULT FALSE,
-  alias_to UUID REFERENCES variables(id),
 
   -- Scopes
-  scopes TEXT[], -- FILL, STROKE, TEXT, etc.
+  scopes JSONB DEFAULT '[]',
 
   -- Metadata
   description TEXT,
@@ -105,8 +121,7 @@ CREATE TABLE variables (
 CREATE INDEX idx_variables_workspace ON variables(workspace_id);
 CREATE INDEX idx_variables_file ON variables(figma_file_id);
 CREATE INDEX idx_variables_name ON variables(name);
-CREATE INDEX idx_variables_collection ON variables(collection);
-CREATE INDEX idx_variables_is_alias ON variables(is_alias);
+CREATE INDEX idx_variables_key ON variables(figma_key);
 
 -- ============================================================================
 -- COMPONENTS
@@ -118,21 +133,13 @@ CREATE TABLE components (
   figma_file_id UUID REFERENCES figma_files(id) ON DELETE CASCADE,
 
   -- Component info
-  figma_node_id VARCHAR(255),
   name VARCHAR(255) NOT NULL,
+  figma_key VARCHAR(255) UNIQUE,
   type VARCHAR(50), -- COMPONENT, COMPONENT_SET
-
-  -- Properties
-  variant_count INTEGER DEFAULT 0,
-  property_count INTEGER DEFAULT 0,
-
-  -- Coverage
-  variable_coverage DECIMAL(5,2) DEFAULT 0.00, -- Percentage
-  has_auto_layout BOOLEAN DEFAULT FALSE,
 
   -- Metadata
   description TEXT,
-  metadata JSONB DEFAULT '{}',
+  properties JSONB DEFAULT '{}',
 
   created_at TIMESTAMP DEFAULT NOW(),
   updated_at TIMESTAMP DEFAULT NOW()
@@ -141,7 +148,7 @@ CREATE TABLE components (
 CREATE INDEX idx_components_workspace ON components(workspace_id);
 CREATE INDEX idx_components_file ON components(figma_file_id);
 CREATE INDEX idx_components_name ON components(name);
-CREATE INDEX idx_components_coverage ON components(variable_coverage);
+CREATE INDEX idx_components_key ON components(figma_key);
 
 -- ============================================================================
 -- CONFLICTS

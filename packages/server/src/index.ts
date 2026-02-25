@@ -3,8 +3,11 @@ import { createServer } from 'http';
 import { Server as SocketIOServer } from 'socket.io';
 import helmet from 'helmet';
 import dotenv from 'dotenv';
+import { readFileSync } from 'fs';
+import { join } from 'path';
 import apiRoutes from './api/routes';
 import { setupWebSocketHandlers } from './websocket/handlers';
+import pool from './db/connection';
 
 // Load environment variables
 dotenv.config();
@@ -89,14 +92,55 @@ app.get('/test-cors', (req, res) => {
 // WebSocket handlers
 setupWebSocketHandlers(io);
 
+// Run database migrations on startup
+async function runMigrations() {
+  try {
+    console.log('🔄 Running database migrations...');
+
+    // Try multiple paths (works in both dev and Docker)
+    const possiblePaths = [
+      join(__dirname, '../../../database/migrations/001_add_variable_collections_and_fix_columns.sql'), // dev: packages/server/dist -> root
+      join(__dirname, '../database/migrations/001_add_variable_collections_and_fix_columns.sql'),       // docker: /app/dist -> /app/database
+      join(process.cwd(), 'database/migrations/001_add_variable_collections_and_fix_columns.sql'),      // cwd fallback
+    ];
+
+    let migrationSQL: string | null = null;
+    for (const p of possiblePaths) {
+      try {
+        migrationSQL = readFileSync(p, 'utf-8');
+        console.log(`📄 Found migration at: ${p}`);
+        break;
+      } catch {
+        // Try next path
+      }
+    }
+
+    if (!migrationSQL) {
+      console.log('⚠️ Migration file not found, skipping');
+      return;
+    }
+
+    await pool.query(migrationSQL);
+    console.log('✅ Database migrations completed');
+  } catch (error) {
+    console.error('⚠️ Migration error (may be safe to ignore if already applied):', error instanceof Error ? error.message : error);
+  }
+}
+
 // Start server
-httpServer.listen(PORT, () => {
-  console.log('🚀 DS Agent Server Started');
-  console.log(`📡 HTTP Server: http://localhost:${PORT}`);
-  console.log(`🔌 WebSocket: ws://localhost:${PORT}`);
-  console.log(`📊 Environment: ${process.env.NODE_ENV || 'development'}`);
-  console.log(`💾 Database: ${process.env.DATABASE_URL ? 'Connected' : 'Not configured'}`);
-});
+async function startServer() {
+  await runMigrations();
+
+  httpServer.listen(PORT, () => {
+    console.log('🚀 DS Agent Server Started');
+    console.log(`📡 HTTP Server: http://localhost:${PORT}`);
+    console.log(`🔌 WebSocket: ws://localhost:${PORT}`);
+    console.log(`📊 Environment: ${process.env.NODE_ENV || 'development'}`);
+    console.log(`💾 Database: ${process.env.DATABASE_URL ? 'Connected' : 'Not configured'}`);
+  });
+}
+
+startServer();
 
 // Graceful shutdown
 process.on('SIGTERM', () => {
