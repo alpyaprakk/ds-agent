@@ -139,9 +139,12 @@ export function AIChatPanel({ isOpen, onClose, workspaceId, initialContext, onAp
 
       setMessages(prev => [...prev, assistantMessage]);
     } catch (error: any) {
-      const errorContent = error?.message?.includes('AI not configured')
+      const msg = error?.message || '';
+      const errorContent = msg.includes('AI not configured') || msg.includes('Add an API key')
         ? 'AI is not configured for this workspace. Please add an API key in Settings.'
-        : 'Sorry, something went wrong. Please try again.';
+        : msg.includes('workspaceId') || msg.includes('required')
+        ? 'No workspace selected. Please select a workspace first.'
+        : msg || 'Sorry, something went wrong. Please try again.';
 
       setMessages(prev => [...prev, {
         id: `error-${Date.now()}`,

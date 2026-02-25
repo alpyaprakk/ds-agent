@@ -338,7 +338,7 @@ export function Layout({ children }: LayoutProps) {
         {/* Main content */}
         <div className={cn('transition-all duration-300', sidebarCollapsed ? 'ml-16' : 'ml-64')}>
           <Header />
-          <main className="h-[calc(100vh-3.5rem)] overflow-y-auto">
+          <main className="min-h-[calc(100vh-3.5rem)]">
             {children}
           </main>
         </div>
