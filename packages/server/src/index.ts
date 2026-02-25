@@ -15,8 +15,11 @@ const httpServer = createServer(app);
 const io = new SocketIOServer(httpServer, {
   cors: {
     origin: '*', // Allow all origins (including Figma plugin with origin: 'null')
+    methods: ['GET', 'POST'],
     credentials: false // Must be false when origin is '*'
-  }
+  },
+  allowEIO3: true, // Allow Engine.IO v3 clients
+  transports: ['polling', 'websocket']
 });
 
 const PORT = process.env.PORT || 3000;
