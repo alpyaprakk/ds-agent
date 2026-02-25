@@ -7,6 +7,7 @@ import conflictsRouter from './conflicts';
 import syncRouter from './sync';
 import notificationsRouter from './notifications';
 import chatRouter from './chat';
+import agentConfigsRouter from './agent-configs';
 import { getConnectedPluginsStatus } from '../../websocket/handlers';
 
 const router = Router();
@@ -41,5 +42,6 @@ router.use('/conflicts', conflictsRouter);
 router.use('/sync', syncRouter);
 router.use('/notifications', notificationsRouter);
 router.use('/chat', chatRouter);
+router.use('/agent-configs', agentConfigsRouter);
 
 export default router;

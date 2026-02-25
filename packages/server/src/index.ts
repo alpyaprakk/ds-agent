@@ -9,6 +9,7 @@ import apiRoutes from './api/routes';
 import { setupWebSocketHandlers } from './websocket/handlers';
 import pool from './db/connection';
 import { NotificationRepository } from './db/repositories/notification.repository';
+import { AgentConfigRepository } from './db/repositories/agent-config.repository';
 
 // Load environment variables
 dotenv.config();
@@ -164,6 +165,7 @@ function startNotificationCleanup() {
 // Start server
 async function startServer() {
   await runMigrations();
+  await AgentConfigRepository.ensureTable();
   startNotificationCleanup();
 
   httpServer.listen(PORT, () => {

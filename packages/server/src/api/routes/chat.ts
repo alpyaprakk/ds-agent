@@ -3,6 +3,7 @@ import { authMiddleware, AuthRequest } from '../../middleware/auth';
 import { AIAnalyzer, ChatMessage, ChatAction } from '../../services/ai-analyzer';
 import { query } from '../../db/connection';
 import { UserRepository } from '../../db/repositories';
+import { AgentConfigRepository } from '../../db/repositories/agent-config.repository';
 import { getConnectedPluginsStatus, emitToPlugin } from '../../websocket/handlers';
 import { randomUUID } from 'crypto';
 
@@ -104,7 +105,7 @@ ${varSummary || '  (none synced yet)'}
 ${compSummary || '  (none synced yet)'}`;
 }
 
-function buildSystemPrompt(agentType: 'uiux' | 'design-system', context: WorkspaceContext): string {
+function buildDefaultSystemPrompt(agentType: 'uiux' | 'design-system', context: WorkspaceContext): string {
   const contextBlock = buildContextBlock(context);
 
   if (agentType === 'uiux') {
@@ -201,6 +202,27 @@ EXECUTE:
 Respond in the same language the user writes in.`;
 }
 
+async function buildSystemPrompt(agentType: 'uiux' | 'design-system', context: WorkspaceContext, workspaceId: string): Promise<string> {
+  const contextBlock = buildContextBlock(context);
+  const dbConfig = await AgentConfigRepository.findOne(workspaceId, agentType).catch(() => null);
+
+  // If a custom system_prompt is stored, use it with context injected
+  if (dbConfig?.system_prompt) {
+    let prompt = dbConfig.system_prompt.replace('{{CONTEXT}}', contextBlock);
+    if (dbConfig.context_rules) {
+      prompt += `\n\n## Additional Rules\n${dbConfig.context_rules}`;
+    }
+    return prompt;
+  }
+
+  // Fall back to default prompt, but append context_rules if set
+  const defaultPrompt = buildDefaultSystemPrompt(agentType, context);
+  if (dbConfig?.context_rules) {
+    return defaultPrompt + `\n\n## Additional Rules\n${dbConfig.context_rules}`;
+  }
+  return defaultPrompt;
+}
+
 function parseReplyForCommands(rawReply: string): { reply: string; command?: any; actions?: ChatAction[] } {
   // Look for EXECUTE: JSON block
   const executeMatch = rawReply.match(/```json\s*\nEXECUTE:\s*\n([\s\S]*?)```/);
@@ -265,7 +287,7 @@ router.post('/', async (req: AuthRequest, res) => {
 
     const context = await fetchWorkspaceContext(workspaceId);
     const agentType = routeToAgent(message);
-    const systemPrompt = buildSystemPrompt(agentType, context);
+    const systemPrompt = await buildSystemPrompt(agentType, context, workspaceId);
 
     const fullHistory: ChatMessage[] = [
       ...(history || []),
