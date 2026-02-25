@@ -2,6 +2,7 @@ const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:3000';
 
 export function getAvatarUrl(avatar?: string | null): string {
   if (!avatar) return '';
+  if (avatar.startsWith('data:')) return avatar;
   if (avatar.startsWith('http')) return avatar;
   return `${API_URL}${avatar}`;
 }

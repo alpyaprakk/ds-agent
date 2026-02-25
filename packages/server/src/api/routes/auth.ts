@@ -1,28 +1,13 @@
 import { Router, Response } from 'express';
 import bcrypt from 'bcryptjs';
 import multer from 'multer';
-import path from 'path';
-import fs from 'fs';
-import { randomUUID } from 'crypto';
 import { UserRepository } from '../../db/repositories/user-repository';
 import { authMiddleware, generateToken, AuthRequest } from '../../middleware/auth';
 import { NotificationService } from '../../services/notification.service';
 
-// Resolve uploads directory relative to the working directory (works in both dev and Docker)
-const uploadsDir = path.join(process.cwd(), 'uploads', 'avatars');
-fs.mkdirSync(uploadsDir, { recursive: true });
-
-// Configure multer for avatar uploads
-const avatarStorage = multer.diskStorage({
-  destination: uploadsDir,
-  filename: (_req, file, cb) => {
-    const ext = path.extname(file.originalname).toLowerCase() || '.png';
-    cb(null, `${randomUUID()}${ext}`);
-  },
-});
-
+// Store avatar in memory, convert to base64 data URL and save to DB
 const avatarUpload = multer({
-  storage: avatarStorage,
+  storage: multer.memoryStorage(),
   limits: { fileSize: 5 * 1024 * 1024 }, // 5MB
   fileFilter: (_req, file, cb) => {
     const allowed = ['image/jpeg', 'image/png', 'image/gif', 'image/webp'];
@@ -246,8 +231,9 @@ router.post('/avatar', authMiddleware, (req: AuthRequest, res: Response) => {
     }
 
     try {
-      const avatarUrl = `/api/uploads/avatars/${req.file.filename}`;
-      const user = await UserRepository.update(req.user!.id, { avatar: avatarUrl });
+      const base64 = req.file.buffer.toString('base64');
+      const avatarDataUrl = `data:${req.file.mimetype};base64,${base64}`;
+      const user = await UserRepository.update(req.user!.id, { avatar: avatarDataUrl });
 
       res.json({
         user: {

@@ -26,7 +26,7 @@ async function migrate() {
     const tablesExist = parseInt(checkResult.rows[0].count) > 0;
 
     if (tablesExist) {
-      console.log('ℹ️  Database tables already exist, skipping migration');
+      console.log('ℹ️  Database tables already exist, skipping initial schema');
     } else {
       // Read schema file
       const schemaPath = path.join(__dirname, '../database/schema.sql');
@@ -39,6 +39,9 @@ async function migrate() {
 
       console.log('✅ Database migration completed successfully!');
     }
+
+    // Run incremental migrations from the migrations directory
+    await runMigrations();
 
     // Verify tables
     const result = await pool.query(`
@@ -56,6 +59,58 @@ async function migrate() {
     console.error('❌ Migration failed:', error.message);
     console.error(error);
     process.exit(1);
+  }
+}
+
+async function runMigrations() {
+  // Ensure migrations tracking table exists
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS schema_migrations (
+      version VARCHAR(255) PRIMARY KEY,
+      applied_at TIMESTAMP DEFAULT NOW()
+    );
+  `);
+
+  // Find migration files
+  const migrationsDir = path.join(__dirname, '../database/migrations');
+  if (!fs.existsSync(migrationsDir)) {
+    console.log('ℹ️  No migrations directory found, skipping');
+    return;
+  }
+
+  const files = fs.readdirSync(migrationsDir)
+    .filter(f => f.endsWith('.sql'))
+    .sort();
+
+  for (const file of files) {
+    const version = file.replace('.sql', '');
+
+    // Check if already applied
+    const applied = await pool.query(
+      'SELECT version FROM schema_migrations WHERE version = $1',
+      [version]
+    );
+
+    if (applied.rows.length > 0) {
+      console.log(`⏭️  Skipping already applied migration: ${file}`);
+      continue;
+    }
+
+    // Apply migration
+    console.log(`📄 Applying migration: ${file}`);
+    const sql = fs.readFileSync(path.join(migrationsDir, file), 'utf-8');
+
+    try {
+      await pool.query(sql);
+      await pool.query(
+        'INSERT INTO schema_migrations (version) VALUES ($1)',
+        [version]
+      );
+      console.log(`✅ Applied migration: ${file}`);
+    } catch (error) {
+      console.error(`❌ Migration ${file} failed:`, error.message);
+      throw error;
+    }
   }
 }
 

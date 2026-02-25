@@ -25,6 +25,7 @@ COPY turbo.json ./
 COPY tsconfig.json ./
 COPY packages/server ./packages/server
 COPY .ds-agent ./.ds-agent
+COPY database ./database
 
 # Build server
 RUN npm run build --workspace=@ds-agent/server
@@ -43,12 +44,17 @@ RUN adduser --system --uid 1001 nodejs
 COPY --from=builder --chown=nodejs:nodejs /app/packages/server/dist ./dist
 COPY --from=builder --chown=nodejs:nodejs /app/packages/server/package*.json ./
 COPY --from=builder --chown=nodejs:nodejs /app/.ds-agent ./.ds-agent
+COPY --from=builder --chown=nodejs:nodejs /app/database ./database
+COPY --from=builder --chown=nodejs:nodejs /app/packages/server/scripts ./scripts
 
 # Install production dependencies only
 RUN npm ci --only=production
+
+# Create uploads directory (for backward compat, not primary storage)
+RUN mkdir -p /app/uploads && chown nodejs:nodejs /app/uploads
 
 USER nodejs
 
 EXPOSE 3000
 
-CMD ["node", "dist/index.js"]
+CMD ["sh", "-c", "node scripts/migrate.js && node dist/index.js"]
