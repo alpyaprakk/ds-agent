@@ -89,70 +89,108 @@ export function setupWebSocketHandlers(io: SocketIOServer) {
 
         const figmaFile = figmaFileResult.rows[0];
 
-        // Save variable collections
-        for (const collection of collections) {
-          await pool.query(
-            `INSERT INTO variable_collections (id, workspace_id, figma_file_id, name, figma_key, modes)
-             VALUES ($1, $2, $3, $4, $5, $6)
-             ON CONFLICT (figma_key) DO UPDATE SET
-               name = EXCLUDED.name,
-               modes = EXCLUDED.modes,
-               updated_at = NOW()`,
-            [
-              randomUUID(),
-              figmaFile.workspace_id,
-              figmaFile.id,
-              collection.name,
-              collection.key,
-              JSON.stringify(collection.modes)
-            ]
-          );
-        }
+        // Start transaction for batch inserts
+        const client = await pool.connect();
+        try {
+          await client.query('BEGIN');
 
-        // Save variables
-        for (const variable of variables) {
-          await pool.query(
-            `INSERT INTO variables (id, workspace_id, figma_file_id, name, figma_key, type, value, collection_id, scopes)
-             VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
-             ON CONFLICT (figma_key) DO UPDATE SET
-               name = EXCLUDED.name,
-               type = EXCLUDED.type,
-               value = EXCLUDED.value,
-               updated_at = NOW()`,
-            [
+          // Batch save variable collections
+          if (collections.length > 0) {
+            const collectionValues = collections.map((_c: any, i: number) => {
+              const baseIndex = i * 6;
+              return `($${baseIndex + 1}, $${baseIndex + 2}, $${baseIndex + 3}, $${baseIndex + 4}, $${baseIndex + 5}, $${baseIndex + 6})`;
+            }).join(',');
+
+            const collectionParams = collections.flatMap((c: any) => [
               randomUUID(),
               figmaFile.workspace_id,
               figmaFile.id,
-              variable.name,
-              variable.key,
-              variable.resolvedType,
-              JSON.stringify(variable.valuesByMode),
-              variable.variableCollectionId,
+              c.name,
+              c.key,
+              JSON.stringify(c.modes)
+            ]);
+
+            await client.query(
+              `INSERT INTO variable_collections (id, workspace_id, figma_file_id, name, figma_key, modes)
+               VALUES ${collectionValues}
+               ON CONFLICT (figma_key) DO UPDATE SET
+                 name = EXCLUDED.name,
+                 modes = EXCLUDED.modes,
+                 updated_at = NOW()`,
+              collectionParams
+            );
+          }
+
+          // Batch save variables (in chunks of 100 to avoid parameter limit)
+          const variableChunkSize = 100;
+          for (let i = 0; i < variables.length; i += variableChunkSize) {
+            const chunk = variables.slice(i, i + variableChunkSize);
+            const variableValues = chunk.map((_: any, idx: number) => {
+              const baseIndex = idx * 9;
+              return `($${baseIndex + 1}, $${baseIndex + 2}, $${baseIndex + 3}, $${baseIndex + 4}, $${baseIndex + 5}, $${baseIndex + 6}, $${baseIndex + 7}, $${baseIndex + 8}, $${baseIndex + 9})`;
+            }).join(',');
+
+            const variableParams = chunk.flatMap((v: any) => [
+              randomUUID(),
+              figmaFile.workspace_id,
+              figmaFile.id,
+              v.name,
+              v.key,
+              v.resolvedType,
+              JSON.stringify(v.valuesByMode),
+              v.variableCollectionId,
               JSON.stringify([])
-            ]
-          );
-        }
+            ]);
 
-        // Save components
-        for (const component of components) {
-          await pool.query(
-            `INSERT INTO components (id, workspace_id, figma_file_id, name, figma_key, description, type, properties)
-             VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
-             ON CONFLICT (figma_key) DO UPDATE SET
-               name = EXCLUDED.name,
-               description = EXCLUDED.description,
-               updated_at = NOW()`,
-            [
+            await client.query(
+              `INSERT INTO variables (id, workspace_id, figma_file_id, name, figma_key, type, value, collection_id, scopes)
+               VALUES ${variableValues}
+               ON CONFLICT (figma_key) DO UPDATE SET
+                 name = EXCLUDED.name,
+                 type = EXCLUDED.type,
+                 value = EXCLUDED.value,
+                 updated_at = NOW()`,
+              variableParams
+            );
+          }
+
+          // Batch save components (in chunks of 100)
+          const componentChunkSize = 100;
+          for (let i = 0; i < components.length; i += componentChunkSize) {
+            const chunk = components.slice(i, i + componentChunkSize);
+            const componentValues = chunk.map((_: any, idx: number) => {
+              const baseIndex = idx * 8;
+              return `($${baseIndex + 1}, $${baseIndex + 2}, $${baseIndex + 3}, $${baseIndex + 4}, $${baseIndex + 5}, $${baseIndex + 6}, $${baseIndex + 7}, $${baseIndex + 8})`;
+            }).join(',');
+
+            const componentParams = chunk.flatMap((c: any) => [
               randomUUID(),
               figmaFile.workspace_id,
               figmaFile.id,
-              component.name,
-              component.key,
-              component.description || '',
+              c.name,
+              c.key,
+              c.description || '',
               'component',
-              JSON.stringify({ parent: component.parent })
-            ]
-          );
+              JSON.stringify({ parent: c.parent })
+            ]);
+
+            await client.query(
+              `INSERT INTO components (id, workspace_id, figma_file_id, name, figma_key, description, type, properties)
+               VALUES ${componentValues}
+               ON CONFLICT (figma_key) DO UPDATE SET
+                 name = EXCLUDED.name,
+                 description = EXCLUDED.description,
+                 updated_at = NOW()`,
+              componentParams
+            );
+          }
+
+          await client.query('COMMIT');
+        } catch (err) {
+          await client.query('ROLLBACK');
+          throw err;
+        } finally {
+          client.release();
         }
 
         // Update file sync status
