@@ -4,6 +4,7 @@ import { NotificationService } from '../services/notification.service';
 import pool from '../db/connection';
 import { randomUUID } from 'crypto';
 import { AIAnalyzer, DesignSystemData } from '../services/ai-analyzer';
+import { verifyToken } from '../middleware/auth';
 
 const workspaceRepo = new WorkspaceRepository();
 
@@ -26,8 +27,39 @@ const connectedPlugins = new Map<string, {
 export function setupWebSocketHandlers(io: SocketIOServer) {
   ioInstance = io;
 
+  // Socket.IO authentication middleware
+  io.use((socket, next) => {
+    const token = socket.handshake.auth?.token || socket.handshake.query?.token;
+    const isPlugin = socket.handshake.query?.plugin === 'true';
+
+    // Allow plugin connections without auth (they use plugin-connect event)
+    if (isPlugin) {
+      (socket as any).isPlugin = true;
+      return next();
+    }
+
+    if (!token) {
+      return next(new Error('Authentication required'));
+    }
+
+    try {
+      const user = verifyToken(token as string);
+      (socket as any).user = user;
+      return next();
+    } catch {
+      return next(new Error('Invalid or expired token'));
+    }
+  });
+
   io.on('connection', (socket: Socket) => {
-    console.log(`Client connected: ${socket.id}`);
+    const user = (socket as any).user;
+    const isPlugin = (socket as any).isPlugin;
+    console.log(`Client connected: ${socket.id}${user ? ` (user: ${user.id})` : ''}${isPlugin ? ' (plugin)' : ''}`);
+
+    // Join user-specific room for targeted notifications
+    if (user) {
+      socket.join(`user:${user.id}`);
+    }
     let pluginId: string | null = null;
 
     // Send current plugin status to newly connected client

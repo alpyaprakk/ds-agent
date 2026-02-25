@@ -8,6 +8,8 @@ import { join } from 'path';
 import apiRoutes from './api/routes';
 import { setupWebSocketHandlers } from './websocket/handlers';
 import pool from './db/connection';
+import { NotificationRepository } from './db/repositories/notification.repository';
+import path from 'path';
 
 // Load environment variables
 dotenv.config();
@@ -68,6 +70,9 @@ app.use((req, res, next) => {
 
 app.use(express.json({ limit: '50mb' })); // Support large design system payloads
 
+// Serve uploaded files (avatars etc.)
+app.use('/uploads', express.static(path.join(__dirname, '../uploads')));
+
 // Log Socket.IO requests for debugging
 app.use((req, _res, next) => {
   if (req.url.startsWith('/socket.io')) {
@@ -102,6 +107,7 @@ async function runMigrations() {
     '005_add_collection_figma_id.sql',
     '006_add_variable_figma_id.sql',
     '007_add_notifications.sql',
+    '008_add_notification_preferences.sql',
   ];
 
   for (const file of migrationFiles) {
@@ -138,9 +144,30 @@ async function runMigrations() {
   }
 }
 
+// Periodic cleanup of expired notifications (read: 30 days, unread: 90 days)
+function startNotificationCleanup() {
+  const CLEANUP_INTERVAL = 24 * 60 * 60 * 1000; // 24 hours
+
+  const cleanup = async () => {
+    try {
+      const deleted = await NotificationRepository.cleanupExpired(30, 90);
+      if (deleted > 0) {
+        console.log(`🧹 Cleaned up ${deleted} expired notifications`);
+      }
+    } catch (error) {
+      console.error('⚠️ Notification cleanup error:', error instanceof Error ? error.message : error);
+    }
+  };
+
+  // Run once on startup then every 24h
+  cleanup();
+  setInterval(cleanup, CLEANUP_INTERVAL);
+}
+
 // Start server
 async function startServer() {
   await runMigrations();
+  startNotificationCleanup();
 
   httpServer.listen(PORT, () => {
     console.log('🚀 DS Agent Server Started');

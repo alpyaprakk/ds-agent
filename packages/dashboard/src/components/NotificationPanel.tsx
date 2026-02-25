@@ -1,4 +1,4 @@
-import { useEffect } from 'react';
+import { useEffect, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { HugeiconsIcon } from '@hugeicons/react';
 import {
@@ -48,6 +48,18 @@ function getTimeAgo(dateStr: string): string {
   return date.toLocaleDateString();
 }
 
+function getDateGroup(dateStr: string): string {
+  const now = new Date();
+  const date = new Date(dateStr);
+  const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+  const yesterday = new Date(today.getTime() - 86400000);
+  const notifDate = new Date(date.getFullYear(), date.getMonth(), date.getDate());
+
+  if (notifDate.getTime() === today.getTime()) return 'Today';
+  if (notifDate.getTime() === yesterday.getTime()) return 'Yesterday';
+  return 'Earlier';
+}
+
 function getNotificationRoute(type: string): string | null {
   switch (type) {
     case 'workspace_invitation':
@@ -81,7 +93,7 @@ function NotificationItem({
 
   return (
     <div
-      className={`flex items-start gap-3 px-4 py-3 border-b last:border-b-0 transition-colors cursor-pointer hover:bg-accent/50 ${
+      className={`group flex items-start gap-3 px-4 py-3 border-b last:border-b-0 transition-colors cursor-pointer hover:bg-accent/50 ${
         !notification.read ? 'bg-accent/30' : ''
       }`}
       onClick={() => onClick(notification)}
@@ -119,9 +131,6 @@ function NotificationItem({
           onDelete(notification.id);
         }}
         className="flex-shrink-0 mt-0.5 p-1 rounded-md text-muted-foreground hover:text-foreground hover:bg-accent opacity-0 group-hover:opacity-100 transition-opacity"
-        style={{ opacity: undefined }}
-        onMouseEnter={(e) => (e.currentTarget.style.opacity = '1')}
-        onMouseLeave={(e) => (e.currentTarget.style.opacity = '0')}
       >
         <HugeiconsIcon icon={Cancel01Icon} size={12} />
       </button>
@@ -135,10 +144,13 @@ export function NotificationPanel() {
     notifications,
     unreadCount,
     loading,
+    loadingMore,
+    hasMore,
     isOpen,
     setOpen,
     fetchNotifications,
     fetchUnreadCount,
+    loadMore,
     markAsRead,
     markAllAsRead,
     deleteNotification,
@@ -152,6 +164,24 @@ export function NotificationPanel() {
       navigate(route);
     }
   };
+
+  // Group notifications by date
+  const groupedNotifications = useMemo(() => {
+    const groups: { label: string; items: AppNotification[] }[] = [];
+    let currentGroup: string | null = null;
+
+    for (const notif of notifications) {
+      const group = getDateGroup(notif.created_at);
+      if (group !== currentGroup) {
+        currentGroup = group;
+        groups.push({ label: group, items: [notif] });
+      } else {
+        groups[groups.length - 1].items.push(notif);
+      }
+    }
+
+    return groups;
+  }, [notifications]);
 
   // Fetch unread count on mount
   useEffect(() => {
@@ -214,14 +244,36 @@ export function NotificationPanel() {
             </div>
           ) : (
             <div>
-              {notifications.map((notification) => (
-                <NotificationItem
-                  key={notification.id}
-                  notification={notification}
-                  onDelete={deleteNotification}
-                  onClick={handleNotificationClick}
-                />
+              {groupedNotifications.map((group) => (
+                <div key={group.label}>
+                  <div className="px-4 py-1.5 bg-muted/50 border-b">
+                    <p className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider">
+                      {group.label}
+                    </p>
+                  </div>
+                  {group.items.map((notification) => (
+                    <NotificationItem
+                      key={notification.id}
+                      notification={notification}
+                      onDelete={deleteNotification}
+                      onClick={handleNotificationClick}
+                    />
+                  ))}
+                </div>
               ))}
+              {hasMore && (
+                <div className="flex justify-center py-3 border-t">
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    className="h-7 text-xs text-muted-foreground hover:text-foreground"
+                    onClick={loadMore}
+                    disabled={loadingMore}
+                  >
+                    {loadingMore ? 'Loading...' : 'Load more'}
+                  </Button>
+                </div>
+              )}
             </div>
           )}
         </ScrollArea>

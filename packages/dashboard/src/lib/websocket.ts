@@ -11,12 +11,15 @@ class WebSocketClient {
   connect(): void {
     if (this.socket?.connected) return;
 
+    const token = localStorage.getItem('auth_token');
+
     this.socket = io(WS_URL, {
       path: '/api/socket.io', // Use /api prefix to work with proxy
       transports: ['websocket', 'polling'],
       reconnection: true,
       reconnectionDelay: 1000,
       reconnectionAttempts: 5,
+      auth: { token },
     });
 
     this.socket.on('connect', () => {

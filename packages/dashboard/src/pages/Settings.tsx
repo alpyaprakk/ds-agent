@@ -1,9 +1,9 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { HugeiconsIcon } from '@hugeicons/react';
 import {
   AiCloudIcon, SaveMoneyDollarIcon, User02Icon, FigmaIcon,
   UserGroupIcon, Mail01Icon, Delete02Icon, Crown02Icon,
-  Tick02Icon, Cancel01Icon,
+  Tick02Icon, Cancel01Icon, Camera01Icon, Notification03Icon,
 } from '@hugeicons/core-free-icons';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
@@ -19,12 +19,16 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
+import { Switch } from '@/components/ui/switch';
 import { useAuthStore } from '@/store/auth-store';
 import { useWorkspaceStore } from '@/store/workspace-store';
+import { apiClient, getAvatarUrl } from '@/lib/api-client';
 import { toast } from 'sonner';
 
 export function Settings() {
-  const { user, settings: userSettings, fetchSettings, updateSettings, updateProfile } = useAuthStore();
+  const { user, settings: userSettings, fetchSettings, updateSettings, updateProfile, uploadAvatar } = useAuthStore();
+  const avatarInputRef = useRef<HTMLInputElement>(null);
+  const [uploadingAvatar, setUploadingAvatar] = useState(false);
   const {
     currentWorkspace, members, invitations, myInvitations,
     fetchMembers, fetchInvitations, inviteMember, removeMember,
@@ -44,9 +48,16 @@ export function Settings() {
   const [inviteRole, setInviteRole] = useState('member');
   const [inviting, setInviting] = useState(false);
 
+  const [notifPrefs, setNotifPrefs] = useState<Record<string, boolean>>({});
+  const [notifPrefsLoaded, setNotifPrefsLoaded] = useState(false);
+
   useEffect(() => {
     fetchSettings();
     fetchMyInvitations();
+    apiClient.getNotificationPreferences().then(({ preferences }) => {
+      setNotifPrefs(preferences);
+      setNotifPrefsLoaded(true);
+    }).catch(() => setNotifPrefsLoaded(true));
   }, []);
 
   useEffect(() => {
@@ -105,6 +116,27 @@ export function Settings() {
     }
   };
 
+  const handleAvatarChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    if (file.size > 5 * 1024 * 1024) {
+      toast.error('Image must be under 5MB');
+      return;
+    }
+
+    setUploadingAvatar(true);
+    try {
+      await uploadAvatar(file);
+      toast.success('Avatar updated');
+    } catch {
+      toast.error('Failed to upload avatar');
+    } finally {
+      setUploadingAvatar(false);
+      if (avatarInputRef.current) avatarInputRef.current.value = '';
+    }
+  };
+
   const handleInvite = async () => {
     if (!inviteEmail.trim() || !currentWorkspace) return;
     setInviting(true);
@@ -159,6 +191,17 @@ export function Settings() {
     }
   };
 
+  const handleNotifPrefToggle = async (type: string, enabled: boolean) => {
+    const prev = { ...notifPrefs };
+    setNotifPrefs({ ...notifPrefs, [type]: enabled });
+    try {
+      await apiClient.updateNotificationPreferences({ [type]: enabled });
+    } catch {
+      setNotifPrefs(prev);
+      toast.error('Failed to update preference');
+    }
+  };
+
   const handleRejectInvitation = async (token: string) => {
     try {
       await rejectInvitation(token);
@@ -202,12 +245,33 @@ export function Settings() {
           </CardHeader>
           <CardContent className="space-y-6 pt-6">
             <div className="flex items-center gap-5">
-              <Avatar className="h-16 w-16">
-                <AvatarImage src={user?.avatar || ''} />
-                <AvatarFallback className="bg-primary text-primary-foreground text-lg font-semibold">
-                  {user ? getInitials(user.name) : 'U'}
-                </AvatarFallback>
-              </Avatar>
+              <div className="relative group">
+                <Avatar className="h-16 w-16">
+                  <AvatarImage src={getAvatarUrl(user?.avatar)} />
+                  <AvatarFallback className="bg-primary text-primary-foreground text-lg font-semibold">
+                    {user ? getInitials(user.name) : 'U'}
+                  </AvatarFallback>
+                </Avatar>
+                <button
+                  type="button"
+                  onClick={() => avatarInputRef.current?.click()}
+                  disabled={uploadingAvatar}
+                  className="absolute inset-0 flex items-center justify-center rounded-full bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity cursor-pointer"
+                >
+                  {uploadingAvatar ? (
+                    <div className="h-5 w-5 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                  ) : (
+                    <HugeiconsIcon icon={Camera01Icon} size={20} className="text-white" />
+                  )}
+                </button>
+                <input
+                  ref={avatarInputRef}
+                  type="file"
+                  accept="image/jpeg,image/png,image/gif,image/webp"
+                  onChange={handleAvatarChange}
+                  className="hidden"
+                />
+              </div>
               <div>
                 <p className="font-semibold text-base">{user?.name}</p>
                 <p className="text-sm text-muted-foreground mt-0.5">{user?.email}</p>
@@ -376,7 +440,7 @@ export function Settings() {
                     return (
                       <div key={member.id} className="flex items-center gap-3 p-3 rounded-lg hover:bg-muted/30 transition">
                         <Avatar className="h-9 w-9">
-                          <AvatarImage src={member.avatar || ''} />
+                          <AvatarImage src={getAvatarUrl(member.avatar)} />
                           <AvatarFallback className="bg-primary/10 text-primary text-xs font-semibold">
                             {getInitials(member.name)}
                           </AvatarFallback>
@@ -426,6 +490,48 @@ export function Settings() {
                   })}
                 </div>
               </div>
+            </CardContent>
+          </Card>
+        )}
+
+        {/* Notification Preferences */}
+        {notifPrefsLoaded && (
+          <Card>
+            <CardHeader className="pb-2">
+              <div className="flex items-center gap-3">
+                <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-orange-500/10">
+                  <HugeiconsIcon icon={Notification03Icon} size={20} className="text-orange-500" />
+                </div>
+                <div>
+                  <CardTitle className="text-base">Notification Preferences</CardTitle>
+                  <CardDescription className="mt-1">Choose which notifications you want to receive</CardDescription>
+                </div>
+              </div>
+            </CardHeader>
+            <CardContent className="space-y-1 pt-6">
+              {[
+                { type: 'workspace_invitation', label: 'Workspace invitations', desc: 'When you are invited to a workspace' },
+                { type: 'invitation_accepted', label: 'Invitation accepted', desc: 'When someone accepts your invitation' },
+                { type: 'invitation_rejected', label: 'Invitation rejected', desc: 'When someone declines your invitation' },
+                { type: 'member_removed', label: 'Member removed', desc: 'When you are removed from a workspace' },
+                { type: 'role_changed', label: 'Role changed', desc: 'When your workspace role is updated' },
+                { type: 'figma_file_added', label: 'Figma file added', desc: 'When a Figma file is added to workspace' },
+                { type: 'figma_file_removed', label: 'Figma file removed', desc: 'When a Figma file is removed' },
+                { type: 'figma_synced', label: 'Figma synced', desc: 'When a Figma file is synced' },
+                { type: 'conflict_detected', label: 'Conflicts detected', desc: 'When design system issues are found' },
+                { type: 'conflict_resolved', label: 'Conflict resolved', desc: 'When a conflict is resolved' },
+              ].map(({ type, label, desc }) => (
+                <div key={type} className="flex items-center justify-between py-3">
+                  <div>
+                    <p className="text-sm font-medium">{label}</p>
+                    <p className="text-xs text-muted-foreground">{desc}</p>
+                  </div>
+                  <Switch
+                    checked={notifPrefs[type] !== false}
+                    onCheckedChange={(checked) => handleNotifPrefToggle(type, checked)}
+                  />
+                </div>
+              ))}
             </CardContent>
           </Card>
         )}

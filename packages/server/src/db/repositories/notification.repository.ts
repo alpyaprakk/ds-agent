@@ -1,5 +1,7 @@
 import { query } from '../connection';
 
+export type NotificationPreferences = Partial<Record<NotificationType, boolean>>;
+
 export interface Notification {
   id: string;
   user_id: string;
@@ -77,17 +79,42 @@ export class NotificationRepository {
       [workspaceId]
     );
 
-    const notifications: Notification[] = [];
-    for (const member of membersResult.rows) {
-      if (excludeUserId && member.user_id === excludeUserId) continue;
-      const notification = await this.create({
-        user_id: member.user_id,
-        workspace_id: workspaceId,
-        ...data,
-      });
-      notifications.push(notification);
+    const userIds = membersResult.rows
+      .map((m: any) => m.user_id)
+      .filter((id: string) => !excludeUserId || id !== excludeUserId);
+
+    if (userIds.length === 0) return [];
+
+    // Batch INSERT - single query for all members
+    const values: string[] = [];
+    const params: any[] = [];
+    let paramIndex = 1;
+
+    for (const userId of userIds) {
+      values.push(
+        `($${paramIndex}, $${paramIndex + 1}, $${paramIndex + 2}, $${paramIndex + 3}, $${paramIndex + 4}, $${paramIndex + 5}, $${paramIndex + 6}, $${paramIndex + 7})`
+      );
+      params.push(
+        userId,
+        workspaceId,
+        data.type,
+        data.title,
+        data.message || null,
+        data.actor_id || null,
+        data.reference_type || null,
+        data.reference_id || null,
+      );
+      paramIndex += 8;
     }
-    return notifications;
+
+    const result = await query(
+      `INSERT INTO notifications (user_id, workspace_id, type, title, message, actor_id, reference_type, reference_id)
+       VALUES ${values.join(', ')}
+       RETURNING *`,
+      params
+    );
+
+    return result.rows;
   }
 
   static async getByUser(
@@ -164,6 +191,76 @@ export class NotificationRepository {
     const result = await query(
       'DELETE FROM notifications WHERE user_id = $1 AND read = TRUE',
       [userId]
+    );
+    return result.rowCount || 0;
+  }
+
+  /**
+   * Delete notifications older than the given number of days.
+   * Read notifications expire after `readDays`, unread after `unreadDays`.
+   */
+  /**
+   * Find a recent unread notification of the same type for grouping.
+   * Returns null if no groupable notification exists within the time window.
+   */
+  static async findRecentForGrouping(
+    userId: string,
+    workspaceId: string,
+    type: NotificationType,
+    windowMinutes = 5
+  ): Promise<Notification | null> {
+    const result = await query(
+      `SELECT * FROM notifications
+       WHERE user_id = $1 AND workspace_id = $2 AND type = $3
+         AND read = FALSE
+         AND created_at > NOW() - INTERVAL '1 minute' * $4
+       ORDER BY created_at DESC
+       LIMIT 1`,
+      [userId, workspaceId, type, windowMinutes]
+    );
+    return result.rows[0] || null;
+  }
+
+  /**
+   * Update an existing notification's title and message (for grouping).
+   */
+  static async updateContent(
+    notificationId: string,
+    title: string,
+    message: string | null
+  ): Promise<Notification> {
+    const result = await query(
+      `UPDATE notifications SET title = $2, message = $3, created_at = NOW()
+       WHERE id = $1
+       RETURNING *`,
+      [notificationId, title, message]
+    );
+    return result.rows[0];
+  }
+
+  static async getPreferences(userId: string): Promise<NotificationPreferences> {
+    const result = await query(
+      'SELECT notification_preferences FROM users WHERE id = $1',
+      [userId]
+    );
+    return result.rows[0]?.notification_preferences || {};
+  }
+
+  static async updatePreferences(userId: string, prefs: NotificationPreferences): Promise<NotificationPreferences> {
+    const result = await query(
+      `UPDATE users SET notification_preferences = notification_preferences || $2::jsonb WHERE id = $1
+       RETURNING notification_preferences`,
+      [userId, JSON.stringify(prefs)]
+    );
+    return result.rows[0]?.notification_preferences || {};
+  }
+
+  static async cleanupExpired(readDays = 30, unreadDays = 90): Promise<number> {
+    const result = await query(
+      `DELETE FROM notifications
+       WHERE (read = TRUE AND created_at < NOW() - INTERVAL '1 day' * $1)
+          OR (read = FALSE AND created_at < NOW() - INTERVAL '1 day' * $2)`,
+      [readDays, unreadDays]
     );
     return result.rowCount || 0;
   }

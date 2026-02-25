@@ -1,7 +1,25 @@
-import { NotificationRepository, NotificationType } from '../db/repositories/notification.repository';
+import { NotificationRepository, NotificationType, Notification } from '../db/repositories/notification.repository';
 import { getIO } from '../websocket/handlers';
 
+// Notification types eligible for grouping (repeated events within a time window)
+const GROUPABLE_TYPES: NotificationType[] = [
+  'figma_synced',
+  'conflict_detected',
+  'figma_file_added',
+  'figma_file_removed',
+];
+
 export class NotificationService {
+  private static emitToUser(userId: string, notification: Notification) {
+    const io = getIO();
+    if (io) {
+      io.to(`user:${userId}`).emit('notification', {
+        userId,
+        notification,
+      });
+    }
+  }
+
   static async notify(data: {
     userId: string;
     workspaceId?: string;
@@ -12,6 +30,28 @@ export class NotificationService {
     referenceType?: string;
     referenceId?: string;
   }) {
+    // Check user preferences - skip if this type is disabled
+    const prefs = await NotificationRepository.getPreferences(data.userId);
+    if (prefs[data.type] === false) return null;
+
+    // Try to group with a recent notification of the same type
+    if (data.workspaceId && GROUPABLE_TYPES.includes(data.type)) {
+      const recent = await NotificationRepository.findRecentForGrouping(
+        data.userId,
+        data.workspaceId,
+        data.type,
+      );
+      if (recent) {
+        const updated = await NotificationRepository.updateContent(
+          recent.id,
+          data.title,
+          data.message || null,
+        );
+        this.emitToUser(data.userId, updated);
+        return updated;
+      }
+    }
+
     const notification = await NotificationRepository.create({
       user_id: data.userId,
       workspace_id: data.workspaceId,
@@ -23,15 +63,7 @@ export class NotificationService {
       reference_id: data.referenceId,
     });
 
-    // Broadcast via Socket.IO to the specific user
-    const io = getIO();
-    if (io) {
-      io.emit('notification', {
-        userId: data.userId,
-        notification,
-      });
-    }
-
+    this.emitToUser(data.userId, notification);
     return notification;
   }
 
@@ -58,15 +90,8 @@ export class NotificationService {
       data.excludeUserId
     );
 
-    // Broadcast via Socket.IO to each user
-    const io = getIO();
-    if (io) {
-      for (const notification of notifications) {
-        io.emit('notification', {
-          userId: notification.user_id,
-          notification,
-        });
-      }
+    for (const notification of notifications) {
+      this.emitToUser(notification.user_id, notification);
     }
 
     return notifications;

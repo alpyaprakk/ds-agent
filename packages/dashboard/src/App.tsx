@@ -92,135 +92,115 @@ function AppContent() {
     wsClient.connect();
     fetchWorkspaces();
 
-    // Setup WebSocket listeners
-    wsClient.on('workspace_joined', (data) => {
+    // Named handlers for proper cleanup
+    const onWorkspaceJoined = (data: any) => {
       console.log('Joined workspace:', data.workspace_id);
-    });
+    };
 
-    wsClient.on('conflict_detected', (data) => {
-      console.log('Conflict detected:', data);
+    const onConflictDetected = (data: any) => {
       const severity = data.severity || 'medium';
       const message = `${data.entity_type} conflict detected: ${data.entity_name || 'Unnamed'}`;
 
       if (severity === 'high') {
-        toast.error(message, {
-          description: 'Please review and resolve this conflict',
-          duration: 10000,
-        });
+        toast.error(message, { description: 'Please review and resolve this conflict', duration: 10000 });
       } else if (severity === 'medium') {
-        toast.warning(message, {
-          description: 'Auto-resolved, but please verify',
-          duration: 5000,
-        });
+        toast.warning(message, { description: 'Auto-resolved, but please verify', duration: 5000 });
       } else {
-        toast.info(message, {
-          description: 'Auto-resolved successfully',
-          duration: 3000,
-        });
+        toast.info(message, { description: 'Auto-resolved successfully', duration: 3000 });
       }
 
       if (useWorkspaceStore.getState().currentWorkspace) {
-        useWorkspaceStore.getState().fetchConflicts(
-          useWorkspaceStore.getState().currentWorkspace!.id,
-          'active'
-        );
+        useWorkspaceStore.getState().fetchConflicts(useWorkspaceStore.getState().currentWorkspace!.id, 'active');
       }
-    });
+    };
 
-    wsClient.on('figma_changes', (data) => {
-      console.log('Figma changes:', data);
+    const onFigmaChanges = (data: any) => {
       toast.success('Design system updated', {
         description: `${data.changes?.length || 0} changes synced from Figma`,
         duration: 3000,
       });
-
       if (useWorkspaceStore.getState().currentWorkspace) {
-        useWorkspaceStore.getState().fetchConflicts(
-          useWorkspaceStore.getState().currentWorkspace!.id,
-          'active'
-        );
+        useWorkspaceStore.getState().fetchConflicts(useWorkspaceStore.getState().currentWorkspace!.id, 'active');
       }
-    });
+    };
 
-    wsClient.on('figma_synced', (data) => {
-      console.log('Figma synced:', data);
+    const onFigmaSynced = (data: any) => {
       toast.success(`Synced: ${data.fileName}`, {
         description: `${data.stats?.variables || 0} variables, ${data.stats?.components || 0} components`,
         duration: 5000,
       });
-
       const store = useWorkspaceStore.getState();
       store.fetchWorkspaces();
       if (store.currentWorkspace) {
         store.fetchFigmaFiles(store.currentWorkspace.id);
         store.fetchConflicts(store.currentWorkspace.id, 'active');
       }
-    });
+    };
 
-    wsClient.on('analysis_started', (data) => {
-      console.log('AI analysis started:', data);
+    const onAnalysisStarted = () => {
       toast.info('AI Analysis in progress', {
         description: 'Analyzing design system for issues and conflicts...',
         duration: 5000,
       });
-    });
+    };
 
-    wsClient.on('analysis_complete', (data) => {
-      console.log('AI analysis complete:', data);
+    const onAnalysisComplete = (data: any) => {
       const { summary, score } = data.report;
-
       toast.success('AI Analysis complete', {
         description: `Found ${summary.totalIssues} issues. Health score: ${score}/100`,
         duration: 10000,
       });
-
       if (useWorkspaceStore.getState().currentWorkspace) {
-        useWorkspaceStore.getState().fetchConflicts(
-          useWorkspaceStore.getState().currentWorkspace!.id,
-          'active'
-        );
+        useWorkspaceStore.getState().fetchConflicts(useWorkspaceStore.getState().currentWorkspace!.id, 'active');
       }
-    });
+    };
 
-    wsClient.on('analysis_failed', (data) => {
-      console.error('AI analysis failed:', data);
-      toast.error('AI Analysis failed', {
-        description: data.error || 'Unknown error',
-        duration: 5000,
-      });
-    });
+    const onAnalysisFailed = (data: any) => {
+      toast.error('AI Analysis failed', { description: data.error || 'Unknown error', duration: 5000 });
+    };
 
-    wsClient.on('fix-success', (data) => {
-      console.log('Fix applied successfully:', data);
+    const onFixSuccess = (data: any) => {
       toast.success('Fix applied!', {
         description: data.message || 'The fix has been applied to your Figma file',
         duration: 5000,
       });
-
       if (useWorkspaceStore.getState().currentWorkspace) {
-        useWorkspaceStore.getState().fetchConflicts(
-          useWorkspaceStore.getState().currentWorkspace!.id,
-          'active'
-        );
+        useWorkspaceStore.getState().fetchConflicts(useWorkspaceStore.getState().currentWorkspace!.id, 'active');
       }
-    });
+    };
 
-    wsClient.on('fix-error', (data) => {
-      console.error('Fix failed:', data);
-      toast.error('Fix failed', {
-        description: data.error || 'Could not apply the fix',
-        duration: 5000,
-      });
-    });
+    const onFixError = (data: any) => {
+      toast.error('Fix failed', { description: data.error || 'Could not apply the fix', duration: 5000 });
+    };
 
-    // Real-time notification listener
-    wsClient.on('notification', (data) => {
-      if (data.userId === user.id) {
-        useNotificationStore.getState().addNotification(data.notification);
-      }
-    });
+    const onNotification = (data: any) => {
+      useNotificationStore.getState().addNotification(data.notification);
+    };
+
+    // Register all listeners
+    wsClient.on('workspace_joined', onWorkspaceJoined);
+    wsClient.on('conflict_detected', onConflictDetected);
+    wsClient.on('figma_changes', onFigmaChanges);
+    wsClient.on('figma_synced', onFigmaSynced);
+    wsClient.on('analysis_started', onAnalysisStarted);
+    wsClient.on('analysis_complete', onAnalysisComplete);
+    wsClient.on('analysis_failed', onAnalysisFailed);
+    wsClient.on('fix-success', onFixSuccess);
+    wsClient.on('fix-error', onFixError);
+    wsClient.on('notification', onNotification);
 
     return () => {
+      // Remove all listeners to prevent accumulation on reconnect
+      wsClient.off('workspace_joined', onWorkspaceJoined);
+      wsClient.off('conflict_detected', onConflictDetected);
+      wsClient.off('figma_changes', onFigmaChanges);
+      wsClient.off('figma_synced', onFigmaSynced);
+      wsClient.off('analysis_started', onAnalysisStarted);
+      wsClient.off('analysis_complete', onAnalysisComplete);
+      wsClient.off('analysis_failed', onAnalysisFailed);
+      wsClient.off('fix-success', onFixSuccess);
+      wsClient.off('fix-error', onFixError);
+      wsClient.off('notification', onNotification);
       wsClient.disconnect();
     };
   }, [user, fetchWorkspaces]);

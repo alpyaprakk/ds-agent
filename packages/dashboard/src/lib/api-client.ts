@@ -1,5 +1,11 @@
 const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:3000';
 
+export function getAvatarUrl(avatar?: string | null): string {
+  if (!avatar) return '';
+  if (avatar.startsWith('http')) return avatar;
+  return `${API_URL}${avatar}`;
+}
+
 export interface Workspace {
   id: string;
   name: string;
@@ -227,6 +233,28 @@ class ApiClient {
     });
   }
 
+  async uploadAvatar(file: File): Promise<{ user: AuthUser }> {
+    const url = `${this.baseUrl}/api/auth/avatar`;
+    const token = this.getToken();
+    const formData = new FormData();
+    formData.append('avatar', file);
+
+    const response = await fetch(url, {
+      method: 'POST',
+      headers: {
+        ...(token ? { Authorization: `Bearer ${token}` } : {}),
+      },
+      body: formData,
+    });
+
+    if (!response.ok) {
+      const error = await response.json().catch(() => ({}));
+      throw new Error(error.error || `HTTP ${response.status}`);
+    }
+
+    return response.json();
+  }
+
   // Workspaces
   async getWorkspaces(): Promise<{ workspaces: Workspace[] }> {
     return this.request('/api/workspaces');
@@ -426,6 +454,17 @@ class ApiClient {
 
   async deleteNotification(id: string): Promise<{ success: boolean }> {
     return this.request(`/api/notifications/${id}`, { method: 'DELETE' });
+  }
+
+  async getNotificationPreferences(): Promise<{ preferences: Record<string, boolean> }> {
+    return this.request('/api/notifications/preferences');
+  }
+
+  async updateNotificationPreferences(preferences: Record<string, boolean>): Promise<{ preferences: Record<string, boolean> }> {
+    return this.request('/api/notifications/preferences', {
+      method: 'PUT',
+      body: JSON.stringify({ preferences }),
+    });
   }
 }
 
