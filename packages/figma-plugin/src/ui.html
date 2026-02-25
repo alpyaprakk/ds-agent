@@ -3,6 +3,7 @@
 <head>
   <meta charset="utf-8">
   <title>DS Agent</title>
+  <script src="https://cdn.socket.io/4.7.2/socket.io.min.js"></script>
   <style>
     * {
       margin: 0;
@@ -77,70 +78,68 @@
   <div id="status">Ready</div>
 
   <script>
-    // WebSocket connection
-    let ws = null;
-    let reconnectInterval = null;
-    const SERVER_URL = 'wss://ds-agent.alpy.io'; // TODO: Make configurable
+    // Socket.IO connection
+    let socket = null;
+    const SERVER_URL = 'https://ds-agent.alpy.io';
 
     // Connect to server
     function connectToServer() {
       try {
-        ws = new WebSocket(SERVER_URL);
+        socket = io(SERVER_URL, {
+          transports: ['websocket', 'polling'],
+          reconnection: true,
+          reconnectionDelay: 5000,
+          reconnectionAttempts: Infinity
+        });
 
-        ws.onopen = () => {
+        socket.on('connect', () => {
           console.log('✅ Connected to DS Agent server');
           document.getElementById('status').textContent = '🟢 Connected to server';
 
           // Send authentication
-          ws.send(JSON.stringify({
-            type: 'plugin-connect',
+          socket.emit('plugin-connect', {
             plugin: 'figma',
             timestamp: new Date().toISOString()
-          }));
+          });
 
           // Start heartbeat
           startHeartbeat();
-        };
+        });
 
-        ws.onmessage = (event) => {
-          const msg = JSON.parse(event.data);
-          console.log('Server message:', msg);
+        socket.on('plugin-connected', (data) => {
+          console.log('Plugin connected:', data);
+        });
 
-          if (msg.type === 'sync-request') {
-            // Server requested sync
-            performSync();
-          }
+        socket.on('sync-request', () => {
+          // Server requested sync
+          performSync();
+        });
 
-          if (msg.type === 'apply-fix') {
-            // Server sent a fix to apply
-            console.log('Applying fix from server:', msg);
-            parent.postMessage({
-              pluginMessage: {
-                type: 'apply-fix',
-                fix: msg
-              }
-            }, '*');
+        socket.on('apply-fix', (msg) => {
+          // Server sent a fix to apply
+          console.log('Applying fix from server:', msg);
+          parent.postMessage({
+            pluginMessage: {
+              type: 'apply-fix',
+              fix: msg
+            }
+          }, '*');
 
-            document.getElementById('status').textContent = '🔧 Applying fix...';
-          }
-        };
+          document.getElementById('status').textContent = '🔧 Applying fix...';
+        });
 
-        ws.onerror = (error) => {
-          console.error('WebSocket error:', error);
-          document.getElementById('status').textContent = '🔴 Connection error';
-        };
-
-        ws.onclose = () => {
+        socket.on('disconnect', () => {
           console.log('❌ Disconnected from server');
           document.getElementById('status').textContent = '🔴 Disconnected';
+        });
 
-          // Attempt reconnect
-          reconnectInterval = setTimeout(connectToServer, 5000);
-        };
+        socket.on('connect_error', (error) => {
+          console.error('Connection error:', error);
+          document.getElementById('status').textContent = '🔴 Connection error';
+        });
       } catch (error) {
         console.error('Connection error:', error);
         document.getElementById('status').textContent = '🔴 Failed to connect';
-        reconnectInterval = setTimeout(connectToServer, 5000);
       }
     }
 
@@ -150,8 +149,8 @@
       if (heartbeatInterval) clearInterval(heartbeatInterval);
 
       heartbeatInterval = setInterval(() => {
-        if (ws && ws.readyState === WebSocket.OPEN) {
-          ws.send(JSON.stringify({ type: 'heartbeat' }));
+        if (socket && socket.connected) {
+          socket.emit('heartbeat');
         }
       }, 30000); // Every 30 seconds
     }
@@ -199,11 +198,8 @@
 
       if (msg.type === 'sync-data') {
         // Send sync data to server
-        if (ws && ws.readyState === WebSocket.OPEN) {
-          ws.send(JSON.stringify({
-            type: 'design-system-sync',
-            data: msg.data
-          }));
+        if (socket && socket.connected) {
+          socket.emit('design-system-sync', msg.data);
           document.getElementById('status').textContent = '✅ Synced with server';
         } else {
           document.getElementById('status').textContent = '❌ Not connected to server';
@@ -214,12 +210,11 @@
         document.getElementById('status').textContent = '✅ Fix applied successfully';
 
         // Notify server
-        if (ws && ws.readyState === WebSocket.OPEN) {
-          ws.send(JSON.stringify({
-            type: 'fix-applied',
+        if (socket && socket.connected) {
+          socket.emit('fix-applied', {
             conflictId: msg.conflictId,
             success: true
-          }));
+          });
         }
       }
 
@@ -227,13 +222,12 @@
         document.getElementById('status').textContent = '❌ Fix failed: ' + msg.error;
 
         // Notify server
-        if (ws && ws.readyState === WebSocket.OPEN) {
-          ws.send(JSON.stringify({
-            type: 'fix-applied',
+        if (socket && socket.connected) {
+          socket.emit('fix-applied', {
             conflictId: msg.conflictId,
             success: false,
             error: msg.error
-          }));
+          });
         }
       }
     };
@@ -244,8 +238,7 @@
     // Cleanup on unload
     window.onbeforeunload = () => {
       if (heartbeatInterval) clearInterval(heartbeatInterval);
-      if (reconnectInterval) clearTimeout(reconnectInterval);
-      if (ws) ws.close();
+      if (socket) socket.disconnect();
     };
   </script>
 </body>
