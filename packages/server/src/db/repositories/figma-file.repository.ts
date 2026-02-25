@@ -21,15 +21,21 @@ export class FigmaFileRepository {
   }
 
   async create(file: Partial<FigmaFile>): Promise<FigmaFile> {
+    const url = file.url || (file.figma_key ? `https://www.figma.com/design/${file.figma_key}` : null);
     const result = await query(
       `INSERT INTO figma_files (workspace_id, figma_key, name, url, role, type, config)
        VALUES ($1, $2, $3, $4, $5, $6, $7)
+       ON CONFLICT (figma_key) DO UPDATE SET
+         name = COALESCE(EXCLUDED.name, figma_files.name),
+         role = COALESCE(EXCLUDED.role, figma_files.role),
+         url = COALESCE(EXCLUDED.url, figma_files.url),
+         updated_at = NOW()
        RETURNING *`,
       [
         file.workspace_id,
         file.figma_key,
         file.name,
-        file.url,
+        url,
         file.role || 'primary',
         file.type || 'design_system',
         JSON.stringify(file.config || {})

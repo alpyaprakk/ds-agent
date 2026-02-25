@@ -103,6 +103,7 @@ export function AddFigmaFileModal({ isOpen, onClose }: AddFigmaFileModalProps) {
       await addFigmaFile(currentWorkspace.id, {
         figma_key: extracted.file_key,
         name: extracted.name,
+        url: formData.url.trim(),
         role: formData.role as 'primary' | 'secondary' | 'reference',
       });
 
@@ -114,8 +115,9 @@ export function AddFigmaFileModal({ isOpen, onClose }: AddFigmaFileModalProps) {
         url: '',
         role: 'primary',
       });
-    } catch (error) {
-      toast.error('Failed to add Figma file');
+    } catch (error: any) {
+      const message = error?.message || 'Failed to add Figma file';
+      toast.error(message);
       console.error('Add Figma file error:', error);
     } finally {
       setLoading(false);

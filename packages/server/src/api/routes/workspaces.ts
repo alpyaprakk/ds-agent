@@ -104,7 +104,7 @@ router.get('/:id/files', async (req, res) => {
   }
 });
 
-// POST /api/workspaces/:id/files - Add Figma file to workspace
+// POST /api/workspaces/:id/files - Add Figma file to workspace (upsert)
 router.post('/:id/files', async (req, res) => {
   try {
     const file = await figmaFileRepo.create({
@@ -114,9 +114,6 @@ router.post('/:id/files', async (req, res) => {
     return res.status(201).json({ file });
   } catch (error: any) {
     console.error('Error adding Figma file:', error);
-    if (error?.code === '23505') {
-      return res.status(409).json({ error: 'This Figma file is already added' });
-    }
     return res.status(500).json({ error: 'Failed to add Figma file' });
   }
 });

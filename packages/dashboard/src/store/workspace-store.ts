@@ -139,13 +139,18 @@ export const useWorkspaceStore = create<WorkspaceStore>((set, get) => ({
     }
   },
 
-  // Add Figma file
+  // Add Figma file (upsert - handles both new and existing)
   addFigmaFile: async (workspaceId, data) => {
     try {
       const { file } = await apiClient.addFigmaFile(workspaceId, data);
-      set((state) => ({
-        figmaFiles: [...state.figmaFiles, file],
-      }));
+      set((state) => {
+        const exists = state.figmaFiles.some((f) => f.id === file.id);
+        return {
+          figmaFiles: exists
+            ? state.figmaFiles.map((f) => (f.id === file.id ? file : f))
+            : [...state.figmaFiles, file],
+        };
+      });
     } catch (error) {
       console.error('Failed to add Figma file:', error);
       throw error;

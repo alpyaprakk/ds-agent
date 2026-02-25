@@ -17,6 +17,7 @@ export interface FigmaFile {
   workspace_id: string;
   figma_key: string;
   name: string;
+  url?: string;
   role: 'primary' | 'secondary' | 'reference';
   sync_status: string;
   last_synced?: string;
