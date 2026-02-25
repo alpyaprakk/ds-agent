@@ -194,27 +194,57 @@ export function Dashboard() {
 
         {/* Stats Cards */}
         <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-          <Card>
-            <CardContent className="p-4">
-              <div className="flex items-center gap-3">
-                <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary/10">
-                  <HugeiconsIcon icon={Activity01Icon} size={14} className="text-primary" />
-                </div>
-                <div>
-                  <p className="text-xs text-muted-foreground font-medium">Health Score</p>
-                  <p className="text-lg font-bold">{currentWorkspace.health_score || 0}%</p>
-                </div>
-              </div>
-              <div className="mt-3">
-                <div className="w-full bg-muted rounded-full h-1">
-                  <div
-                    className="bg-primary h-1 rounded-full transition-all"
-                    style={{ width: `${currentWorkspace.health_score || 0}%` }}
-                  />
-                </div>
-              </div>
-            </CardContent>
-          </Card>
+          {(() => {
+            const score = currentWorkspace.health_score || 0;
+            const color = score >= 80 ? 'emerald' : score >= 50 ? 'yellow' : 'red';
+            const label = score >= 80 ? 'Excellent' : score >= 50 ? 'Fair' : 'Poor';
+            const colorMap = {
+              emerald: {
+                icon: 'text-emerald-500',
+                bg: 'bg-emerald-500/10',
+                bar: 'bg-emerald-500',
+                badge: 'text-emerald-600 dark:text-emerald-400 bg-emerald-500/10',
+              },
+              yellow: {
+                icon: 'text-yellow-500',
+                bg: 'bg-yellow-500/10',
+                bar: 'bg-yellow-500',
+                badge: 'text-yellow-600 dark:text-yellow-400 bg-yellow-500/10',
+              },
+              red: {
+                icon: 'text-red-500',
+                bg: 'bg-red-500/10',
+                bar: 'bg-red-500',
+                badge: 'text-red-600 dark:text-red-400 bg-red-500/10',
+              },
+            }[color];
+            return (
+              <Card>
+                <CardContent className="p-4">
+                  <div className="flex items-center justify-between mb-3">
+                    <div className="flex items-center gap-2">
+                      <div className={`flex h-7 w-7 items-center justify-center rounded-lg ${colorMap.bg}`}>
+                        <HugeiconsIcon icon={Activity01Icon} size={13} className={colorMap.icon} />
+                      </div>
+                      <p className="text-xs text-muted-foreground font-medium">Health Score</p>
+                    </div>
+                    <span className={`text-[10px] font-medium px-1.5 py-0.5 rounded-full ${colorMap.badge}`}>
+                      {label}
+                    </span>
+                  </div>
+                  <p className={`text-2xl font-bold tracking-tight ${colorMap.icon}`}>{score}%</p>
+                  <div className="mt-2.5">
+                    <div className="w-full bg-muted rounded-full h-1.5">
+                      <div
+                        className={`${colorMap.bar} h-1.5 rounded-full transition-all duration-500`}
+                        style={{ width: `${score}%` }}
+                      />
+                    </div>
+                  </div>
+                </CardContent>
+              </Card>
+            );
+          })()}
 
           <Card>
             <CardContent className="p-4">
