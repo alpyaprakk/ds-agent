@@ -27,7 +27,9 @@ const io = new SocketIOServer(httpServer, {
   transports: ['polling', 'websocket'],
   // Add Engine.IO options
   pingTimeout: 60000,
-  pingInterval: 25000
+  pingInterval: 25000,
+  // Increase max message size for large design system syncs (default: 1MB)
+  maxHttpBufferSize: 10e6 // 10MB - allows syncing 500+ variables and components
 });
 
 // Add middleware to Socket.IO engine to manually set CORS headers
