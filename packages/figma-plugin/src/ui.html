@@ -86,7 +86,7 @@
     function connectToServer() {
       try {
         socket = io(SERVER_URL, {
-          transports: ['websocket', 'polling'],
+          transports: ['polling'], // Force polling instead of websocket
           reconnection: true,
           reconnectionDelay: 5000,
           reconnectionAttempts: Infinity
