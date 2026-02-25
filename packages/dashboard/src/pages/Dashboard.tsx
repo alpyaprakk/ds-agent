@@ -219,7 +219,7 @@ export function Dashboard() {
               },
             }[color];
             return (
-              <Card>
+              <Card className="!py-0">
                 <CardContent className="p-4 flex flex-col gap-3">
                   <div className="flex items-center justify-between">
                     <div className="flex items-center gap-2">
@@ -244,7 +244,7 @@ export function Dashboard() {
             );
           })()}
 
-          <Card>
+          <Card className="!py-0">
             <CardContent className="p-4 flex flex-col gap-3">
               <div className="flex items-center gap-2">
                 <div className="flex h-7 w-7 items-center justify-center rounded-lg bg-blue-500/10">
@@ -253,11 +253,10 @@ export function Dashboard() {
                 <p className="text-xs text-muted-foreground font-medium">Components</p>
               </div>
               <p className="text-2xl font-bold tracking-tight">{currentWorkspace.total_components || 0}</p>
-              <div className="h-1.5" />
             </CardContent>
           </Card>
 
-          <Card>
+          <Card className="!py-0">
             <CardContent className="p-4 flex flex-col gap-3">
               <div className="flex items-center gap-2">
                 <div className="flex h-7 w-7 items-center justify-center rounded-lg bg-purple-500/10">
@@ -266,11 +265,10 @@ export function Dashboard() {
                 <p className="text-xs text-muted-foreground font-medium">Variables</p>
               </div>
               <p className="text-2xl font-bold tracking-tight">{currentWorkspace.total_variables || 0}</p>
-              <div className="h-1.5" />
             </CardContent>
           </Card>
 
-          <Card>
+          <Card className="!py-0">
             <CardContent className="p-4 flex flex-col gap-3">
               <div className="flex items-center gap-2">
                 <div className={`flex h-7 w-7 items-center justify-center rounded-lg ${conflicts.length > 0 ? 'bg-red-500/10' : 'bg-emerald-500/10'}`}>
@@ -283,7 +281,6 @@ export function Dashboard() {
                 <p className="text-xs text-muted-foreground font-medium">Conflicts</p>
               </div>
               <p className={`text-2xl font-bold tracking-tight ${conflicts.length > 0 ? 'text-red-500' : ''}`}>{conflicts.length}</p>
-              <div className="h-1.5" />
             </CardContent>
           </Card>
         </div>
