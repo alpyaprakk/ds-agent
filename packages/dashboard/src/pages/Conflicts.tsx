@@ -1,20 +1,23 @@
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
 import { useWorkspaceStore } from '../store/workspace-store';
 import { HugeiconsIcon } from '@hugeicons/react';
 import {
   CheckmarkCircle02Icon,
   AiCloudIcon,
   SparklesIcon,
-  Message01Icon
+  Message01Icon,
+  AlertDiamondIcon,
+  Alert02Icon,
+  InformationCircleIcon,
 } from '@hugeicons/core-free-icons';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
-import { Separator } from '@/components/ui/separator';
 import { AIChatPanel } from '@/components/AIChatPanel';
 import { cn } from '@/lib/utils';
 import { wsClient } from '@/lib/websocket';
 import { toast } from 'sonner';
+import type { Conflict } from '@/lib/api-client';
 
 interface ParsedIssue {
   title: string;
@@ -59,22 +62,23 @@ export function Conflicts() {
   const [selectedCategory, setSelectedCategory] = useState<string | null>(null);
   const [chatOpen, setChatOpen] = useState(false);
   const [chatContext, setChatContext] = useState<any>(null);
-
-  useEffect(() => {
-    if (currentWorkspace) {
-      // Conflicts are already fetched when workspace is set
-    }
-  }, [currentWorkspace]);
+  const [dismissingId, setDismissingId] = useState<string | null>(null);
+  const [autoFixingId, setAutoFixingId] = useState<string | null>(null);
+  const [autoFixingAll, setAutoFixingAll] = useState(false);
 
   const handleDismiss = async (conflictId: string) => {
+    setDismissingId(conflictId);
     try {
       await dismissConflict(conflictId, 'user');
+      toast.success('Issue dismissed');
     } catch (error) {
-      console.error('Failed to dismiss conflict:', error);
+      toast.error('Failed to dismiss issue');
+    } finally {
+      setDismissingId(null);
     }
   };
 
-  const handleFixWithAI = (conflict: any) => {
+  const handleFixWithAI = (conflict: Conflict) => {
     const parsed = parseIssueDescription(conflict.description || '');
 
     setChatContext({
@@ -88,10 +92,52 @@ export function Conflicts() {
     setChatOpen(true);
   };
 
-  const handleApplyFix = (fix: any) => {
-    console.log('Applying fix:', fix);
+  const handleAutoFix = async (conflict: Conflict) => {
+    setAutoFixingId(conflict.id);
+    try {
+      wsClient.emit('apply-fix', {
+        conflictId: conflict.id,
+        entityId: conflict.entity_id,
+        action: 'auto-fix',
+        suggestion: parseIssueDescription(conflict.description || '').suggestion
+      });
 
-    // Send fix to plugin via WebSocket
+      toast.info('Fix request sent to plugin', {
+        description: 'Please make sure the Figma plugin is running',
+      });
+    } catch (error) {
+      toast.error('Failed to send fix request');
+    } finally {
+      setAutoFixingId(null);
+    }
+  };
+
+  const handleAutoFixAll = async () => {
+    const autoFixable = conflicts.filter(c => c.resolution_method === 'auto');
+    if (autoFixable.length === 0) return;
+
+    setAutoFixingAll(true);
+    try {
+      for (const conflict of autoFixable) {
+        wsClient.emit('apply-fix', {
+          conflictId: conflict.id,
+          entityId: conflict.entity_id,
+          action: 'auto-fix',
+          suggestion: parseIssueDescription(conflict.description || '').suggestion
+        });
+      }
+
+      toast.info(`${autoFixable.length} fix requests sent to plugin`, {
+        description: 'Please make sure the Figma plugin is running',
+      });
+    } catch (error) {
+      toast.error('Failed to send fix requests');
+    } finally {
+      setAutoFixingAll(false);
+    }
+  };
+
+  const handleApplyFix = (fix: any) => {
     wsClient.emit('apply-fix', {
       conflictId: fix.conflictId,
       entityId: fix.entityId,
@@ -101,16 +147,14 @@ export function Conflicts() {
 
     toast.info('Fix request sent to plugin', {
       description: 'Please make sure the Figma plugin is running',
-      duration: 5000
     });
 
-    // Close chat after applying fix
     setChatOpen(false);
   };
 
   if (!currentWorkspace) {
     return (
-      <div className="p-8">
+      <div className="p-6 md:p-8">
         <div className="text-center py-12 text-muted-foreground">
           No workspace selected
         </div>
@@ -118,181 +162,183 @@ export function Conflicts() {
     );
   }
 
-  // Group conflicts by category
   const categories = Array.from(new Set(conflicts.map(c => c.conflict_type)));
   const filteredConflicts = selectedCategory
     ? conflicts.filter(c => c.conflict_type === selectedCategory)
     : conflicts;
 
+  const highCount = conflicts.filter(c => c.severity === 'high').length;
+  const mediumCount = conflicts.filter(c => c.severity === 'medium').length;
+  const lowCount = conflicts.filter(c => c.severity === 'low').length;
   const autoFixableCount = conflicts.filter(c => c.resolution_method === 'auto').length;
 
   return (
-    <div className="p-8">
-      <div className="mb-8">
+    <div className="p-6 md:p-8">
+      <div className="max-w-4xl mx-auto space-y-6">
+        {/* Page Header */}
         <div className="flex items-center justify-between">
           <div>
-            <h1 className="text-3xl font-semibold tracking-tight">Issues & Conflicts</h1>
-            <p className="text-muted-foreground mt-2">
+            <h1 className="text-lg font-semibold tracking-tight">Issues & Conflicts</h1>
+            <p className="text-xs text-muted-foreground mt-1">
               AI-detected issues and design system conflicts
             </p>
           </div>
           {autoFixableCount > 0 && (
-            <Button className="gap-2">
-              <HugeiconsIcon icon={SparklesIcon} size={18} />
-              Auto-Fix {autoFixableCount} Issues
+            <Button
+              size="sm"
+              className="gap-1.5"
+              onClick={handleAutoFixAll}
+              disabled={autoFixingAll}
+            >
+              <HugeiconsIcon icon={SparklesIcon} size={14} />
+              {autoFixingAll ? 'Sending...' : `Auto-Fix ${autoFixableCount} Issues`}
             </Button>
           )}
         </div>
-      </div>
 
-      <Separator className="mb-8" />
-
-      {/* Summary Cards */}
-      <div className="grid grid-cols-4 gap-4 mb-8">
-        <Card className="hover:border-border/60 transition-all">
-          <CardHeader className="pb-3">
-            <CardDescription className="flex items-center gap-2 text-xs font-medium">
-              <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-red-500/10">
-                <span className="text-lg">🔴</span>
+        {/* Summary Cards */}
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+          <Card>
+            <CardContent className="p-4">
+              <div className="flex items-center gap-3">
+                <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-red-500/10">
+                  <HugeiconsIcon icon={AlertDiamondIcon} size={14} className="text-red-500" />
+                </div>
+                <div>
+                  <p className="text-xs text-muted-foreground font-medium">High</p>
+                  <p className="text-lg font-bold">{highCount}</p>
+                </div>
               </div>
-              High Priority
-            </CardDescription>
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">
-              {conflicts.filter((c) => c.severity === 'high').length}
-            </div>
-          </CardContent>
-        </Card>
+            </CardContent>
+          </Card>
 
-        <Card className="hover:border-border/60 transition-all">
-          <CardHeader className="pb-3">
-            <CardDescription className="flex items-center gap-2 text-xs font-medium">
-              <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-yellow-500/10">
-                <span className="text-lg">🟡</span>
+          <Card>
+            <CardContent className="p-4">
+              <div className="flex items-center gap-3">
+                <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-yellow-500/10">
+                  <HugeiconsIcon icon={Alert02Icon} size={14} className="text-yellow-500" />
+                </div>
+                <div>
+                  <p className="text-xs text-muted-foreground font-medium">Medium</p>
+                  <p className="text-lg font-bold">{mediumCount}</p>
+                </div>
               </div>
-              Medium Priority
-            </CardDescription>
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">
-              {conflicts.filter((c) => c.severity === 'medium').length}
-            </div>
-          </CardContent>
-        </Card>
+            </CardContent>
+          </Card>
 
-        <Card className="hover:border-border/60 transition-all">
-          <CardHeader className="pb-3">
-            <CardDescription className="flex items-center gap-2 text-xs font-medium">
-              <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-blue-500/10">
-                <span className="text-lg">🔵</span>
+          <Card>
+            <CardContent className="p-4">
+              <div className="flex items-center gap-3">
+                <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-blue-500/10">
+                  <HugeiconsIcon icon={InformationCircleIcon} size={14} className="text-blue-500" />
+                </div>
+                <div>
+                  <p className="text-xs text-muted-foreground font-medium">Low</p>
+                  <p className="text-lg font-bold">{lowCount}</p>
+                </div>
               </div>
-              Low Priority
-            </CardDescription>
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">
-              {conflicts.filter((c) => c.severity === 'low').length}
-            </div>
-          </CardContent>
-        </Card>
+            </CardContent>
+          </Card>
 
-        <Card className="hover:border-border/60 transition-all">
-          <CardHeader className="pb-3">
-            <CardDescription className="flex items-center gap-2 text-xs font-medium">
-              <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-emerald-500/10">
-                <HugeiconsIcon icon={SparklesIcon} size={16} className="text-emerald-600" />
+          <Card>
+            <CardContent className="p-4">
+              <div className="flex items-center gap-3">
+                <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-emerald-500/10">
+                  <HugeiconsIcon icon={SparklesIcon} size={14} className="text-emerald-500" />
+                </div>
+                <div>
+                  <p className="text-xs text-muted-foreground font-medium">Auto-Fixable</p>
+                  <p className="text-lg font-bold">{autoFixableCount}</p>
+                </div>
               </div>
-              Auto-Fixable
-            </CardDescription>
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">{autoFixableCount}</div>
-          </CardContent>
-        </Card>
-      </div>
-
-      {/* Category Filter */}
-      {categories.length > 0 && (
-        <div className="flex gap-2 mb-6 overflow-x-auto pb-2">
-          <Button
-            variant={selectedCategory === null ? 'default' : 'outline'}
-            size="sm"
-            onClick={() => setSelectedCategory(null)}
-          >
-            All Issues ({conflicts.length})
-          </Button>
-          {categories.map((category) => (
-            <Button
-              key={category}
-              variant={selectedCategory === category ? 'default' : 'outline'}
-              size="sm"
-              onClick={() => setSelectedCategory(category)}
-              className="gap-2"
-            >
-              <span>{categoryIcons[category] || '📋'}</span>
-              {categoryLabels[category] || category}
-              <Badge variant="secondary" className="ml-1">
-                {conflicts.filter(c => c.conflict_type === category).length}
-              </Badge>
-            </Button>
-          ))}
+            </CardContent>
+          </Card>
         </div>
-      )}
 
-      {/* Issues List */}
-      <Card>
-        <CardHeader>
-          <div className="flex items-center justify-between">
-            <div>
-              <CardTitle>
-                {selectedCategory
-                  ? `${categoryLabels[selectedCategory] || selectedCategory} Issues`
-                  : 'All Issues'
-                }
-              </CardTitle>
-              <CardDescription className="mt-1">
-                {filteredConflicts.length} issue{filteredConflicts.length !== 1 ? 's' : ''} detected
-              </CardDescription>
-            </div>
+        {/* Category Filter */}
+        {categories.length > 0 && (
+          <div className="flex gap-2 overflow-x-auto pb-1">
+            <Button
+              variant={selectedCategory === null ? 'default' : 'outline'}
+              size="sm"
+              onClick={() => setSelectedCategory(null)}
+              className="text-xs"
+            >
+              All ({conflicts.length})
+            </Button>
+            {categories.map((category) => (
+              <Button
+                key={category}
+                variant={selectedCategory === category ? 'default' : 'outline'}
+                size="sm"
+                onClick={() => setSelectedCategory(category)}
+                className="gap-1.5 text-xs"
+              >
+                <span className="text-sm">{categoryIcons[category] || '📋'}</span>
+                {categoryLabels[category] || category}
+                <Badge variant="secondary" className="ml-0.5 text-[10px] px-1.5 py-0 h-4">
+                  {conflicts.filter(c => c.conflict_type === category).length}
+                </Badge>
+              </Button>
+            ))}
           </div>
-        </CardHeader>
-        <CardContent className="p-0">
-          {loading ? (
-            <div className="p-6 text-center text-muted-foreground">
-              <HugeiconsIcon icon={AiCloudIcon} size={40} className="mx-auto mb-4 animate-pulse" />
-              Analyzing design system...
-            </div>
-          ) : filteredConflicts.length === 0 ? (
-            <div className="p-12 text-center">
-              <HugeiconsIcon
-                icon={CheckmarkCircle02Icon}
-                className="h-16 w-16 mx-auto mb-4 text-emerald-600 dark:text-emerald-400"
-              />
-              <h3 className="text-lg font-semibold mb-2">
-                {selectedCategory ? 'No Issues in This Category' : 'No Active Issues'}
-              </h3>
-              <p className="text-muted-foreground text-sm">
-                {selectedCategory
-                  ? 'Try selecting a different category or view all issues.'
-                  : 'Your design system is in great shape. Keep up the good work!'}
-              </p>
-            </div>
-          ) : (
-            <div className="divide-y">
-              {filteredConflicts.map((conflict) => {
-                const parsed = parseIssueDescription(conflict.description || '');
-                const isAutoFixable = conflict.resolution_method === 'auto';
+        )}
 
-                return (
-                  <div key={conflict.id} className="p-6 hover:bg-muted/30 transition-colors">
-                    <div className="flex items-start justify-between mb-4">
-                      <div className="flex-1">
-                        <div className="flex items-center gap-2 mb-3">
+        {/* Issues List */}
+        <Card>
+          <CardHeader>
+            <div className="flex items-center gap-3">
+              <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary/10">
+                <HugeiconsIcon icon={AiCloudIcon} size={16} className="text-primary" />
+              </div>
+              <div>
+                <CardTitle>
+                  {selectedCategory
+                    ? `${categoryLabels[selectedCategory] || selectedCategory} Issues`
+                    : 'All Issues'
+                  }
+                </CardTitle>
+                <CardDescription>
+                  {filteredConflicts.length} issue{filteredConflicts.length !== 1 ? 's' : ''} detected
+                </CardDescription>
+              </div>
+            </div>
+          </CardHeader>
+          <CardContent className="p-0">
+            {loading ? (
+              <div className="p-8 text-center text-muted-foreground">
+                <HugeiconsIcon icon={AiCloudIcon} size={32} className="mx-auto mb-3 animate-pulse" />
+                <p className="text-sm">Analyzing design system...</p>
+              </div>
+            ) : filteredConflicts.length === 0 ? (
+              <div className="p-10 text-center">
+                <HugeiconsIcon
+                  icon={CheckmarkCircle02Icon}
+                  className="h-12 w-12 mx-auto mb-3 text-emerald-600 dark:text-emerald-400"
+                />
+                <h3 className="text-sm font-semibold mb-1">
+                  {selectedCategory ? 'No Issues in This Category' : 'No Active Issues'}
+                </h3>
+                <p className="text-muted-foreground text-xs">
+                  {selectedCategory
+                    ? 'Try selecting a different category or view all issues.'
+                    : 'Your design system is in great shape!'}
+                </p>
+              </div>
+            ) : (
+              <div className="divide-y">
+                {filteredConflicts.map((conflict) => {
+                  const parsed = parseIssueDescription(conflict.description || '');
+                  const isAutoFixable = conflict.resolution_method === 'auto';
+
+                  return (
+                    <div key={conflict.id} className="p-5 hover:bg-muted/30 transition-colors">
+                      <div className="mb-3">
+                        <div className="flex items-center gap-1.5 mb-2 flex-wrap">
                           <Badge
                             variant="secondary"
                             className={cn(
-                              'font-semibold',
+                              'text-[10px] font-semibold',
                               conflict.severity === 'high' &&
                                 'bg-red-500/10 text-red-700 dark:text-red-400 hover:bg-red-500/20',
                               conflict.severity === 'medium' &&
@@ -303,71 +349,87 @@ export function Conflicts() {
                           >
                             {conflict.severity.toUpperCase()}
                           </Badge>
-                          <Badge variant="outline" className="gap-1.5">
-                            <span>{categoryIcons[conflict.conflict_type] || '📋'}</span>
+                          <Badge variant="outline" className="gap-1 text-[10px]">
+                            <span className="text-xs">{categoryIcons[conflict.conflict_type] || '📋'}</span>
                             {categoryLabels[conflict.conflict_type] || conflict.conflict_type}
                           </Badge>
-                          <Badge variant="outline">
+                          <Badge variant="outline" className="text-[10px]">
                             {conflict.entity_type}
                           </Badge>
                           {isAutoFixable && (
-                            <Badge className="gap-1.5 bg-emerald-500/10 text-emerald-700 dark:text-emerald-400 hover:bg-emerald-500/20">
-                              <HugeiconsIcon icon={SparklesIcon} size={12} />
+                            <Badge className="gap-1 text-[10px] bg-emerald-500/10 text-emerald-700 dark:text-emerald-400 hover:bg-emerald-500/20">
+                              <HugeiconsIcon icon={SparklesIcon} size={10} />
                               Auto-fixable
                             </Badge>
                           )}
                         </div>
 
-                        <h3 className="text-base font-semibold mb-2">
+                        <h3 className="text-sm font-semibold mb-1">
                           {parsed.title || conflict.entity_name || 'Unnamed Issue'}
                         </h3>
 
-                        <p className="text-sm text-muted-foreground mb-3 leading-relaxed">
+                        <p className="text-xs text-muted-foreground mb-2 leading-relaxed">
                           {parsed.description}
                         </p>
 
                         {parsed.suggestion !== 'N/A' && (
-                          <div className="bg-muted/50 rounded-lg p-3 mb-3">
-                            <p className="text-xs font-medium text-muted-foreground mb-1">
-                              💡 Suggested Fix:
+                          <div className="bg-muted/50 rounded-lg p-2.5 mb-2">
+                            <p className="text-[10px] font-medium text-muted-foreground mb-0.5">
+                              Suggested Fix
                             </p>
-                            <p className="text-sm">{parsed.suggestion}</p>
+                            <p className="text-xs">{parsed.suggestion}</p>
                           </div>
                         )}
 
-                        <div className="text-xs text-muted-foreground">
-                          <span className="font-medium">Entity:</span> {conflict.entity_name} •{' '}
+                        <div className="text-[10px] text-muted-foreground">
+                          <span className="font-medium">Entity:</span> {conflict.entity_name} &middot;{' '}
                           <span className="font-medium">Detected:</span>{' '}
                           {new Date(conflict.created_at).toLocaleString()}
                         </div>
                       </div>
-                    </div>
 
-                    <div className="flex gap-2">
-                      <Button
-                        onClick={() => handleFixWithAI(conflict)}
-                        className="gap-2"
-                      >
-                        <HugeiconsIcon icon={Message01Icon} size={16} />
-                        Fix with AI
-                      </Button>
-                      {isAutoFixable && (
-                        <Button variant="secondary" className="gap-2">
-                          <HugeiconsIcon icon={SparklesIcon} size={16} />
-                          Apply Auto-Fix
+                      <div className="flex gap-2">
+                        <Button
+                          size="sm"
+                          onClick={() => handleFixWithAI(conflict)}
+                          className="gap-1.5 text-xs"
+                        >
+                          <HugeiconsIcon icon={Message01Icon} size={12} />
+                          Fix with AI
                         </Button>
-                      )}
-                      <Button onClick={() => handleDismiss(conflict.id)} variant="outline">
-                        Dismiss
-                      </Button>
+                        {isAutoFixable && (
+                          <Button
+                            size="sm"
+                            variant="secondary"
+                            className="gap-1.5 text-xs"
+                            onClick={() => handleAutoFix(conflict)}
+                            disabled={autoFixingId === conflict.id}
+                          >
+                            <HugeiconsIcon icon={SparklesIcon} size={12} />
+                            {autoFixingId === conflict.id ? 'Sending...' : 'Auto-Fix'}
+                          </Button>
+                        )}
+                        <Button
+                          size="sm"
+                          onClick={() => handleDismiss(conflict.id)}
+                          variant="ghost"
+                          className="text-xs text-muted-foreground"
+                          disabled={dismissingId === conflict.id}
+                        >
+                          {dismissingId === conflict.id ? 'Dismissing...' : 'Dismiss'}
+                        </Button>
+                      </div>
                     </div>
-                  </div>
-                );
-              })}
-            </div>
-          )}
-        </CardContent>
-      </Card>
+                  );
+                })}
+              </div>
+            )}
+          </CardContent>
+        </Card>
+
+        {/* Bottom spacing */}
+        <div className="h-4" />
+      </div>
 
       {/* AI Chat Panel */}
       <AIChatPanel

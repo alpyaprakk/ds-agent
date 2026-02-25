@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
 import { HugeiconsIcon } from '@hugeicons/react';
 import {
   AiCloudIcon,
@@ -11,7 +11,6 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
 import { Badge } from '@/components/ui/badge';
-import { ScrollArea } from '@/components/ui/scroll-area';
 import { cn } from '@/lib/utils';
 
 interface Message {
@@ -39,11 +38,21 @@ export function AIChatPanel({ isOpen, onClose, initialContext, onApplyFix }: AIC
   const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState('');
   const [isLoading, setIsLoading] = useState(false);
-  const scrollRef = useRef<HTMLDivElement>(null);
+  const messagesEndRef = useRef<HTMLDivElement>(null);
+  const prevContextRef = useRef<string | null>(null);
+
+  const scrollToBottom = useCallback(() => {
+    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+  }, []);
 
   useEffect(() => {
     if (isOpen && initialContext) {
-      // Initialize chat with context
+      const contextKey = initialContext.conflictId;
+
+      // Only reinitialize if context changed (different conflict)
+      if (prevContextRef.current === contextKey) return;
+      prevContextRef.current = contextKey;
+
       const systemMessage: Message = {
         id: 'system-1',
         role: 'system',
@@ -59,15 +68,17 @@ export function AIChatPanel({ isOpen, onClose, initialContext, onApplyFix }: AIC
       };
 
       setMessages([systemMessage, assistantMessage]);
+      setInput('');
+    }
+
+    if (!isOpen) {
+      prevContextRef.current = null;
     }
   }, [isOpen, initialContext]);
 
   useEffect(() => {
-    // Auto-scroll to bottom when new messages arrive
-    if (scrollRef.current) {
-      scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
-    }
-  }, [messages]);
+    scrollToBottom();
+  }, [messages, scrollToBottom]);
 
   const handleSend = async () => {
     if (!input.trim() || isLoading) return;
@@ -85,7 +96,6 @@ export function AIChatPanel({ isOpen, onClose, initialContext, onApplyFix }: AIC
 
     try {
       // TODO: Call AI API to get response
-      // For now, simulate response
       await new Promise(resolve => setTimeout(resolve, 1000));
 
       const assistantMessage: Message = {
@@ -105,7 +115,6 @@ export function AIChatPanel({ isOpen, onClose, initialContext, onApplyFix }: AIC
 
   const handleApplyAutoFix = () => {
     if (initialContext && onApplyFix) {
-      // Send fix command to plugin
       onApplyFix({
         conflictId: initialContext.conflictId,
         entityId: initialContext.entityName,
@@ -118,117 +127,121 @@ export function AIChatPanel({ isOpen, onClose, initialContext, onApplyFix }: AIC
   if (!isOpen) return null;
 
   return (
-    <div className="fixed inset-0 z-50 bg-background/80 backdrop-blur-sm">
-      <div className="fixed right-0 top-0 h-full w-full max-w-2xl border-l bg-background shadow-lg">
-        <Card className="h-full rounded-none border-0">
-          <CardHeader className="border-b">
+    <div className="fixed inset-0 z-50 bg-background/80 backdrop-blur-sm" onClick={onClose}>
+      <div
+        className="fixed right-0 top-0 h-full w-full max-w-xl border-l bg-background shadow-lg"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <Card className="h-full rounded-none border-0 flex flex-col">
+          <CardHeader className="border-b flex-shrink-0 py-4">
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-3">
-                <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-primary/10">
-                  <HugeiconsIcon icon={AiCloudIcon} size={20} className="text-primary" />
+                <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary/10">
+                  <HugeiconsIcon icon={AiCloudIcon} size={16} className="text-primary" />
                 </div>
                 <div>
-                  <CardTitle className="flex items-center gap-2">
+                  <CardTitle className="flex items-center gap-2 text-sm">
                     AI Assistant
-                    <Badge variant="secondary" className="gap-1">
-                      <HugeiconsIcon icon={SparklesIcon} size={12} />
+                    <Badge variant="secondary" className="gap-1 text-[10px]">
+                      <HugeiconsIcon icon={SparklesIcon} size={10} />
                       Active
                     </Badge>
                   </CardTitle>
                   {initialContext && (
-                    <p className="text-xs text-muted-foreground mt-1">
+                    <p className="text-[10px] text-muted-foreground mt-0.5 truncate max-w-[280px]">
                       Helping with: {initialContext.entityName}
                     </p>
                   )}
                 </div>
               </div>
-              <Button variant="ghost" size="icon" onClick={onClose}>
-                <HugeiconsIcon icon={Cancel01Icon} size={20} />
+              <Button variant="ghost" size="icon-sm" onClick={onClose}>
+                <HugeiconsIcon icon={Cancel01Icon} size={16} />
               </Button>
             </div>
           </CardHeader>
 
-          <CardContent className="flex h-[calc(100%-80px)] flex-col p-0">
+          <CardContent className="flex flex-1 flex-col p-0 overflow-hidden">
             {/* Messages */}
-            <ScrollArea className="flex-1 p-6" ref={scrollRef}>
-              <div className="space-y-4">
-                {messages.map((message) => (
+            <div className="flex-1 overflow-y-auto p-4 space-y-3">
+              {messages.map((message) => (
+                <div
+                  key={message.id}
+                  className={cn(
+                    'flex gap-2.5',
+                    message.role === 'user' && 'flex-row-reverse'
+                  )}
+                >
                   <div
-                    key={message.id}
                     className={cn(
-                      'flex gap-3',
-                      message.role === 'user' && 'flex-row-reverse'
+                      'flex h-7 w-7 items-center justify-center rounded-full flex-shrink-0',
+                      message.role === 'assistant' && 'bg-primary/10',
+                      message.role === 'user' && 'bg-muted',
+                      message.role === 'system' && 'bg-muted/50'
                     )}
                   >
+                    {message.role === 'assistant' && (
+                      <HugeiconsIcon icon={AiCloudIcon} size={14} className="text-primary" />
+                    )}
+                    {message.role === 'user' && (
+                      <HugeiconsIcon icon={UserIcon} size={14} />
+                    )}
+                    {message.role === 'system' && (
+                      <HugeiconsIcon icon={SparklesIcon} size={14} />
+                    )}
+                  </div>
+
+                  <div
+                    className={cn(
+                      'max-w-[80%] rounded-lg px-3 py-2.5',
+                      message.role === 'assistant' && 'bg-muted',
+                      message.role === 'user' && 'bg-primary text-primary-foreground',
+                      message.role === 'system' && 'bg-muted/50 text-[11px] italic'
+                    )}
+                  >
+                    <div className="whitespace-pre-wrap text-xs leading-relaxed">
+                      {message.content}
+                    </div>
                     <div
                       className={cn(
-                        'flex h-8 w-8 items-center justify-center rounded-full flex-shrink-0',
-                        message.role === 'assistant' && 'bg-primary/10',
-                        message.role === 'user' && 'bg-muted',
-                        message.role === 'system' && 'bg-muted/50'
+                        'mt-1.5 text-[10px] opacity-60',
+                        message.role === 'user' && 'text-primary-foreground'
                       )}
                     >
-                      {message.role === 'assistant' && (
-                        <HugeiconsIcon icon={AiCloudIcon} size={16} className="text-primary" />
-                      )}
-                      {message.role === 'user' && (
-                        <HugeiconsIcon icon={UserIcon} size={16} />
-                      )}
-                      {message.role === 'system' && (
-                        <HugeiconsIcon icon={SparklesIcon} size={16} />
-                      )}
-                    </div>
-
-                    <div
-                      className={cn(
-                        'max-w-[80%] rounded-lg px-4 py-3',
-                        message.role === 'assistant' && 'bg-muted',
-                        message.role === 'user' && 'bg-primary text-primary-foreground',
-                        message.role === 'system' && 'bg-muted/50 text-xs italic'
-                      )}
-                    >
-                      <div className="whitespace-pre-wrap text-sm leading-relaxed">
-                        {message.content}
-                      </div>
-                      <div
-                        className={cn(
-                          'mt-2 text-xs opacity-60',
-                          message.role === 'user' && 'text-primary-foreground'
-                        )}
-                      >
-                        {message.timestamp.toLocaleTimeString()}
-                      </div>
+                      {message.timestamp.toLocaleTimeString()}
                     </div>
                   </div>
-                ))}
+                </div>
+              ))}
 
-                {isLoading && (
-                  <div className="flex gap-3">
-                    <div className="flex h-8 w-8 items-center justify-center rounded-full bg-primary/10">
-                      <HugeiconsIcon icon={AiCloudIcon} size={16} className="text-primary animate-pulse" />
-                    </div>
-                    <div className="rounded-lg bg-muted px-4 py-3">
-                      <div className="flex gap-1">
-                        <div className="h-2 w-2 rounded-full bg-muted-foreground animate-bounce" />
-                        <div className="h-2 w-2 rounded-full bg-muted-foreground animate-bounce" style={{ animationDelay: '0.1s' }} />
-                        <div className="h-2 w-2 rounded-full bg-muted-foreground animate-bounce" style={{ animationDelay: '0.2s' }} />
-                      </div>
+              {isLoading && (
+                <div className="flex gap-2.5">
+                  <div className="flex h-7 w-7 items-center justify-center rounded-full bg-primary/10">
+                    <HugeiconsIcon icon={AiCloudIcon} size={14} className="text-primary animate-pulse" />
+                  </div>
+                  <div className="rounded-lg bg-muted px-3 py-2.5">
+                    <div className="flex gap-1">
+                      <div className="h-1.5 w-1.5 rounded-full bg-muted-foreground animate-bounce" />
+                      <div className="h-1.5 w-1.5 rounded-full bg-muted-foreground animate-bounce" style={{ animationDelay: '0.1s' }} />
+                      <div className="h-1.5 w-1.5 rounded-full bg-muted-foreground animate-bounce" style={{ animationDelay: '0.2s' }} />
                     </div>
                   </div>
-                )}
-              </div>
-            </ScrollArea>
+                </div>
+              )}
+
+              <div ref={messagesEndRef} />
+            </div>
 
             {/* Input Area */}
-            <div className="border-t p-4">
+            <div className="border-t p-3 flex-shrink-0">
               {initialContext?.suggestion && (
-                <div className="mb-3">
+                <div className="mb-2">
                   <Button
                     onClick={handleApplyAutoFix}
-                    className="w-full gap-2"
+                    className="w-full gap-1.5 text-xs"
                     variant="secondary"
+                    size="sm"
                   >
-                    <HugeiconsIcon icon={SparklesIcon} size={16} />
+                    <HugeiconsIcon icon={SparklesIcon} size={12} />
                     Apply Suggested Fix Automatically
                   </Button>
                 </div>
@@ -245,21 +258,21 @@ export function AIChatPanel({ isOpen, onClose, initialContext, onApplyFix }: AIC
                       handleSend();
                     }
                   }}
-                  className="min-h-[60px] max-h-[120px] resize-none"
+                  className="min-h-[48px] max-h-[100px] resize-none text-xs"
                   disabled={isLoading}
                 />
                 <Button
                   onClick={handleSend}
                   disabled={!input.trim() || isLoading}
                   size="icon"
-                  className="h-[60px] w-[60px] flex-shrink-0"
+                  className="h-[48px] w-[48px] flex-shrink-0"
                 >
-                  <HugeiconsIcon icon={ArrowRight01Icon} size={20} />
+                  <HugeiconsIcon icon={ArrowRight01Icon} size={16} />
                 </Button>
               </div>
 
-              <p className="text-xs text-muted-foreground mt-2">
-                Press Enter to send, Shift+Enter for new line
+              <p className="text-[10px] text-muted-foreground mt-1.5">
+                Enter to send, Shift+Enter for new line
               </p>
             </div>
           </CardContent>
