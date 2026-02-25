@@ -1,6 +1,7 @@
-import { ReactNode } from 'react';
+import { ReactNode, useEffect, useState } from 'react';
 import { Link, useLocation } from 'react-router-dom';
 import { HugeiconsIcon } from '@hugeicons/react';
+import { io } from 'socket.io-client';
 import {
   DashboardSquare01Icon,
   PaintBoardIcon,
@@ -36,6 +37,31 @@ const navigation = [
 export function Layout({ children }: LayoutProps) {
   const location = useLocation();
   const { sidebarCollapsed, toggleSidebar } = useLayout();
+  const [pluginConnected, setPluginConnected] = useState(false);
+
+  useEffect(() => {
+    // Connect to WebSocket server
+    const WS_URL = import.meta.env.VITE_WS_URL || 'http://localhost:3000';
+    const socket = io(WS_URL);
+
+    socket.on('connect', () => {
+      console.log('✅ Connected to server');
+    });
+
+    socket.on('plugin-status', (data: { connected: boolean; plugin: string; count: number }) => {
+      console.log('Plugin status update:', data);
+      setPluginConnected(data.connected && data.count > 0);
+    });
+
+    socket.on('disconnect', () => {
+      console.log('❌ Disconnected from server');
+      setPluginConnected(false);
+    });
+
+    return () => {
+      socket.close();
+    };
+  }, []);
 
   return (
     <TooltipProvider delayDuration={0}>
@@ -153,12 +179,15 @@ export function Layout({ children }: LayoutProps) {
             {/* Footer */}
             <div className="p-4">
               <div className="flex items-center justify-center gap-2 text-xs text-muted-foreground transition-all duration-300">
-                <div className="h-2 w-2 rounded-full bg-green-500 animate-pulse" />
+                <div className={cn(
+                  "h-2 w-2 rounded-full transition-colors",
+                  pluginConnected ? "bg-green-500 animate-pulse" : "bg-red-500"
+                )} />
                 <span className={cn(
                   'transition-all duration-300',
                   sidebarCollapsed ? 'w-0 opacity-0 overflow-hidden' : 'w-auto opacity-100'
                 )}>
-                  Connected
+                  {pluginConnected ? 'Plugin Connected' : 'Plugin Disconnected'}
                 </span>
               </div>
             </div>

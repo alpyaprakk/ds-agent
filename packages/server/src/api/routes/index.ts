@@ -2,6 +2,7 @@ import { Router } from 'express';
 import workspacesRouter from './workspaces';
 import conflictsRouter from './conflicts';
 import syncRouter from './sync';
+import { getConnectedPluginsStatus } from '../../websocket/handlers';
 
 const router = Router();
 
@@ -11,6 +12,15 @@ router.get('/health', (_req, res) => {
     status: 'ok',
     timestamp: new Date().toISOString(),
     service: 'ds-agent-api'
+  });
+});
+
+// Plugin status endpoint
+router.get('/plugins/status', (_req, res) => {
+  const status = getConnectedPluginsStatus();
+  res.json({
+    connected: status.count > 0,
+    ...status
   });
 });
 

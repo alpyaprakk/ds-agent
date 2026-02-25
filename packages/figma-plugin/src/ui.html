@@ -77,6 +77,90 @@
   <div id="status">Ready</div>
 
   <script>
+    // WebSocket connection
+    let ws = null;
+    let reconnectInterval = null;
+    const SERVER_URL = 'wss://ds-agent.alpy.io'; // TODO: Make configurable
+
+    // Connect to server
+    function connectToServer() {
+      try {
+        ws = new WebSocket(SERVER_URL);
+
+        ws.onopen = () => {
+          console.log('✅ Connected to DS Agent server');
+          document.getElementById('status').textContent = '🟢 Connected to server';
+
+          // Send authentication
+          ws.send(JSON.stringify({
+            type: 'plugin-connect',
+            plugin: 'figma',
+            timestamp: new Date().toISOString()
+          }));
+
+          // Start heartbeat
+          startHeartbeat();
+        };
+
+        ws.onmessage = (event) => {
+          const msg = JSON.parse(event.data);
+          console.log('Server message:', msg);
+
+          if (msg.type === 'sync-request') {
+            // Server requested sync
+            performSync();
+          }
+
+          if (msg.type === 'apply-fix') {
+            // Server sent a fix to apply
+            parent.postMessage({
+              pluginMessage: {
+                type: 'apply-fix',
+                fix: msg.fix
+              }
+            }, '*');
+          }
+        };
+
+        ws.onerror = (error) => {
+          console.error('WebSocket error:', error);
+          document.getElementById('status').textContent = '🔴 Connection error';
+        };
+
+        ws.onclose = () => {
+          console.log('❌ Disconnected from server');
+          document.getElementById('status').textContent = '🔴 Disconnected';
+
+          // Attempt reconnect
+          reconnectInterval = setTimeout(connectToServer, 5000);
+        };
+      } catch (error) {
+        console.error('Connection error:', error);
+        document.getElementById('status').textContent = '🔴 Failed to connect';
+        reconnectInterval = setTimeout(connectToServer, 5000);
+      }
+    }
+
+    // Heartbeat to keep connection alive
+    let heartbeatInterval = null;
+    function startHeartbeat() {
+      if (heartbeatInterval) clearInterval(heartbeatInterval);
+
+      heartbeatInterval = setInterval(() => {
+        if (ws && ws.readyState === WebSocket.OPEN) {
+          ws.send(JSON.stringify({ type: 'heartbeat' }));
+        }
+      }, 30000); // Every 30 seconds
+    }
+
+    // Perform full sync
+    function performSync() {
+      document.getElementById('status').textContent = '🔄 Syncing...';
+
+      // Request variables and components from plugin code
+      parent.postMessage({ pluginMessage: { type: 'full-sync' } }, '*');
+    }
+
     // Get Variables
     document.getElementById('get-variables').onclick = () => {
       parent.postMessage({ pluginMessage: { type: 'get-variables' } }, '*');
@@ -91,8 +175,7 @@
 
     // Sync
     document.getElementById('sync').onclick = () => {
-      document.getElementById('status').textContent = 'Syncing with server...';
-      // TODO: Implement sync
+      performSync();
     };
 
     // Listen for messages from plugin code
@@ -110,6 +193,29 @@
           `Found ${msg.components.length} components`;
         console.log('Components:', msg.components);
       }
+
+      if (msg.type === 'sync-data') {
+        // Send sync data to server
+        if (ws && ws.readyState === WebSocket.OPEN) {
+          ws.send(JSON.stringify({
+            type: 'design-system-sync',
+            data: msg.data
+          }));
+          document.getElementById('status').textContent = '✅ Synced with server';
+        } else {
+          document.getElementById('status').textContent = '❌ Not connected to server';
+        }
+      }
+    };
+
+    // Connect on load
+    connectToServer();
+
+    // Cleanup on unload
+    window.onbeforeunload = () => {
+      if (heartbeatInterval) clearInterval(heartbeatInterval);
+      if (reconnectInterval) clearTimeout(reconnectInterval);
+      if (ws) ws.close();
     };
   </script>
 </body>
