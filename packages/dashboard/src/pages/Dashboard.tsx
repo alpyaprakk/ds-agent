@@ -45,6 +45,9 @@ export function Dashboard() {
   const [showAddFileModal, setShowAddFileModal] = useState(false);
   const [showCreateWorkspaceModal, setShowCreateWorkspaceModal] = useState(false);
   const [syncingFileId, setSyncingFileId] = useState<string | null>(null);
+
+  const myRole = currentWorkspace?.member_role;
+  const isOwnerOrAdmin = myRole === 'owner' || myRole === 'admin';
   const [deleteState, setDeleteState] = useState<DeleteFileState>({
     isOpen: false,
     file: null,
@@ -241,10 +244,12 @@ export function Dashboard() {
         <CardHeader>
           <div className="flex items-center justify-between">
             <CardTitle>Figma Files</CardTitle>
-            <Button onClick={() => setShowAddFileModal(true)} size="sm">
-              <HugeiconsIcon icon={Add01Icon} className="h-4 w-4 mr-2" />
-              Add Figma File
-            </Button>
+            {isOwnerOrAdmin && (
+              <Button onClick={() => setShowAddFileModal(true)} size="sm">
+                <HugeiconsIcon icon={Add01Icon} className="h-4 w-4 mr-2" />
+                Add Figma File
+              </Button>
+            )}
           </div>
         </CardHeader>
         <CardContent>
@@ -281,17 +286,19 @@ export function Dashboard() {
                         className={`h-4 w-4 ${syncingFileId === file.id ? 'animate-spin' : ''}`}
                       />
                     </Button>
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      onClick={() => openDeleteDialog({ id: file.id, name: file.name })}
-                      className="h-8 w-8 p-0 text-muted-foreground hover:text-red-600 dark:hover:text-red-400"
-                      title="Delete file"
-                    >
-                      <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                        <path d="M3 6h18" /><path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6" /><path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2" /><line x1="10" x2="10" y1="11" y2="17" /><line x1="14" x2="14" y1="11" y2="17" />
-                      </svg>
-                    </Button>
+                    {isOwnerOrAdmin && (
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => openDeleteDialog({ id: file.id, name: file.name })}
+                        className="h-8 w-8 p-0 text-muted-foreground hover:text-red-600 dark:hover:text-red-400"
+                        title="Delete file"
+                      >
+                        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                          <path d="M3 6h18" /><path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6" /><path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2" /><line x1="10" x2="10" y1="11" y2="17" /><line x1="14" x2="14" y1="11" y2="17" />
+                        </svg>
+                      </Button>
+                    )}
                     <Badge
                       variant={
                         file.sync_status === 'success'
