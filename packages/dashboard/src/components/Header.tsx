@@ -1,3 +1,4 @@
+import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { HugeiconsIcon } from '@hugeicons/react';
 import {
@@ -6,8 +7,10 @@ import {
   Logout03Icon,
   User02Icon,
   Moon02Icon,
-  Sun03Icon
+  Sun03Icon,
+  AiCloudIcon
 } from '@hugeicons/core-free-icons';
+import { AIChatPanel } from '@/components/AIChatPanel';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import {
@@ -30,6 +33,7 @@ export function Header() {
   const { currentWorkspace } = useWorkspaceStore();
   const { user, logout } = useAuthStore();
   const { theme, toggleTheme } = useTheme();
+  const [isChatOpen, setIsChatOpen] = useState(false);
 
   const handleLogout = () => {
     logout();
@@ -58,6 +62,17 @@ export function Header() {
         </div>
 
         <div className="flex-1" />
+
+        {/* AI Chat */}
+        <Button
+          variant="ghost"
+          size="sm"
+          className="h-9 gap-1.5 px-3"
+          onClick={() => setIsChatOpen(true)}
+        >
+          <HugeiconsIcon icon={AiCloudIcon} size={16} />
+          <span className="text-xs font-medium">AI Chat</span>
+        </Button>
 
         {/* Search */}
         <div className="relative w-64">
@@ -118,5 +133,11 @@ export function Header() {
         </DropdownMenu>
       </div>
     </header>
+
+    <AIChatPanel
+      isOpen={isChatOpen}
+      onClose={() => setIsChatOpen(false)}
+      workspaceId={currentWorkspace?.id}
+    />
   );
 }

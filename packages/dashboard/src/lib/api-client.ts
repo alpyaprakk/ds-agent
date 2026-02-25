@@ -6,6 +6,23 @@ export function getAvatarUrl(avatar?: string | null): string {
   return `${API_URL}${avatar}`;
 }
 
+export interface ChatMessage {
+  role: 'user' | 'assistant';
+  content: string;
+}
+
+export interface ChatAction {
+  type: 'create_component' | 'update_variable' | 'apply_fix';
+  label: string;
+  payload: Record<string, any>;
+}
+
+export interface ChatResponse {
+  reply: string;
+  agentType: 'uiux' | 'design-system';
+  actions?: ChatAction[];
+}
+
 export interface Workspace {
   id: string;
   name: string;
@@ -466,6 +483,17 @@ class ApiClient {
     return this.request('/api/notifications/preferences', {
       method: 'PUT',
       body: JSON.stringify({ preferences }),
+    });
+  }
+
+  async sendChatMessage(data: {
+    message: string;
+    history: ChatMessage[];
+    workspaceId: string;
+  }): Promise<ChatResponse> {
+    return this.request('/api/chat', {
+      method: 'POST',
+      body: JSON.stringify(data),
     });
   }
 }

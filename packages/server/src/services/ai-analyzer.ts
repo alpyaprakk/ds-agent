@@ -56,6 +56,23 @@ export interface AnalysisReport {
   score: number; // 0-100
 }
 
+export interface ChatMessage {
+  role: 'user' | 'assistant';
+  content: string;
+}
+
+export interface ChatAction {
+  type: 'create_component' | 'update_variable' | 'apply_fix';
+  label: string;
+  payload: Record<string, any>;
+}
+
+export interface ChatResponse {
+  reply: string;
+  agentType: 'uiux' | 'design-system';
+  actions?: ChatAction[];
+}
+
 export class AIAnalyzer {
   private anthropic: Anthropic | null = null;
   private openai: OpenAI | null = null;
@@ -77,6 +94,34 @@ export class AIAnalyzer {
         apiKey: config.openaiApiKey
       });
     }
+  }
+
+  async chat(systemPrompt: string, history: ChatMessage[]): Promise<string> {
+    if (this.provider === 'anthropic' && this.anthropic) {
+      const message = await this.anthropic.messages.create({
+        model: 'claude-3-5-sonnet-20241022',
+        max_tokens: 2048,
+        temperature: 0.7,
+        system: systemPrompt,
+        messages: history.map(m => ({ role: m.role, content: m.content }))
+      });
+      const textContent = message.content.find(block => block.type === 'text');
+      if (!textContent || textContent.type !== 'text') {
+        throw new Error('No text response from Claude');
+      }
+      return textContent.text;
+    } else if (this.provider === 'openai' && this.openai) {
+      const completion = await this.openai.chat.completions.create({
+        model: 'gpt-4-turbo-preview',
+        messages: [
+          { role: 'system', content: systemPrompt },
+          ...history.map(m => ({ role: m.role as 'user' | 'assistant', content: m.content }))
+        ],
+        temperature: 0.7
+      });
+      return completion.choices[0]?.message?.content || '';
+    }
+    throw new Error('AI provider not configured');
   }
 
   async analyzeDesignSystem(data: DesignSystemData): Promise<AnalysisReport> {

@@ -12,17 +12,21 @@ import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
 import { Badge } from '@/components/ui/badge';
 import { cn } from '@/lib/utils';
+import { apiClient, ChatMessage, ChatAction } from '@/lib/api-client';
 
 interface Message {
   id: string;
   role: 'user' | 'assistant' | 'system';
   content: string;
   timestamp: Date;
+  agentType?: 'uiux' | 'design-system';
+  actions?: ChatAction[];
 }
 
 interface AIChatPanelProps {
   isOpen: boolean;
   onClose: () => void;
+  workspaceId?: string;
   initialContext?: {
     conflictId: string;
     title: string;
@@ -34,7 +38,7 @@ interface AIChatPanelProps {
   onApplyFix?: (fix: any) => void;
 }
 
-export function AIChatPanel({ isOpen, onClose, initialContext, onApplyFix }: AIChatPanelProps) {
+export function AIChatPanel({ isOpen, onClose, workspaceId, initialContext, onApplyFix }: AIChatPanelProps) {
   const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState('');
   const [isLoading, setIsLoading] = useState(false);
@@ -46,10 +50,13 @@ export function AIChatPanel({ isOpen, onClose, initialContext, onApplyFix }: AIC
   }, []);
 
   useEffect(() => {
-    if (isOpen && initialContext) {
-      const contextKey = initialContext.conflictId;
+    if (!isOpen) {
+      prevContextRef.current = null;
+      return;
+    }
 
-      // Only reinitialize if context changed (different conflict)
+    if (initialContext) {
+      const contextKey = initialContext.conflictId;
       if (prevContextRef.current === contextKey) return;
       prevContextRef.current = contextKey;
 
@@ -64,15 +71,24 @@ export function AIChatPanel({ isOpen, onClose, initialContext, onApplyFix }: AIC
         id: 'assistant-1',
         role: 'assistant',
         content: `I've analyzed the **${initialContext.entityType}** issue with "${initialContext.entityName}".\n\nHere's what I found:\n\n${initialContext.description}\n\n${initialContext.suggestion ? `**Recommended approach:**\n${initialContext.suggestion}\n\n` : ''}Would you like me to:\n1. Explain the issue in more detail\n2. Provide step-by-step fix instructions\n3. Generate the fix automatically (if auto-fixable)`,
-        timestamp: new Date()
+        timestamp: new Date(),
+        agentType: 'design-system'
       };
 
       setMessages([systemMessage, assistantMessage]);
       setInput('');
-    }
-
-    if (!isOpen) {
-      prevContextRef.current = null;
+    } else {
+      // General design system chat — show welcome message once
+      setMessages(prev => {
+        if (prev.length > 0) return prev;
+        return [{
+          id: 'welcome-1',
+          role: 'assistant',
+          content: "Hi! I'm your design system assistant. I have two specialized agents ready to help:\n\n- **UI/UX Agent** — design principles, best practices, accessibility\n- **Design System Agent** — variables, components, naming conventions\n\nWhat would you like to work on?",
+          timestamp: new Date(),
+          agentType: 'uiux'
+        }];
+      });
     }
   }, [isOpen, initialContext]);
 
@@ -90,26 +106,57 @@ export function AIChatPanel({ isOpen, onClose, initialContext, onApplyFix }: AIC
       timestamp: new Date()
     };
 
+    const currentInput = input;
     setMessages(prev => [...prev, userMessage]);
     setInput('');
     setIsLoading(true);
 
     try {
-      // TODO: Call AI API to get response
-      await new Promise(resolve => setTimeout(resolve, 1000));
+      // Build conversation history for the API (exclude system messages, prefix agent identity)
+      const history: ChatMessage[] = messages
+        .filter(m => m.role !== 'system')
+        .map(m => ({
+          role: m.role as 'user' | 'assistant',
+          content: m.agentType
+            ? `[${m.agentType === 'uiux' ? 'UI/UX Agent' : 'Design System Agent'}]: ${m.content}`
+            : m.content
+        }));
+
+      const response = await apiClient.sendChatMessage({
+        message: currentInput,
+        history,
+        workspaceId: workspaceId || ''
+      });
 
       const assistantMessage: Message = {
         id: `assistant-${Date.now()}`,
         role: 'assistant',
-        content: 'I understand your question. Let me help you with that...\n\n(AI response will be implemented here)',
-        timestamp: new Date()
+        content: response.reply,
+        timestamp: new Date(),
+        agentType: response.agentType,
+        actions: response.actions
       };
 
       setMessages(prev => [...prev, assistantMessage]);
-    } catch (error) {
-      console.error('Failed to get AI response:', error);
+    } catch (error: any) {
+      const errorContent = error?.message?.includes('AI not configured')
+        ? 'AI is not configured for this workspace. Please add an API key in Settings.'
+        : 'Sorry, something went wrong. Please try again.';
+
+      setMessages(prev => [...prev, {
+        id: `error-${Date.now()}`,
+        role: 'assistant',
+        content: errorContent,
+        timestamp: new Date()
+      }]);
     } finally {
       setIsLoading(false);
+    }
+  };
+
+  const handleAction = (action: ChatAction) => {
+    if (action.type === 'create_component' && onApplyFix) {
+      onApplyFix({ action: 'create_component', ...action.payload });
     }
   };
 
@@ -123,6 +170,9 @@ export function AIChatPanel({ isOpen, onClose, initialContext, onApplyFix }: AIC
       });
     }
   };
+
+  const agentLabel = (agentType: 'uiux' | 'design-system') =>
+    agentType === 'uiux' ? 'UI/UX Agent' : 'Design System Agent';
 
   if (!isOpen) return null;
 
@@ -147,9 +197,13 @@ export function AIChatPanel({ isOpen, onClose, initialContext, onApplyFix }: AIC
                       Active
                     </Badge>
                   </CardTitle>
-                  {initialContext && (
+                  {initialContext ? (
                     <p className="text-[10px] text-muted-foreground mt-0.5 truncate max-w-[280px]">
                       Helping with: {initialContext.entityName}
+                    </p>
+                  ) : (
+                    <p className="text-[10px] text-muted-foreground mt-0.5">
+                      Design System Assistant
                     </p>
                   )}
                 </div>
@@ -198,9 +252,35 @@ export function AIChatPanel({ isOpen, onClose, initialContext, onApplyFix }: AIC
                       message.role === 'system' && 'bg-muted/50 text-[11px] italic'
                     )}
                   >
+                    {/* Agent identity badge */}
+                    {message.role === 'assistant' && message.agentType && (
+                      <div className="text-[9px] font-semibold text-muted-foreground mb-1 uppercase tracking-wide">
+                        {agentLabel(message.agentType)}
+                      </div>
+                    )}
+
                     <div className="whitespace-pre-wrap text-xs leading-relaxed">
                       {message.content}
                     </div>
+
+                    {/* Action buttons */}
+                    {message.actions && message.actions.length > 0 && (
+                      <div className="mt-2 flex flex-col gap-1">
+                        {message.actions.map((action, i) => (
+                          <Button
+                            key={i}
+                            size="sm"
+                            variant="secondary"
+                            className="text-xs w-full justify-start h-7"
+                            onClick={() => handleAction(action)}
+                          >
+                            <HugeiconsIcon icon={SparklesIcon} size={10} className="mr-1.5" />
+                            {action.label}
+                          </Button>
+                        ))}
+                      </div>
+                    )}
+
                     <div
                       className={cn(
                         'mt-1.5 text-[10px] opacity-60',
@@ -249,7 +329,7 @@ export function AIChatPanel({ isOpen, onClose, initialContext, onApplyFix }: AIC
 
               <div className="flex gap-2">
                 <Textarea
-                  placeholder="Ask me anything about this issue..."
+                  placeholder={initialContext ? "Ask me anything about this issue..." : "Ask about your design system..."}
                   value={input}
                   onChange={(e) => setInput(e.target.value)}
                   onKeyDown={(e) => {
