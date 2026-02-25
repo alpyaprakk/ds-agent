@@ -43,6 +43,9 @@ COPY --from=builder --chown=nodejs:nodejs /app/packages/server/scripts ./scripts
 # Install production dependencies only
 RUN npm install --omit=dev
 
+# Create uploads directory with correct permissions
+RUN mkdir -p /app/uploads && chown nodejs:nodejs /app/uploads
+
 USER nodejs
 
 EXPOSE 3000
