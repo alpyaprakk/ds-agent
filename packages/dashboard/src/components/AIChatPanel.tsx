@@ -13,6 +13,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { Badge } from '@/components/ui/badge';
 import { cn } from '@/lib/utils';
 import { apiClient, ChatMessage, ChatAction } from '@/lib/api-client';
+import { useWorkspaceStore } from '@/store/workspace-store';
 
 interface Message {
   id: string;
@@ -38,7 +39,9 @@ interface AIChatPanelProps {
   onApplyFix?: (fix: any) => void;
 }
 
-export function AIChatPanel({ isOpen, onClose, workspaceId, initialContext, onApplyFix }: AIChatPanelProps) {
+export function AIChatPanel({ isOpen, onClose, workspaceId: workspaceIdProp, initialContext, onApplyFix }: AIChatPanelProps) {
+  const { currentWorkspace } = useWorkspaceStore();
+  const workspaceId = workspaceIdProp || currentWorkspace?.id || '';
   const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState('');
   const [isLoading, setIsLoading] = useState(false);
