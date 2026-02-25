@@ -29,6 +29,16 @@ const io = new SocketIOServer(httpServer, {
   pingInterval: 25000
 });
 
+// Add middleware to Socket.IO engine to manually set CORS headers
+io.engine.on('headers', (headers: any, req: any) => {
+  headers['Access-Control-Allow-Origin'] = '*';
+  headers['Access-Control-Allow-Methods'] = 'GET, POST, OPTIONS';
+  headers['Access-Control-Allow-Headers'] = '*';
+  headers['Access-Control-Allow-Credentials'] = 'false';
+
+  console.log(`🔧 Adding CORS headers to Socket.IO response for ${req.url}`);
+});
+
 const PORT = process.env.PORT || 3000;
 
 // Middleware
