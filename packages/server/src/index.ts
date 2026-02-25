@@ -11,18 +11,22 @@ dotenv.config();
 
 const app = express();
 const httpServer = createServer(app);
+
+// Configure Socket.IO with permissive CORS
 const io = new SocketIOServer(httpServer, {
+  path: '/socket.io',
+  serveClient: false,
   cors: {
-    origin: (_origin, callback) => {
-      // Allow all origins
-      callback(null, true);
-    },
-    methods: ['GET', 'POST'],
-    credentials: false,
-    allowedHeaders: ['Content-Type']
+    origin: '*',
+    methods: ['GET', 'POST', 'OPTIONS'],
+    allowedHeaders: ['*'],
+    credentials: false
   },
-  allowEIO3: true, // Allow Engine.IO v3 clients
-  transports: ['polling', 'websocket']
+  allowEIO3: true,
+  transports: ['polling', 'websocket'],
+  // Add Engine.IO options
+  pingTimeout: 60000,
+  pingInterval: 25000
 });
 
 const PORT = process.env.PORT || 3000;
@@ -38,6 +42,7 @@ app.use((req, res, next) => {
   res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS, PUT, DELETE');
   res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization');
 
+  // Handle preflight for all routes
   if (req.method === 'OPTIONS') {
     res.status(200).end();
     return;
@@ -46,6 +51,15 @@ app.use((req, res, next) => {
 });
 
 app.use(express.json());
+
+// Log Socket.IO requests for debugging
+app.use((req, _res, next) => {
+  if (req.url.startsWith('/socket.io')) {
+    console.log(`🔌 Socket.IO request: ${req.method} ${req.url}`);
+    console.log(`   Origin: ${req.headers.origin || 'none'}`);
+  }
+  next();
+});
 
 // API routes (includes /api/health)
 app.use('/api', apiRoutes);
