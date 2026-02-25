@@ -1,5 +1,6 @@
 import { Server as SocketIOServer, Socket } from 'socket.io';
 import { WorkspaceRepository } from '../db/repositories';
+import { NotificationService } from '../services/notification.service';
 import pool from '../db/connection';
 import { randomUUID } from 'crypto';
 import { AIAnalyzer, DesignSystemData } from '../services/ai-analyzer';
@@ -345,6 +346,16 @@ export function setupWebSocketHandlers(io: SocketIOServer) {
         };
         io.emit('figma_synced', syncedData);
 
+        // Notify workspace members about sync
+        NotificationService.notifyWorkspaceMembers({
+          workspaceId: figmaFile.workspace_id,
+          type: 'figma_synced',
+          title: `Figma file synced: ${file.name}`,
+          message: `${variables.length} variables, ${components.length} components updated`,
+          referenceType: 'figma_file',
+          referenceId: figmaFile.id,
+        }).catch(err => console.error('Failed to create sync notification:', err));
+
         // Trigger AI analysis (async, don't block sync response)
         analyzeDesignSystemAsync(io, figmaFile.workspace_id, figmaFile.id, syncPayload)
           .catch(err => console.error('❌ AI analysis failed:', err));
@@ -630,6 +641,16 @@ async function analyzeDesignSystemAsync(
     });
 
     console.log(`📊 Analysis broadcast to workspace ${workspaceId}`);
+
+    // Notify workspace members if issues were found
+    if (report.summary.totalIssues > 0) {
+      NotificationService.notifyWorkspaceMembers({
+        workspaceId,
+        type: 'conflict_detected',
+        title: `${report.summary.totalIssues} issues detected in design system`,
+        message: `Health score: ${report.score}/100. Review conflicts to resolve.`,
+      }).catch(err => console.error('Failed to create conflict notification:', err));
+    }
 
   } catch (error) {
     console.error('❌ AI analysis error:', error);

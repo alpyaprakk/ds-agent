@@ -1,6 +1,7 @@
 import { Router } from 'express';
 import { WorkspaceRepository, FigmaFileRepository, UserRepository } from '../../db/repositories';
 import { authMiddleware, AuthRequest } from '../../middleware/auth';
+import { NotificationService } from '../../services/notification.service';
 import pool from '../../db/connection';
 
 const router = Router();
@@ -136,6 +137,19 @@ router.post('/:id/files', async (req: AuthRequest, res) => {
       ...req.body,
       workspace_id: req.params.id
     });
+
+    // Notify workspace members about new file
+    NotificationService.notifyWorkspaceMembers({
+      workspaceId: req.params.id,
+      type: 'figma_file_added',
+      title: `New Figma file added: ${file.name || 'Untitled'}`,
+      message: `${req.user!.name} added a new Figma file`,
+      actorId: req.user!.id,
+      referenceType: 'figma_file',
+      referenceId: file.id,
+      excludeUserId: req.user!.id,
+    }).catch(err => console.error('Failed to create file added notification:', err));
+
     return res.status(201).json({ file });
   } catch (error) {
     console.error('Error adding Figma file:', error);
@@ -150,10 +164,27 @@ router.delete('/:workspaceId/files/:fileId', async (req: AuthRequest, res) => {
     if (!role || !['owner', 'admin'].includes(role)) {
       return res.status(403).json({ error: 'Only owners and admins can remove files' });
     }
+    // Get file info before deletion for notification
+    const fileResult = await pool.query('SELECT name FROM figma_files WHERE id = $1', [req.params.fileId]);
+    const fileName = fileResult.rows[0]?.name;
+
     const deleted = await figmaFileRepo.delete(req.params.fileId);
     if (!deleted) {
       return res.status(404).json({ error: 'File not found' });
     }
+
+    // Notify workspace members
+    if (fileName) {
+      NotificationService.notifyWorkspaceMembers({
+        workspaceId: req.params.workspaceId,
+        type: 'figma_file_removed',
+        title: `Figma file removed: ${fileName}`,
+        message: `${req.user!.name} removed the file from the workspace`,
+        actorId: req.user!.id,
+        excludeUserId: req.user!.id,
+      }).catch(err => console.error('Failed to create file removed notification:', err));
+    }
+
     return res.json({ success: true });
   } catch (error) {
     console.error('Error deleting Figma file:', error);
@@ -254,6 +285,22 @@ router.post('/:id/members/invite', async (req: AuthRequest, res) => {
     const invitation = await UserRepository.createInvitation(
       req.params.id, email, targetRole, req.user!.id
     );
+
+    // Notify invited user if they have an account
+    if (existingUser) {
+      const workspace = await workspaceRepo.findById(req.params.id);
+      NotificationService.notify({
+        userId: existingUser.id,
+        workspaceId: req.params.id,
+        type: 'workspace_invitation',
+        title: `You've been invited to ${workspace?.name || 'a workspace'}`,
+        message: `${req.user!.name} invited you as ${targetRole}`,
+        actorId: req.user!.id,
+        referenceType: 'invitation',
+        referenceId: invitation.id,
+      }).catch(err => console.error('Failed to create invitation notification:', err));
+    }
+
     return res.status(201).json({ invitation });
   } catch (error) {
     console.error('Error inviting member:', error);
@@ -314,6 +361,18 @@ router.patch('/:id/members/:userId/role', async (req: AuthRequest, res) => {
     }
 
     await UserRepository.updateMemberRole(req.params.userId, req.params.id, newRole);
+
+    // Notify the user whose role changed
+    const workspace = await workspaceRepo.findById(req.params.id);
+    NotificationService.notify({
+      userId: req.params.userId,
+      workspaceId: req.params.id,
+      type: 'role_changed',
+      title: `Your role was updated to ${newRole}`,
+      message: `${req.user!.name} changed your role in ${workspace?.name || 'workspace'}`,
+      actorId: req.user!.id,
+    }).catch(err => console.error('Failed to create role change notification:', err));
+
     return res.json({ success: true });
   } catch (error) {
     console.error('Error updating member role:', error);
@@ -335,10 +394,26 @@ router.delete('/:id/members/:userId', async (req: AuthRequest, res) => {
       return res.status(400).json({ error: 'Workspace owner cannot leave. Transfer ownership or delete the workspace.' });
     }
 
+    // Get workspace info before removal for notification
+    const workspace = await workspaceRepo.findById(req.params.id);
+
     const removed = await UserRepository.removeFromWorkspace(req.params.userId, req.params.id);
     if (!removed) {
       return res.status(404).json({ error: 'Member not found' });
     }
+
+    // Notify removed member (only if removed by someone else)
+    if (!isRemovingSelf) {
+      NotificationService.notify({
+        userId: req.params.userId,
+        workspaceId: req.params.id,
+        type: 'member_removed',
+        title: `You were removed from ${workspace?.name || 'a workspace'}`,
+        message: `${req.user!.name} removed you from the workspace`,
+        actorId: req.user!.id,
+      }).catch(err => console.error('Failed to create removal notification:', err));
+    }
+
     return res.json({ success: true });
   } catch (error) {
     console.error('Error removing member:', error);

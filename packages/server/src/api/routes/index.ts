@@ -3,6 +3,7 @@ import authRouter from './auth';
 import workspacesRouter from './workspaces';
 import conflictsRouter from './conflicts';
 import syncRouter from './sync';
+import notificationsRouter from './notifications';
 import { getConnectedPluginsStatus } from '../../websocket/handlers';
 
 const router = Router();
@@ -32,5 +33,6 @@ router.use('/workspaces', workspacesRouter);
 router.use('/workspaces', conflictsRouter);
 router.use('/conflicts', conflictsRouter);
 router.use('/sync', syncRouter);
+router.use('/notifications', notificationsRouter);
 
 export default router;

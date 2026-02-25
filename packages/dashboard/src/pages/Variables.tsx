@@ -538,28 +538,36 @@ export function Variables() {
 
                         {/* Value column */}
                         <div className="w-[320px] flex items-center gap-2.5 px-4 py-2 border-l border-border/30 flex-shrink-0">
-                          {color && (
-                            <div
-                              className="w-4 h-4 rounded-[3px] border border-border/50 flex-shrink-0"
-                              style={{ backgroundColor: color }}
-                            />
-                          )}
-                          {variable.type === 'COLOR' && !color && !isAlias && (
-                            <div className="w-4 h-4 rounded-[3px] border border-border/50 bg-muted flex-shrink-0" />
-                          )}
-                          {isAlias && !color && (
-                            <div className="w-4 h-4 rounded-[3px] border border-border/50 flex-shrink-0 flex items-center justify-center bg-muted">
-                              <svg width="8" height="8" viewBox="0 0 8 8" className="text-muted-foreground">
-                                <path d="M1 7L4 1L7 7" fill="none" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round" strokeLinejoin="round"/>
-                              </svg>
+                          {isAlias ? (
+                            <div className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-md border border-border/60 bg-muted/40 max-w-full">
+                              {color ? (
+                                <div
+                                  className="w-3.5 h-3.5 rounded-[3px] border border-border/50 flex-shrink-0"
+                                  style={{ backgroundColor: color }}
+                                />
+                              ) : (
+                                <HugeiconsIcon icon={Icon} size={12} className="text-muted-foreground flex-shrink-0 opacity-60" />
+                              )}
+                              <span className="text-[12px] text-primary/80 truncate">
+                                {label}
+                              </span>
                             </div>
+                          ) : (
+                            <>
+                              {color && (
+                                <div
+                                  className="w-4 h-4 rounded-[3px] border border-border/50 flex-shrink-0"
+                                  style={{ backgroundColor: color }}
+                                />
+                              )}
+                              {variable.type === 'COLOR' && !color && (
+                                <div className="w-4 h-4 rounded-[3px] border border-border/50 bg-muted flex-shrink-0" />
+                              )}
+                              <span className="text-[13px] text-muted-foreground truncate">
+                                {label}
+                              </span>
+                            </>
                           )}
-                          <span className={cn(
-                            'text-[13px] truncate',
-                            isAlias ? 'text-primary/80' : 'text-muted-foreground'
-                          )}>
-                            {label}
-                          </span>
                         </div>
                       </div>
                     );

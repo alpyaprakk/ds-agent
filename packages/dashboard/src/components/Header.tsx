@@ -2,7 +2,6 @@ import { useNavigate } from 'react-router-dom';
 import { HugeiconsIcon } from '@hugeicons/react';
 import {
   Search01Icon,
-  Notification03Icon,
   Settings02Icon,
   Logout03Icon,
   User02Icon,
@@ -20,6 +19,7 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
+import { NotificationPanel } from '@/components/NotificationPanel';
 import { useWorkspaceStore } from '@/store/workspace-store';
 import { useAuthStore } from '@/store/auth-store';
 import { useTheme } from '@/contexts/ThemeContext';
@@ -78,9 +78,7 @@ export function Header() {
         </Button>
 
         {/* Notifications */}
-        <Button variant="ghost" size="icon" className="h-9 w-9 rounded-lg">
-          <HugeiconsIcon icon={Notification03Icon} size={18} />
-        </Button>
+        <NotificationPanel />
 
         {/* User Menu */}
         <DropdownMenu>

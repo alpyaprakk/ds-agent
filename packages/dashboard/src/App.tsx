@@ -11,6 +11,7 @@ import { Login } from './pages/Login';
 import { Register } from './pages/Register';
 import { useWorkspaceStore } from './store/workspace-store';
 import { useAuthStore } from './store/auth-store';
+import { useNotificationStore } from './store/notification-store';
 import { wsClient } from './lib/websocket';
 import { LayoutProvider } from './contexts/LayoutContext';
 import { ThemeProvider } from './contexts/ThemeContext';
@@ -210,6 +211,13 @@ function AppContent() {
         description: data.error || 'Could not apply the fix',
         duration: 5000,
       });
+    });
+
+    // Real-time notification listener
+    wsClient.on('notification', (data) => {
+      if (data.userId === user.id) {
+        useNotificationStore.getState().addNotification(data.notification);
+      }
     });
 
     return () => {

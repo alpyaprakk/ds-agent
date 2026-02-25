@@ -2,6 +2,7 @@ import { Router, Response } from 'express';
 import bcrypt from 'bcryptjs';
 import { UserRepository } from '../../db/repositories/user-repository';
 import { authMiddleware, generateToken, AuthRequest } from '../../middleware/auth';
+import { NotificationService } from '../../services/notification.service';
 
 const router = Router();
 
@@ -225,6 +226,20 @@ router.post('/invitations/:token/accept', authMiddleware, async (req: AuthReques
       return;
     }
 
+    // Notify the inviter that their invitation was accepted
+    if (invitation.invited_by) {
+      NotificationService.notify({
+        userId: invitation.invited_by,
+        workspaceId: invitation.workspace_id,
+        type: 'invitation_accepted',
+        title: `${req.user!.name} joined ${invitation.workspace_name || 'the workspace'}`,
+        message: `Your invitation was accepted`,
+        actorId: req.user!.id,
+        referenceType: 'invitation',
+        referenceId: invitation.id,
+      }).catch(err => console.error('Failed to create accept notification:', err));
+    }
+
     res.json({
       success: true,
       workspace_id: invitation.workspace_id,
@@ -239,10 +254,27 @@ router.post('/invitations/:token/accept', authMiddleware, async (req: AuthReques
 // POST /api/auth/invitations/:token/reject
 router.post('/invitations/:token/reject', authMiddleware, async (req: AuthRequest, res: Response) => {
   try {
+    // Get invitation details before rejecting
+    const invitation = await UserRepository.getInvitationByToken(req.params.token);
+
     const rejected = await UserRepository.rejectInvitation(req.params.token);
     if (!rejected) {
       res.status(404).json({ error: 'Invitation not found or already responded' });
       return;
+    }
+
+    // Notify the inviter that their invitation was rejected
+    if (invitation?.invited_by) {
+      NotificationService.notify({
+        userId: invitation.invited_by,
+        workspaceId: invitation.workspace_id,
+        type: 'invitation_rejected',
+        title: `${req.user!.name} declined the invitation`,
+        message: `Your invitation to ${invitation.workspace_name || 'the workspace'} was declined`,
+        actorId: req.user!.id,
+        referenceType: 'invitation',
+        referenceId: invitation.id,
+      }).catch(err => console.error('Failed to create reject notification:', err));
     }
 
     res.json({ success: true });

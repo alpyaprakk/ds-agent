@@ -1,5 +1,6 @@
 import { Router } from 'express';
 import { ConflictRepository } from '../../db/repositories';
+import { NotificationService } from '../../services/notification.service';
 
 const router = Router();
 const conflictRepo = new ConflictRepository();
@@ -49,6 +50,16 @@ router.post('/:id/resolve', async (req, res) => {
 
     if (!conflict) {
       return res.status(404).json({ error: 'Conflict not found' });
+    }
+
+    // Notify workspace members about resolution
+    if (conflict.workspace_id) {
+      NotificationService.notifyWorkspaceMembers({
+        workspaceId: conflict.workspace_id,
+        type: 'conflict_resolved',
+        title: `Conflict resolved: ${conflict.entity_name || conflict.conflict_type}`,
+        message: `Resolved by ${resolvedBy} using ${method}`,
+      }).catch(err => console.error('Failed to create resolve notification:', err));
     }
 
     return res.json({ conflict });

@@ -115,6 +115,24 @@ export interface AuthUser {
   avatar?: string;
 }
 
+export interface AppNotification {
+  id: string;
+  user_id: string;
+  workspace_id?: string;
+  type: string;
+  title: string;
+  message?: string;
+  actor_id?: string;
+  reference_type?: string;
+  reference_id?: string;
+  read: boolean;
+  created_at: string;
+  actor_name?: string;
+  actor_avatar?: string;
+  workspace_name?: string;
+  workspace_icon?: string;
+}
+
 export interface UserSettings {
   ai_provider: string;
   has_anthropic_key: boolean;
@@ -378,6 +396,36 @@ class ApiClient {
     return this.request(`/api/auth/invitations/${token}/reject`, {
       method: 'POST',
     });
+  }
+
+  // Notifications
+  async getNotifications(options?: { limit?: number; offset?: number; unread?: boolean }): Promise<{
+    notifications: AppNotification[];
+    total: number;
+    unread_count: number;
+  }> {
+    const params = new URLSearchParams();
+    if (options?.limit) params.set('limit', String(options.limit));
+    if (options?.offset) params.set('offset', String(options.offset));
+    if (options?.unread) params.set('unread', 'true');
+    const query = params.toString() ? `?${params}` : '';
+    return this.request(`/api/notifications${query}`);
+  }
+
+  async getUnreadNotificationCount(): Promise<{ count: number }> {
+    return this.request('/api/notifications/unread-count');
+  }
+
+  async markNotificationAsRead(id: string): Promise<{ success: boolean }> {
+    return this.request(`/api/notifications/${id}/read`, { method: 'POST' });
+  }
+
+  async markAllNotificationsAsRead(): Promise<{ success: boolean; count: number }> {
+    return this.request('/api/notifications/read-all', { method: 'POST' });
+  }
+
+  async deleteNotification(id: string): Promise<{ success: boolean }> {
+    return this.request(`/api/notifications/${id}`, { method: 'DELETE' });
   }
 }
 
