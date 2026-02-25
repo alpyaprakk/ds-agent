@@ -237,11 +237,16 @@ export function setupWebSocketHandlers(io: SocketIOServer) {
         // Build variable sort_order from collection variableIds arrays (Figma ordering)
         const variableSortOrderMap = new Map<string, number>();
         for (const c of collections) {
+          console.log(`📋 Collection "${c.name}" variableIds:`, Array.isArray(c.variableIds) ? `${c.variableIds.length} items, first: ${c.variableIds[0]}` : 'MISSING');
           if (Array.isArray(c.variableIds)) {
             c.variableIds.forEach((vid: string, idx: number) => {
               variableSortOrderMap.set(vid, idx);
             });
           }
+        }
+        if (variables.length > 0) {
+          console.log(`🔑 Sample variable id: "${variables[0].id}", name: "${variables[0].name}"`);
+          console.log(`🗺️ Sort order map size: ${variableSortOrderMap.size}, has sample: ${variableSortOrderMap.has(variables[0].id)}`);
         }
 
         // Start transaction for batch inserts
