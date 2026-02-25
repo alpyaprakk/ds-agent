@@ -99,6 +99,22 @@ router.post('/files/:fileId', async (req, res) => {
 
       console.log(`✅ Fetched ${syncData.variables.length} variables, ${syncData.collections.length} collections, ${syncData.components.length} components`);
 
+      // Build variable ID → name lookup for resolving aliases in valuesByMode
+      const varIdToName = new Map<string, string>();
+      for (const v of syncData.variables) {
+        varIdToName.set(v.id, v.name);
+      }
+      for (const v of syncData.variables) {
+        if (v.valuesByMode && typeof v.valuesByMode === 'object') {
+          for (const modeKey of Object.keys(v.valuesByMode)) {
+            const modeVal = (v.valuesByMode as any)[modeKey];
+            if (modeVal && typeof modeVal === 'object' && modeVal.type === 'VARIABLE_ALIAS' && modeVal.id) {
+              modeVal.name = varIdToName.get(modeVal.id) || modeVal.id;
+            }
+          }
+        }
+      }
+
       // Save variable collections
       for (const collection of syncData.collections) {
         await pool.query(

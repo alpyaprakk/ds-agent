@@ -89,8 +89,10 @@ function renderValue(
   // Alias reference
   if (typeof firstVal === 'object' && firstVal.type === 'VARIABLE_ALIAS') {
     const aliasId = firstVal.id as string;
-    const resolvedName = aliasMap.get(aliasId);
-    return { color: null, label: resolvedName || aliasId, isAlias: true };
+    // firstVal.name is set by server during sync, aliasMap is a frontend fallback
+    const resolvedName = firstVal.name || aliasMap.get(aliasId);
+    const displayName = resolvedName && resolvedName !== aliasId ? resolvedName : aliasId;
+    return { color: null, label: displayName, isAlias: true };
   }
 
   if (variable.type === 'COLOR') {
@@ -139,6 +141,7 @@ function getTypeIcon(type: string) {
 export function Variables() {
   const { currentWorkspace } = useWorkspaceStore();
   const [collections, setCollections] = useState<VariableCollection[]>([]);
+  const [allVariables, setAllVariables] = useState<DesignVariable[]>([]);
   const [variables, setVariables] = useState<DesignVariable[]>([]);
   const [selectedCollectionId, setSelectedCollectionId] = useState<string | null>(null);
   const [expandedGroups, setExpandedGroups] = useState<Set<string>>(new Set());
@@ -161,6 +164,7 @@ export function Variables() {
         apiClient.getVariables(currentWorkspace.id),
       ]);
       setCollections(colRes.collections);
+      setAllVariables(varRes.variables);
       setVariables(varRes.variables);
     } catch (error) {
       console.error('Failed to load variables:', error);
@@ -220,15 +224,20 @@ export function Variables() {
   }, [visibleVariables]);
 
   // Build alias lookup: figma_id → variable name (for resolving VARIABLE_ALIAS references)
+  // Uses allVariables so aliases across collections can still be resolved
   const aliasMap = useMemo(() => {
     const map = new Map<string, string>();
-    for (const v of variables) {
+    for (const v of allVariables) {
       if (v.figma_id) {
         map.set(v.figma_id, v.name);
       }
+      // Also map figma_key as fallback (some alias references may use key format)
+      if (v.figma_key) {
+        map.set(v.figma_key, v.name);
+      }
     }
     return map;
-  }, [variables]);
+  }, [allVariables]);
 
   const toggleGroup = (path: string) => {
     setExpandedGroups(prev => {

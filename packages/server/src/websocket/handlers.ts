@@ -160,6 +160,24 @@ export function setupWebSocketHandlers(io: SocketIOServer) {
           [figmaFile.id]
         );
 
+        // Build variable ID → name lookup for resolving aliases in valuesByMode
+        const varIdToName = new Map<string, string>();
+        for (const v of variables) {
+          varIdToName.set(v.id, v.name);
+        }
+
+        // Enrich alias references with resolved variable names
+        for (const v of variables) {
+          if (v.valuesByMode && typeof v.valuesByMode === 'object') {
+            for (const modeKey of Object.keys(v.valuesByMode)) {
+              const modeVal = v.valuesByMode[modeKey];
+              if (modeVal && typeof modeVal === 'object' && modeVal.type === 'VARIABLE_ALIAS' && modeVal.id) {
+                modeVal.name = varIdToName.get(modeVal.id) || modeVal.id;
+              }
+            }
+          }
+        }
+
         // Start transaction for batch inserts
         const client = await pool.connect();
         try {
