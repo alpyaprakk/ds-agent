@@ -60,8 +60,11 @@ export function Layout({ children }: LayoutProps) {
 
   useEffect(() => {
     const WS_URL = import.meta.env.VITE_WS_URL || 'http://localhost:3000';
+    const token = localStorage.getItem('auth_token');
+
     const socket = io(WS_URL, {
-      path: '/api/socket.io'
+      path: '/api/socket.io',
+      auth: { token },
     });
 
     socket.on('connect', () => {
