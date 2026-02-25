@@ -436,7 +436,7 @@ router.get('/:id/collections', async (req: AuthRequest, res) => {
               (SELECT COUNT(*) FROM variables v WHERE v.workspace_id = vc.workspace_id AND v.collection_id = vc.figma_id) as variable_count
        FROM variable_collections vc
        WHERE vc.workspace_id = $1
-       ORDER BY vc.name ASC`,
+       ORDER BY vc.sort_order ASC, vc.name ASC`,
       [req.params.id]
     );
     return res.json({ collections: result.rows });
@@ -465,7 +465,7 @@ router.get('/:id/variables', async (req: AuthRequest, res) => {
       params.push(collectionFigmaId);
     }
 
-    queryText += ` ORDER BY v.name ASC`;
+    queryText += ` ORDER BY v.sort_order ASC, v.name ASC`;
 
     const result = await pool.query(queryText, params);
     return res.json({ variables: result.rows });

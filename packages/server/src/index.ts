@@ -104,6 +104,7 @@ async function runMigrations() {
     '006_add_variable_figma_id.sql',
     '007_add_notifications.sql',
     '008_add_notification_preferences.sql',
+    '009_add_sort_order.sql',
   ];
 
   for (const file of migrationFiles) {

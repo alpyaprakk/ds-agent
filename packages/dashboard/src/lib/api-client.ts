@@ -54,6 +54,7 @@ export interface VariableCollection {
   figma_id: string;
   modes: any[];
   variable_count: number;
+  sort_order: number;
   created_at: string;
   updated_at: string;
 }
@@ -71,6 +72,7 @@ export interface DesignVariable {
   collection_name?: string;
   scopes: any[];
   description?: string;
+  sort_order: number;
   created_at: string;
   updated_at: string;
 }

@@ -15,6 +15,7 @@ interface FigmaVariableCollection {
   defaultModeId: string;
   remote: boolean;
   hiddenFromPublishing: boolean;
+  variableIds: string[];
 }
 
 interface FigmaComponent {

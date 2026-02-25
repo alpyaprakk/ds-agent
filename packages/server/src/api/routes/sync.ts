@@ -116,15 +116,27 @@ router.post('/files/:fileId', async (req, res) => {
         }
       }
 
-      // Save variable collections
-      for (const collection of syncData.collections) {
+      // Build variable sort_order from collection variableIds arrays (Figma ordering)
+      const variableSortOrderMap = new Map<string, number>();
+      for (const c of syncData.collections) {
+        if (Array.isArray(c.variableIds)) {
+          c.variableIds.forEach((vid, idx) => {
+            variableSortOrderMap.set(vid, idx);
+          });
+        }
+      }
+
+      // Save variable collections (with sort_order preserving Figma order)
+      for (let ci = 0; ci < syncData.collections.length; ci++) {
+        const collection = syncData.collections[ci];
         await pool.query(
-          `INSERT INTO variable_collections (id, workspace_id, figma_file_id, name, figma_key, figma_id, modes)
-           VALUES ($1, $2, $3, $4, $5, $6, $7)
+          `INSERT INTO variable_collections (id, workspace_id, figma_file_id, name, figma_key, figma_id, modes, sort_order)
+           VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
            ON CONFLICT (workspace_id, figma_key) DO UPDATE SET
              name = EXCLUDED.name,
              figma_id = EXCLUDED.figma_id,
              modes = EXCLUDED.modes,
+             sort_order = EXCLUDED.sort_order,
              updated_at = NOW()`,
           [
             randomUUID(),
@@ -133,21 +145,24 @@ router.post('/files/:fileId', async (req, res) => {
             collection.name,
             collection.key,
             collection.id,
-            JSON.stringify(collection.modes)
+            JSON.stringify(collection.modes),
+            ci
           ]
         );
       }
 
-      // Save variables
+      // Save variables (with sort_order preserving Figma order)
       for (const variable of syncData.variables) {
+        const sortOrder = variableSortOrderMap.get(variable.id) ?? variableSortOrderMap.get(`VariableID:${variable.id}`) ?? 0;
         await pool.query(
-          `INSERT INTO variables (id, workspace_id, figma_file_id, name, figma_key, figma_id, type, value, collection_id, scopes)
-           VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
+          `INSERT INTO variables (id, workspace_id, figma_file_id, name, figma_key, figma_id, type, value, collection_id, scopes, sort_order)
+           VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
            ON CONFLICT (workspace_id, figma_key) DO UPDATE SET
              name = EXCLUDED.name,
              figma_id = EXCLUDED.figma_id,
              type = EXCLUDED.type,
              value = EXCLUDED.value,
+             sort_order = EXCLUDED.sort_order,
              updated_at = NOW()`,
           [
             randomUUID(),
@@ -159,7 +174,8 @@ router.post('/files/:fileId', async (req, res) => {
             variable.resolvedType,
             JSON.stringify(variable.valuesByMode),
             variable.variableCollectionId,
-            JSON.stringify([])
+            JSON.stringify([]),
+            sortOrder
           ]
         );
       }

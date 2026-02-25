@@ -322,7 +322,7 @@ export function Variables() {
 
   // Render the sidebar group tree recursively
   const renderGroupTree = (node: GroupNode, depth: number = 0): React.ReactNode => {
-    const entries = Array.from(node.children.entries()).sort(([a], [b]) => a.localeCompare(b));
+    const entries = Array.from(node.children.entries());
     if (entries.length === 0) return null;
 
     return entries.map(([, child]) => {

@@ -234,35 +234,47 @@ export function setupWebSocketHandlers(io: SocketIOServer) {
           }
         }
 
+        // Build variable sort_order from collection variableIds arrays (Figma ordering)
+        const variableSortOrderMap = new Map<string, number>();
+        for (const c of collections) {
+          if (Array.isArray(c.variableIds)) {
+            c.variableIds.forEach((vid: string, idx: number) => {
+              variableSortOrderMap.set(vid, idx);
+            });
+          }
+        }
+
         // Start transaction for batch inserts
         const client = await pool.connect();
         try {
           await client.query('BEGIN');
 
-          // Batch save variable collections
+          // Batch save variable collections (with sort_order preserving Figma order)
           if (collections.length > 0) {
             const collectionValues = collections.map((_c: any, i: number) => {
-              const baseIndex = i * 7;
-              return `($${baseIndex + 1}, $${baseIndex + 2}, $${baseIndex + 3}, $${baseIndex + 4}, $${baseIndex + 5}, $${baseIndex + 6}, $${baseIndex + 7})`;
+              const baseIndex = i * 8;
+              return `($${baseIndex + 1}, $${baseIndex + 2}, $${baseIndex + 3}, $${baseIndex + 4}, $${baseIndex + 5}, $${baseIndex + 6}, $${baseIndex + 7}, $${baseIndex + 8})`;
             }).join(',');
 
-            const collectionParams = collections.flatMap((c: any) => [
+            const collectionParams = collections.flatMap((c: any, i: number) => [
               randomUUID(),
               figmaFile.workspace_id,
               figmaFile.id,
               c.name,
               c.key,
               c.id,
-              JSON.stringify(c.modes)
+              JSON.stringify(c.modes),
+              i
             ]);
 
             await client.query(
-              `INSERT INTO variable_collections (id, workspace_id, figma_file_id, name, figma_key, figma_id, modes)
+              `INSERT INTO variable_collections (id, workspace_id, figma_file_id, name, figma_key, figma_id, modes, sort_order)
                VALUES ${collectionValues}
                ON CONFLICT (workspace_id, figma_key) DO UPDATE SET
                  name = EXCLUDED.name,
                  figma_id = EXCLUDED.figma_id,
                  modes = EXCLUDED.modes,
+                 sort_order = EXCLUDED.sort_order,
                  updated_at = NOW()`,
               collectionParams
             );
@@ -273,8 +285,8 @@ export function setupWebSocketHandlers(io: SocketIOServer) {
           for (let i = 0; i < variables.length; i += variableChunkSize) {
             const chunk = variables.slice(i, i + variableChunkSize);
             const variableValues = chunk.map((_: any, idx: number) => {
-              const baseIndex = idx * 10;
-              return `($${baseIndex + 1}, $${baseIndex + 2}, $${baseIndex + 3}, $${baseIndex + 4}, $${baseIndex + 5}, $${baseIndex + 6}, $${baseIndex + 7}, $${baseIndex + 8}, $${baseIndex + 9}, $${baseIndex + 10})`;
+              const baseIndex = idx * 11;
+              return `($${baseIndex + 1}, $${baseIndex + 2}, $${baseIndex + 3}, $${baseIndex + 4}, $${baseIndex + 5}, $${baseIndex + 6}, $${baseIndex + 7}, $${baseIndex + 8}, $${baseIndex + 9}, $${baseIndex + 10}, $${baseIndex + 11})`;
             }).join(',');
 
             const variableParams = chunk.flatMap((v: any) => [
@@ -287,17 +299,19 @@ export function setupWebSocketHandlers(io: SocketIOServer) {
               v.resolvedType,
               JSON.stringify(v.valuesByMode),
               v.variableCollectionId,
-              JSON.stringify([])
+              JSON.stringify([]),
+              variableSortOrderMap.get(v.id) ?? variableSortOrderMap.get(`VariableID:${v.id}`) ?? 0
             ]);
 
             await client.query(
-              `INSERT INTO variables (id, workspace_id, figma_file_id, name, figma_key, figma_id, type, value, collection_id, scopes)
+              `INSERT INTO variables (id, workspace_id, figma_file_id, name, figma_key, figma_id, type, value, collection_id, scopes, sort_order)
                VALUES ${variableValues}
                ON CONFLICT (workspace_id, figma_key) DO UPDATE SET
                  name = EXCLUDED.name,
                  figma_id = EXCLUDED.figma_id,
                  type = EXCLUDED.type,
                  value = EXCLUDED.value,
+                 sort_order = EXCLUDED.sort_order,
                  updated_at = NOW()`,
               variableParams
             );
