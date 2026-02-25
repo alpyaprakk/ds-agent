@@ -14,9 +14,13 @@ const app = express();
 const httpServer = createServer(app);
 const io = new SocketIOServer(httpServer, {
   cors: {
-    origin: '*', // Allow all origins (including Figma plugin with origin: 'null')
+    origin: (_origin, callback) => {
+      // Allow all origins
+      callback(null, true);
+    },
     methods: ['GET', 'POST'],
-    credentials: false // Must be false when origin is '*'
+    credentials: false,
+    allowedHeaders: ['Content-Type']
   },
   allowEIO3: true, // Allow Engine.IO v3 clients
   transports: ['polling', 'websocket']
@@ -47,6 +51,15 @@ app.use((req, res, next) => {
 
 // API routes (includes /api/health)
 app.use('/api', apiRoutes);
+
+// Test endpoint for Socket.IO troubleshooting
+app.get('/test-cors', (req, res) => {
+  res.json({
+    message: 'CORS test successful',
+    origin: req.headers.origin || 'no origin',
+    timestamp: new Date().toISOString()
+  });
+});
 
 // WebSocket handlers
 setupWebSocketHandlers(io);
