@@ -348,7 +348,10 @@ export function Settings() {
                   value={profileName}
                   onChange={(e) => setProfileName(e.target.value)}
                   placeholder="Your name"
-                  autoComplete="off"
+                  name="profile-name-nofill"
+                  autoComplete="one-time-code"
+                  data-form-type="other"
+                  data-lpignore="true"
                 />
               </div>
               <Button onClick={saveProfile} disabled={savingProfile} size="default">
@@ -391,7 +394,10 @@ export function Settings() {
                           value={inviteEmail}
                           onChange={(e) => setInviteEmail(e.target.value)}
                           className="pl-8"
-                          autoComplete="off"
+                          name="invite-email-nofill"
+                          autoComplete="one-time-code"
+                          data-form-type="other"
+                          data-lpignore="true"
                           onKeyDown={(e) => e.key === 'Enter' && handleInvite()}
                         />
                       </div>
@@ -531,11 +537,15 @@ export function Settings() {
               <Label htmlFor="figma-token">Personal Access Token</Label>
               <Input
                 id="figma-token"
-                type="password"
+                type="text"
                 placeholder={userSettings?.has_figma_token ? 'Token saved - enter new to replace' : 'figd_...'}
                 value={figmaToken}
                 onChange={(e) => setFigmaToken(e.target.value)}
-                autoComplete="off"
+                name="figma-token-nofill"
+                autoComplete="one-time-code"
+                data-form-type="other"
+                data-lpignore="true"
+                className="[-webkit-text-security:disc]"
               />
               <p className="text-xs text-muted-foreground">
                 Generate a token from{' '}
@@ -611,11 +621,15 @@ export function Settings() {
                 <Label htmlFor="anthropic-key">Anthropic API Key</Label>
                 <Input
                   id="anthropic-key"
-                  type="password"
+                  type="text"
                   placeholder={userSettings?.has_anthropic_key ? 'Key saved - enter new to replace' : 'sk-ant-...'}
                   value={anthropicKey}
                   onChange={(e) => setAnthropicKey(e.target.value)}
-                  autoComplete="off"
+                  name="anthropic-key-nofill"
+                  autoComplete="one-time-code"
+                  data-form-type="other"
+                  data-lpignore="true"
+                  className="[-webkit-text-security:disc]"
                 />
                 <p className="text-xs text-muted-foreground">
                   Get your key from{' '}
@@ -638,11 +652,15 @@ export function Settings() {
                 <Label htmlFor="openai-key">OpenAI API Key</Label>
                 <Input
                   id="openai-key"
-                  type="password"
+                  type="text"
                   placeholder={userSettings?.has_openai_key ? 'Key saved - enter new to replace' : 'sk-...'}
                   value={openaiKey}
                   onChange={(e) => setOpenaiKey(e.target.value)}
-                  autoComplete="off"
+                  name="openai-key-nofill"
+                  autoComplete="one-time-code"
+                  data-form-type="other"
+                  data-lpignore="true"
+                  className="[-webkit-text-security:disc]"
                 />
                 <p className="text-xs text-muted-foreground">
                   Get your key from{' '}
