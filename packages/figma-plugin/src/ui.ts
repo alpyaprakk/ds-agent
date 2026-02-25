@@ -28,7 +28,7 @@ function connectToServer() {
   try {
     socket = io(SERVER_URL, {
       path: '/api/socket.io',
-      transports: ['polling'],
+      transports: ['websocket', 'polling'],
       query: { plugin: 'true' },
       reconnection: true,
       reconnectionDelay: 5000,
