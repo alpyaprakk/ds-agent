@@ -129,14 +129,41 @@
           document.getElementById('status').textContent = '🔧 Applying fix...';
         });
 
-        socket.on('disconnect', () => {
-          console.log('❌ Disconnected from server');
-          document.getElementById('status').textContent = '🔴 Disconnected';
+        socket.on('sync-complete', (data) => {
+          console.log('✅ Sync complete:', data);
+          document.getElementById('status').textContent =
+            `✅ Synced: ${data.stats.variables} variables, ${data.stats.components} components`;
+        });
+
+        socket.on('sync-error', (data) => {
+          console.error('❌ Sync error:', data);
+          document.getElementById('status').textContent = '❌ Sync error: ' + data.error;
+        });
+
+        socket.on('disconnect', (reason) => {
+          console.log('❌ Disconnected from server. Reason:', reason);
+          document.getElementById('status').textContent = '🔴 Disconnected - reconnecting...';
+        });
+
+        socket.on('reconnect', (attemptNumber) => {
+          console.log('🔄 Reconnected after', attemptNumber, 'attempts');
+          document.getElementById('status').textContent = '🟢 Reconnected to server';
+          // Re-authenticate after reconnection
+          socket.emit('plugin-connect', {
+            plugin: 'figma',
+            timestamp: new Date().toISOString()
+          });
+          startHeartbeat();
+        });
+
+        socket.on('reconnect_attempt', (attemptNumber) => {
+          console.log('🔄 Reconnection attempt:', attemptNumber);
+          document.getElementById('status').textContent = '🟡 Reconnecting... (attempt ' + attemptNumber + ')';
         });
 
         socket.on('connect_error', (error) => {
-          console.error('Connection error:', error);
-          document.getElementById('status').textContent = '🔴 Connection error';
+          console.error('Connection error:', error.message);
+          document.getElementById('status').textContent = '🔴 Connection error - retrying...';
         });
       } catch (error) {
         console.error('Connection error:', error);
@@ -200,10 +227,21 @@
       if (msg.type === 'sync-data') {
         // Send sync data to server
         if (socket && socket.connected) {
-          socket.emit('design-system-sync', msg.data);
-          document.getElementById('status').textContent = '✅ Synced with server';
+          document.getElementById('status').textContent = '📤 Sending data to server...';
+          socket.emit('design-system-sync', { data: msg.data });
         } else {
-          document.getElementById('status').textContent = '❌ Not connected to server';
+          document.getElementById('status').textContent = '❌ Not connected to server. Retrying...';
+          // Try to reconnect and send after connection
+          connectToServer();
+          const waitForConnection = setInterval(() => {
+            if (socket && socket.connected) {
+              clearInterval(waitForConnection);
+              socket.emit('design-system-sync', { data: msg.data });
+              document.getElementById('status').textContent = '📤 Sending data to server...';
+            }
+          }, 1000);
+          // Give up after 15 seconds
+          setTimeout(() => clearInterval(waitForConnection), 15000);
         }
       }
 

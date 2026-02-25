@@ -107,4 +107,14 @@ process.on('SIGTERM', () => {
   });
 });
 
+// Handle uncaught errors to prevent server crash
+process.on('unhandledRejection', (reason) => {
+  console.error('⚠️ Unhandled Promise Rejection:', reason);
+});
+
+process.on('uncaughtException', (error) => {
+  console.error('⚠️ Uncaught Exception:', error);
+  // Don't exit - keep server running for other connections
+});
+
 export { app, io };

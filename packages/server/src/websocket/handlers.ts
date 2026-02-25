@@ -68,11 +68,22 @@ export function setupWebSocketHandlers(io: SocketIOServer) {
     // Design system sync from plugin
     socket.on('design-system-sync', async (data: any) => {
       console.log('🔄 Received design system sync from plugin');
-      console.log(`📊 File: ${data.data.file.name} (${data.data.file.key})`);
-      console.log(`📦 Variables: ${data.data.variables.length}, Collections: ${data.data.collections.length}, Components: ${data.data.components.length}`);
 
       try {
-        const { file, variables, collections, components } = data.data;
+        // Handle both wrapped { data: {...} } and unwrapped { file, variables, ... } formats
+        const syncPayload = data.data || data;
+        const { file, variables, collections, components } = syncPayload;
+
+        if (!file || !variables || !collections || !components) {
+          console.error('❌ Invalid sync data format:', Object.keys(data));
+          socket.emit('sync-error', {
+            error: 'Invalid sync data format. Missing required fields.'
+          });
+          return;
+        }
+
+        console.log(`📊 File: ${file.name} (${file.key})`);
+        console.log(`📦 Variables: ${variables.length}, Collections: ${collections.length}, Components: ${components.length}`);
 
         // Find Figma file in database by key
         const figmaFileResult = await pool.query(
