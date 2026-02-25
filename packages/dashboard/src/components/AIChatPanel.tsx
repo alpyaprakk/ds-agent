@@ -98,16 +98,52 @@ export function AIChatPanel({ isOpen, onClose, workspaceId: workspaceIdProp, ini
 
   useEffect(() => {
     if (!fixResult) return;
-    const content = fixResult.success
-      ? `✅ Fix applied successfully! The issue has been resolved in your Figma file.`
-      : `❌ Fix failed: ${fixResult.error || 'Could not apply the fix. Make sure the Figma plugin is running and the file is synced.'}`;
-    setMessages(prev => [...prev, {
-      id: `fix-result-${Date.now()}`,
-      role: 'assistant',
-      content,
-      timestamp: new Date(),
-      agentType: 'design-system'
-    }]);
+
+    if (!fixResult.success) {
+      setMessages(prev => [...prev, {
+        id: `fix-result-${Date.now()}`,
+        role: 'assistant',
+        content: `❌ Fix failed: ${fixResult.error || 'Could not apply the fix. Make sure the Figma plugin is running and the file is synced.'}`,
+        timestamp: new Date(),
+        agentType: 'design-system'
+      }]);
+      return;
+    }
+
+    // Success: ask AI to summarize what was done
+    const entity = initialContext?.entityName || '';
+    const entityType = initialContext?.entityType || '';
+    const suggestion = initialContext?.suggestion || '';
+    const autoPrompt = `The fix has been applied to the Figma file. Briefly summarize what was done and any follow-up recommendations:
+- Entity: ${entity} (${entityType})
+- Action taken: ${suggestion || 'Issue acknowledged and marked as resolved'}`;
+
+    setIsLoading(true);
+    const currentMessages = [...messages];
+    apiClient.sendChatMessage({
+      message: autoPrompt,
+      history: currentMessages.filter(m => m.role !== 'system').map(m => ({
+        role: m.role as 'user' | 'assistant',
+        content: m.content
+      })),
+      workspaceId
+    }).then(response => {
+      setMessages(prev => [...prev, {
+        id: `fix-result-${Date.now()}`,
+        role: 'assistant',
+        content: `✅ Fix applied!\n\n${response.reply}`,
+        timestamp: new Date(),
+        agentType: 'design-system'
+      }]);
+    }).catch(() => {
+      setMessages(prev => [...prev, {
+        id: `fix-result-${Date.now()}`,
+        role: 'assistant',
+        content: `✅ Fix applied successfully!\n\n**Entity:** ${entity}\n**Action:** ${suggestion || 'Issue marked as resolved'}\n\nThe conflict has been resolved. Re-sync to confirm the change.`,
+        timestamp: new Date(),
+        agentType: 'design-system'
+      }]);
+    }).finally(() => setIsLoading(false));
   }, [fixResult]);
 
   useEffect(() => {
