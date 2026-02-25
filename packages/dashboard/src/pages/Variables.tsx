@@ -396,7 +396,7 @@ export function Variables() {
           </div>
         </div>
 
-        <ScrollArea className="flex-1 min-h-0">
+        <div className="flex-1 min-h-0 overflow-y-auto">
           {/* Collections */}
           <div className="p-1.5">
             <div className="px-2 py-1.5">
@@ -492,7 +492,7 @@ export function Variables() {
               </div>
             </>
           )}
-        </ScrollArea>
+        </div>
       </div>
 
       {/* Main Content - Variable Table */}
