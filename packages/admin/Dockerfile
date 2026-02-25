@@ -3,6 +3,8 @@ FROM node:18-alpine AS base
 FROM base AS deps
 WORKDIR /app
 
+RUN mkdir -p packages/admin
+
 COPY package*.json ./
 COPY packages/admin/package*.json ./packages/admin/
 
