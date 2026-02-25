@@ -539,7 +539,7 @@ export function Variables() {
                         {/* Value column */}
                         <div className="w-[320px] flex items-center gap-2.5 px-4 py-2 border-l border-border/30 flex-shrink-0">
                           {isAlias ? (
-                            <div className="inline-flex items-center gap-2.5 rounded-md outline outline-1 outline-border/60 -outline-offset-1 px-2.5 py-1 -mx-2.5 -my-1 max-w-full">
+                            <div className="inline-flex items-center gap-2.5 rounded-md outline outline-1 outline-border/40 -outline-offset-1 bg-muted/25 px-2.5 py-1 -mx-2.5 -my-1 max-w-full">
                               {color ? (
                                 <div
                                   className="w-4 h-4 rounded-[3px] border border-border/50 flex-shrink-0"

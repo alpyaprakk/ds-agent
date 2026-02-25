@@ -101,6 +101,7 @@ async function runMigrations() {
     '004_add_workspace_invitations.sql',
     '005_add_collection_figma_id.sql',
     '006_add_variable_figma_id.sql',
+    '007_add_notifications.sql',
   ];
 
   for (const file of migrationFiles) {
