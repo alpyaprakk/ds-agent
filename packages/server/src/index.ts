@@ -14,8 +14,8 @@ const app = express();
 const httpServer = createServer(app);
 const io = new SocketIOServer(httpServer, {
   cors: {
-    origin: process.env.CORS_ORIGIN || 'http://localhost:5173',
-    credentials: true
+    origin: '*', // Allow all origins (including Figma plugin with origin: 'null')
+    credentials: false // Must be false when origin is '*'
   }
 });
 
@@ -24,8 +24,8 @@ const PORT = process.env.PORT || 3000;
 // Middleware
 app.use(helmet());
 app.use(cors({
-  origin: process.env.CORS_ORIGIN || 'http://localhost:5173',
-  credentials: true
+  origin: '*', // Allow all origins (including Figma plugin)
+  credentials: false
 }));
 app.use(express.json());
 
