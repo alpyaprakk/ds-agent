@@ -13,6 +13,7 @@ import {
   Add01Icon,
   Tick02Icon,
   ArrowDown01Icon,
+  UserGroupIcon,
 } from '@hugeicons/core-free-icons';
 import { Separator } from '@/components/ui/separator';
 import { ScrollArea } from '@/components/ui/scroll-area';
@@ -168,7 +169,13 @@ export function Layout({ children }: LayoutProps) {
                           >
                             <span className="text-base">{ws.icon || '📦'}</span>
                             <div className="flex-1 min-w-0">
-                              <span className="truncate text-sm font-medium">{ws.name}</span>
+                              <div className="truncate text-sm font-medium">{ws.name}</div>
+                              {ws.member_count && (
+                                <div className="flex items-center gap-0.5 text-[11px] text-muted-foreground">
+                                  <HugeiconsIcon icon={UserGroupIcon} size={11} />
+                                  {ws.member_count} member{ws.member_count > 1 ? 's' : ''}
+                                </div>
+                              )}
                             </div>
                             {currentWorkspace?.id === ws.id && (
                               <HugeiconsIcon icon={Tick02Icon} size={16} className="text-primary flex-shrink-0" />
@@ -194,8 +201,17 @@ export function Layout({ children }: LayoutProps) {
                       <span className="text-lg flex-shrink-0">{currentWorkspace?.icon || '📦'}</span>
                       <div className="flex-1 min-w-0">
                         <div className="truncate text-sm font-semibold">{currentWorkspace?.name || 'Select Workspace'}</div>
-                        <div className="truncate text-[11px] text-muted-foreground">
-                          {currentWorkspace?.description || 'Design System'}
+                        <div className="flex items-center gap-1.5 text-[11px] text-muted-foreground">
+                          <span className="truncate">{currentWorkspace?.description || 'Design System'}</span>
+                          {currentWorkspace?.member_count && (
+                            <>
+                              <span>·</span>
+                              <span className="flex items-center gap-0.5 flex-shrink-0">
+                                <HugeiconsIcon icon={UserGroupIcon} size={11} />
+                                {currentWorkspace.member_count}
+                              </span>
+                            </>
+                          )}
                         </div>
                       </div>
                       <HugeiconsIcon icon={ArrowDown01Icon} size={16} className="text-muted-foreground flex-shrink-0" />
@@ -214,9 +230,18 @@ export function Layout({ children }: LayoutProps) {
                         <span className="text-base">{ws.icon || '📦'}</span>
                         <div className="flex-1 min-w-0">
                           <div className="truncate text-sm font-medium">{ws.name}</div>
-                          {ws.description && (
-                            <div className="truncate text-[11px] text-muted-foreground">{ws.description}</div>
-                          )}
+                          <div className="flex items-center gap-1.5 text-[11px] text-muted-foreground">
+                            {ws.description && <span className="truncate">{ws.description}</span>}
+                            {ws.member_count && (
+                              <>
+                                {ws.description && <span>·</span>}
+                                <span className="flex items-center gap-0.5 flex-shrink-0">
+                                  <HugeiconsIcon icon={UserGroupIcon} size={11} />
+                                  {ws.member_count}
+                                </span>
+                              </>
+                            )}
+                          </div>
                         </div>
                         {currentWorkspace?.id === ws.id && (
                           <HugeiconsIcon icon={Tick02Icon} size={16} className="text-primary flex-shrink-0" />

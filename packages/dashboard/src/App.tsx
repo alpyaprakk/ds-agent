@@ -62,6 +62,28 @@ function AppContent() {
     checkAuth();
   }, [checkAuth]);
 
+  // Fetch pending invitations when user is authenticated
+  useEffect(() => {
+    if (!user) return;
+
+    const checkInvitations = async () => {
+      await useWorkspaceStore.getState().fetchMyInvitations();
+      const invitations = useWorkspaceStore.getState().myInvitations;
+      if (invitations.length > 0) {
+        toast.info(`You have ${invitations.length} pending workspace invitation${invitations.length > 1 ? 's' : ''}`, {
+          description: 'Go to Settings to accept or decline',
+          duration: 8000,
+          action: {
+            label: 'View',
+            onClick: () => window.location.href = '/settings',
+          },
+        });
+      }
+    };
+
+    checkInvitations();
+  }, [user]);
+
   // Initialize app data when user is authenticated
   useEffect(() => {
     if (!user) return;

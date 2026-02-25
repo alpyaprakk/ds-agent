@@ -195,4 +195,61 @@ router.put('/profile', authMiddleware, async (req: AuthRequest, res: Response) =
   }
 });
 
+// ==========================================
+// Invitations (user-level)
+// ==========================================
+
+// GET /api/auth/invitations - Get my pending invitations
+router.get('/invitations', authMiddleware, async (req: AuthRequest, res: Response) => {
+  try {
+    const user = await UserRepository.findById(req.user!.id);
+    if (!user) {
+      res.status(404).json({ error: 'User not found' });
+      return;
+    }
+
+    const invitations = await UserRepository.getUserPendingInvitations(user.email);
+    res.json({ invitations });
+  } catch (error) {
+    console.error('Get invitations error:', error);
+    res.status(500).json({ error: 'Failed to get invitations' });
+  }
+});
+
+// POST /api/auth/invitations/:token/accept
+router.post('/invitations/:token/accept', authMiddleware, async (req: AuthRequest, res: Response) => {
+  try {
+    const invitation = await UserRepository.acceptInvitation(req.params.token, req.user!.id);
+    if (!invitation) {
+      res.status(404).json({ error: 'Invitation not found, expired, or already responded' });
+      return;
+    }
+
+    res.json({
+      success: true,
+      workspace_id: invitation.workspace_id,
+      workspace_name: invitation.workspace_name,
+    });
+  } catch (error) {
+    console.error('Accept invitation error:', error);
+    res.status(500).json({ error: 'Failed to accept invitation' });
+  }
+});
+
+// POST /api/auth/invitations/:token/reject
+router.post('/invitations/:token/reject', authMiddleware, async (req: AuthRequest, res: Response) => {
+  try {
+    const rejected = await UserRepository.rejectInvitation(req.params.token);
+    if (!rejected) {
+      res.status(404).json({ error: 'Invitation not found or already responded' });
+      return;
+    }
+
+    res.json({ success: true });
+  } catch (error) {
+    console.error('Reject invitation error:', error);
+    res.status(500).json({ error: 'Failed to reject invitation' });
+  }
+});
+
 export default router;

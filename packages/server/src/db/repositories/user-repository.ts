@@ -1,4 +1,5 @@
 import { query } from '../connection';
+import { randomUUID } from 'crypto';
 
 export interface User {
   id: string;
@@ -20,6 +21,33 @@ export interface UserSettings {
   preferences: Record<string, any>;
   created_at: string;
   updated_at: string;
+}
+
+export interface WorkspaceMember {
+  id: string;
+  user_id: string;
+  workspace_id: string;
+  role: string;
+  created_at: string;
+  email: string;
+  name: string;
+  avatar?: string;
+}
+
+export interface WorkspaceInvitation {
+  id: string;
+  workspace_id: string;
+  invited_by: string;
+  email: string;
+  role: string;
+  status: string;
+  token: string;
+  created_at: string;
+  expires_at: string;
+  responded_at?: string;
+  workspace_name?: string;
+  workspace_icon?: string;
+  inviter_name?: string;
 }
 
 export class UserRepository {
@@ -92,10 +120,14 @@ export class UserRepository {
     return result.rows[0];
   }
 
+  // ==========================================
   // Workspace membership
+  // ==========================================
+
   static async getWorkspacesByUser(userId: string): Promise<any[]> {
     const result = await query(
-      `SELECT w.*, wm.role as member_role
+      `SELECT w.*, wm.role as member_role,
+         (SELECT COUNT(*) FROM workspace_members wm2 WHERE wm2.workspace_id = w.id) as member_count
        FROM workspaces w
        INNER JOIN workspace_members wm ON wm.workspace_id = w.id
        WHERE wm.user_id = $1
@@ -118,5 +150,141 @@ export class UserRepository {
       [userId, workspaceId]
     );
     return result.rows.length > 0;
+  }
+
+  static async getMemberRole(userId: string, workspaceId: string): Promise<string | null> {
+    const result = await query(
+      'SELECT role FROM workspace_members WHERE user_id = $1 AND workspace_id = $2',
+      [userId, workspaceId]
+    );
+    return result.rows[0]?.role || null;
+  }
+
+  static async getWorkspaceMembers(workspaceId: string): Promise<WorkspaceMember[]> {
+    const result = await query(
+      `SELECT wm.id, wm.user_id, wm.workspace_id, wm.role, wm.created_at,
+              u.email, u.name, u.avatar
+       FROM workspace_members wm
+       INNER JOIN users u ON u.id = wm.user_id
+       WHERE wm.workspace_id = $1
+       ORDER BY
+         CASE wm.role WHEN 'owner' THEN 0 WHEN 'admin' THEN 1 ELSE 2 END,
+         wm.created_at ASC`,
+      [workspaceId]
+    );
+    return result.rows;
+  }
+
+  static async updateMemberRole(userId: string, workspaceId: string, role: string): Promise<void> {
+    await query(
+      'UPDATE workspace_members SET role = $1 WHERE user_id = $2 AND workspace_id = $3',
+      [role, userId, workspaceId]
+    );
+  }
+
+  static async removeFromWorkspace(userId: string, workspaceId: string): Promise<boolean> {
+    const result = await query(
+      'DELETE FROM workspace_members WHERE user_id = $1 AND workspace_id = $2',
+      [userId, workspaceId]
+    );
+    return (result.rowCount || 0) > 0;
+  }
+
+  // ==========================================
+  // Invitations
+  // ==========================================
+
+  static async createInvitation(
+    workspaceId: string,
+    email: string,
+    role: string,
+    invitedBy: string
+  ): Promise<WorkspaceInvitation> {
+    const token = randomUUID();
+    const result = await query(
+      `INSERT INTO workspace_invitations (workspace_id, invited_by, email, role, token)
+       VALUES ($1, $2, $3, $4, $5)
+       ON CONFLICT (workspace_id, email) DO UPDATE SET
+         role = EXCLUDED.role,
+         status = 'pending',
+         token = EXCLUDED.token,
+         invited_by = EXCLUDED.invited_by,
+         created_at = NOW(),
+         expires_at = NOW() + INTERVAL '7 days',
+         responded_at = NULL
+       RETURNING *`,
+      [workspaceId, invitedBy, email.toLowerCase(), role, token]
+    );
+    return result.rows[0];
+  }
+
+  static async getWorkspaceInvitations(workspaceId: string): Promise<WorkspaceInvitation[]> {
+    const result = await query(
+      `SELECT wi.*, u.name as inviter_name
+       FROM workspace_invitations wi
+       LEFT JOIN users u ON u.id = wi.invited_by
+       WHERE wi.workspace_id = $1 AND wi.status = 'pending' AND wi.expires_at > NOW()
+       ORDER BY wi.created_at DESC`,
+      [workspaceId]
+    );
+    return result.rows;
+  }
+
+  static async getUserPendingInvitations(email: string): Promise<WorkspaceInvitation[]> {
+    const result = await query(
+      `SELECT wi.*, w.name as workspace_name, w.icon as workspace_icon, u.name as inviter_name
+       FROM workspace_invitations wi
+       INNER JOIN workspaces w ON w.id = wi.workspace_id
+       LEFT JOIN users u ON u.id = wi.invited_by
+       WHERE wi.email = $1 AND wi.status = 'pending' AND wi.expires_at > NOW()
+       ORDER BY wi.created_at DESC`,
+      [email.toLowerCase()]
+    );
+    return result.rows;
+  }
+
+  static async getInvitationByToken(token: string): Promise<WorkspaceInvitation | null> {
+    const result = await query(
+      `SELECT wi.*, w.name as workspace_name, w.icon as workspace_icon, u.name as inviter_name
+       FROM workspace_invitations wi
+       INNER JOIN workspaces w ON w.id = wi.workspace_id
+       LEFT JOIN users u ON u.id = wi.invited_by
+       WHERE wi.token = $1`,
+      [token]
+    );
+    return result.rows[0] || null;
+  }
+
+  static async acceptInvitation(token: string, userId: string): Promise<WorkspaceInvitation | null> {
+    const invitation = await this.getInvitationByToken(token);
+    if (!invitation) return null;
+    if (invitation.status !== 'pending') return null;
+    if (new Date(invitation.expires_at) < new Date()) return null;
+
+    await query(
+      `UPDATE workspace_invitations SET status = 'accepted', responded_at = NOW() WHERE token = $1`,
+      [token]
+    );
+
+    await this.addToWorkspace(userId, invitation.workspace_id, invitation.role);
+
+    return invitation;
+  }
+
+  static async rejectInvitation(token: string): Promise<boolean> {
+    const result = await query(
+      `UPDATE workspace_invitations SET status = 'rejected', responded_at = NOW()
+       WHERE token = $1 AND status = 'pending'`,
+      [token]
+    );
+    return (result.rowCount || 0) > 0;
+  }
+
+  static async cancelInvitation(invitationId: string): Promise<boolean> {
+    const result = await query(
+      `DELETE FROM workspace_invitations WHERE id = $1 AND status = 'pending'`,
+      [invitationId]
+    );
+    return (result.rowCount || 0) > 0;
   }
 }

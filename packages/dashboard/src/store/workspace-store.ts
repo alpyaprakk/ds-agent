@@ -1,5 +1,5 @@
 import { create } from 'zustand';
-import { apiClient, Workspace, FigmaFile, Conflict } from '../lib/api-client';
+import { apiClient, Workspace, FigmaFile, Conflict, WorkspaceMember, WorkspaceInvitation } from '../lib/api-client';
 
 interface WorkspaceStore {
   // State
@@ -7,6 +7,9 @@ interface WorkspaceStore {
   currentWorkspace: Workspace | null;
   figmaFiles: FigmaFile[];
   conflicts: Conflict[];
+  members: WorkspaceMember[];
+  invitations: WorkspaceInvitation[];
+  myInvitations: WorkspaceInvitation[];
   loading: boolean;
   error: string | null;
 
@@ -24,6 +27,18 @@ interface WorkspaceStore {
   fetchConflicts: (workspaceId: string, status?: string) => Promise<void>;
   resolveConflict: (conflictId: string, data: any) => Promise<void>;
   dismissConflict: (conflictId: string, actor: string) => Promise<void>;
+
+  // Members & Invitations
+  fetchMembers: (workspaceId: string) => Promise<void>;
+  inviteMember: (workspaceId: string, email: string, role?: string) => Promise<void>;
+  removeMember: (workspaceId: string, userId: string) => Promise<void>;
+  updateMemberRole: (workspaceId: string, userId: string, role: string) => Promise<void>;
+  fetchInvitations: (workspaceId: string) => Promise<void>;
+  cancelInvitation: (workspaceId: string, invitationId: string) => Promise<void>;
+  fetchMyInvitations: () => Promise<void>;
+  acceptInvitation: (token: string) => Promise<void>;
+  rejectInvitation: (token: string) => Promise<void>;
+  leaveWorkspace: (workspaceId: string, userId: string) => Promise<void>;
 }
 
 export const useWorkspaceStore = create<WorkspaceStore>((set, get) => ({
@@ -32,10 +47,12 @@ export const useWorkspaceStore = create<WorkspaceStore>((set, get) => ({
   currentWorkspace: null,
   figmaFiles: [],
   conflicts: [],
+  members: [],
+  invitations: [],
+  myInvitations: [],
   loading: false,
   error: null,
 
-  // Fetch all workspaces
   fetchWorkspaces: async () => {
     set({ loading: true, error: null });
     try {
@@ -57,18 +74,14 @@ export const useWorkspaceStore = create<WorkspaceStore>((set, get) => ({
     }
   },
 
-  // Set current workspace
   setCurrentWorkspace: (workspace) => {
-    set({ currentWorkspace: workspace });
-
-    // Auto-fetch related data
+    set({ currentWorkspace: workspace, members: [], invitations: [] });
     if (workspace) {
       get().fetchFigmaFiles(workspace.id);
       get().fetchConflicts(workspace.id, 'active');
     }
   },
 
-  // Create workspace
   createWorkspace: async (data) => {
     set({ loading: true, error: null });
     try {
@@ -87,17 +100,13 @@ export const useWorkspaceStore = create<WorkspaceStore>((set, get) => ({
     }
   },
 
-  // Update workspace
   updateWorkspace: async (id, data) => {
     set({ loading: true, error: null });
     try {
       const { workspace } = await apiClient.updateWorkspace(id, data);
       set((state) => ({
-        workspaces: state.workspaces.map((w) =>
-          w.id === id ? workspace : w
-        ),
-        currentWorkspace:
-          state.currentWorkspace?.id === id ? workspace : state.currentWorkspace,
+        workspaces: state.workspaces.map((w) => (w.id === id ? workspace : w)),
+        currentWorkspace: state.currentWorkspace?.id === id ? workspace : state.currentWorkspace,
         loading: false,
       }));
     } catch (error) {
@@ -109,15 +118,13 @@ export const useWorkspaceStore = create<WorkspaceStore>((set, get) => ({
     }
   },
 
-  // Delete workspace
   deleteWorkspace: async (id) => {
     set({ loading: true, error: null });
     try {
       await apiClient.deleteWorkspace(id);
       set((state) => ({
         workspaces: state.workspaces.filter((w) => w.id !== id),
-        currentWorkspace:
-          state.currentWorkspace?.id === id ? null : state.currentWorkspace,
+        currentWorkspace: state.currentWorkspace?.id === id ? null : state.currentWorkspace,
         loading: false,
       }));
     } catch (error) {
@@ -129,7 +136,6 @@ export const useWorkspaceStore = create<WorkspaceStore>((set, get) => ({
     }
   },
 
-  // Fetch Figma files
   fetchFigmaFiles: async (workspaceId) => {
     try {
       const { files } = await apiClient.getFigmaFiles(workspaceId);
@@ -139,7 +145,6 @@ export const useWorkspaceStore = create<WorkspaceStore>((set, get) => ({
     }
   },
 
-  // Add Figma file (upsert - handles both new and existing)
   addFigmaFile: async (workspaceId, data) => {
     try {
       const { file } = await apiClient.addFigmaFile(workspaceId, data);
@@ -157,7 +162,6 @@ export const useWorkspaceStore = create<WorkspaceStore>((set, get) => ({
     }
   },
 
-  // Delete Figma file
   deleteFigmaFile: async (workspaceId, fileId) => {
     try {
       await apiClient.deleteFigmaFile(workspaceId, fileId);
@@ -170,7 +174,6 @@ export const useWorkspaceStore = create<WorkspaceStore>((set, get) => ({
     }
   },
 
-  // Fetch conflicts
   fetchConflicts: async (workspaceId, status) => {
     try {
       const { conflicts } = await apiClient.getConflicts(workspaceId, status);
@@ -180,7 +183,6 @@ export const useWorkspaceStore = create<WorkspaceStore>((set, get) => ({
     }
   },
 
-  // Resolve conflict
   resolveConflict: async (conflictId, data) => {
     try {
       await apiClient.resolveConflict(conflictId, data);
@@ -193,7 +195,6 @@ export const useWorkspaceStore = create<WorkspaceStore>((set, get) => ({
     }
   },
 
-  // Dismiss conflict
   dismissConflict: async (conflictId, actor) => {
     try {
       await apiClient.dismissConflict(conflictId, actor);
@@ -204,5 +205,79 @@ export const useWorkspaceStore = create<WorkspaceStore>((set, get) => ({
       console.error('Failed to dismiss conflict:', error);
       throw error;
     }
+  },
+
+  // ==========================================
+  // Members & Invitations
+  // ==========================================
+
+  fetchMembers: async (workspaceId) => {
+    try {
+      const { members } = await apiClient.getWorkspaceMembers(workspaceId);
+      set({ members });
+    } catch (error) {
+      console.error('Failed to fetch members:', error);
+    }
+  },
+
+  inviteMember: async (workspaceId, email, role = 'member') => {
+    await apiClient.inviteMember(workspaceId, email, role);
+    get().fetchInvitations(workspaceId);
+  },
+
+  removeMember: async (workspaceId, userId) => {
+    await apiClient.removeMember(workspaceId, userId);
+    get().fetchMembers(workspaceId);
+  },
+
+  updateMemberRole: async (workspaceId, userId, role) => {
+    await apiClient.updateMemberRole(workspaceId, userId, role);
+    get().fetchMembers(workspaceId);
+  },
+
+  fetchInvitations: async (workspaceId) => {
+    try {
+      const { invitations } = await apiClient.getWorkspaceInvitations(workspaceId);
+      set({ invitations });
+    } catch (error) {
+      console.error('Failed to fetch invitations:', error);
+    }
+  },
+
+  cancelInvitation: async (workspaceId, invitationId) => {
+    await apiClient.cancelInvitation(workspaceId, invitationId);
+    get().fetchInvitations(workspaceId);
+  },
+
+  fetchMyInvitations: async () => {
+    try {
+      const { invitations } = await apiClient.getMyInvitations();
+      set({ myInvitations: invitations });
+    } catch (error) {
+      console.error('Failed to fetch my invitations:', error);
+    }
+  },
+
+  acceptInvitation: async (token) => {
+    await apiClient.acceptInvitation(token);
+    set((state) => ({
+      myInvitations: state.myInvitations.filter((i) => i.token !== token),
+    }));
+    get().fetchWorkspaces();
+  },
+
+  rejectInvitation: async (token) => {
+    await apiClient.rejectInvitation(token);
+    set((state) => ({
+      myInvitations: state.myInvitations.filter((i) => i.token !== token),
+    }));
+  },
+
+  leaveWorkspace: async (workspaceId, userId) => {
+    await apiClient.removeMember(workspaceId, userId);
+    set((state) => ({
+      workspaces: state.workspaces.filter((w) => w.id !== workspaceId),
+      currentWorkspace: state.currentWorkspace?.id === workspaceId ? null : state.currentWorkspace,
+    }));
   },
 }));

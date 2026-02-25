@@ -10,6 +10,33 @@ export interface Workspace {
   total_components?: number;
   total_variables?: number;
   member_role?: string;
+  member_count?: number;
+}
+
+export interface WorkspaceMember {
+  id: string;
+  user_id: string;
+  workspace_id: string;
+  role: string;
+  created_at: string;
+  email: string;
+  name: string;
+  avatar?: string;
+}
+
+export interface WorkspaceInvitation {
+  id: string;
+  workspace_id: string;
+  invited_by: string;
+  email: string;
+  role: string;
+  status: string;
+  token: string;
+  created_at: string;
+  expires_at: string;
+  workspace_name?: string;
+  workspace_icon?: string;
+  inviter_name?: string;
 }
 
 export interface FigmaFile {
@@ -236,6 +263,62 @@ class ApiClient {
     return this.request(`/api/conflicts/${conflictId}/dismiss`, {
       method: 'POST',
       body: JSON.stringify({ actor }),
+    });
+  }
+
+  // Members
+  async getWorkspaceMembers(workspaceId: string): Promise<{ members: WorkspaceMember[] }> {
+    return this.request(`/api/workspaces/${workspaceId}/members`);
+  }
+
+  async inviteMember(
+    workspaceId: string,
+    email: string,
+    role: string = 'member'
+  ): Promise<{ invitation: WorkspaceInvitation }> {
+    return this.request(`/api/workspaces/${workspaceId}/members/invite`, {
+      method: 'POST',
+      body: JSON.stringify({ email, role }),
+    });
+  }
+
+  async getWorkspaceInvitations(workspaceId: string): Promise<{ invitations: WorkspaceInvitation[] }> {
+    return this.request(`/api/workspaces/${workspaceId}/members/invitations`);
+  }
+
+  async cancelInvitation(workspaceId: string, invitationId: string): Promise<{ success: boolean }> {
+    return this.request(`/api/workspaces/${workspaceId}/members/invitations/${invitationId}`, {
+      method: 'DELETE',
+    });
+  }
+
+  async updateMemberRole(workspaceId: string, userId: string, role: string): Promise<{ success: boolean }> {
+    return this.request(`/api/workspaces/${workspaceId}/members/${userId}/role`, {
+      method: 'PATCH',
+      body: JSON.stringify({ role }),
+    });
+  }
+
+  async removeMember(workspaceId: string, userId: string): Promise<{ success: boolean }> {
+    return this.request(`/api/workspaces/${workspaceId}/members/${userId}`, {
+      method: 'DELETE',
+    });
+  }
+
+  // Invitations (user-level)
+  async getMyInvitations(): Promise<{ invitations: WorkspaceInvitation[] }> {
+    return this.request('/api/auth/invitations');
+  }
+
+  async acceptInvitation(token: string): Promise<{ success: boolean; workspace_id: string; workspace_name: string }> {
+    return this.request(`/api/auth/invitations/${token}/accept`, {
+      method: 'POST',
+    });
+  }
+
+  async rejectInvitation(token: string): Promise<{ success: boolean }> {
+    return this.request(`/api/auth/invitations/${token}/reject`, {
+      method: 'POST',
     });
   }
 }

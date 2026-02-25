@@ -9,6 +9,10 @@ const figmaFileRepo = new FigmaFileRepository();
 // Apply auth middleware to all workspace routes
 router.use(authMiddleware);
 
+// ==========================================
+// Workspace CRUD
+// ==========================================
+
 // GET /api/workspaces - List user's workspaces
 router.get('/', async (req: AuthRequest, res) => {
   try {
@@ -42,7 +46,6 @@ router.get('/:id', async (req: AuthRequest, res) => {
 router.post('/', async (req: AuthRequest, res) => {
   try {
     const workspace = await workspaceRepo.create(req.body);
-    // Add creator as owner
     await UserRepository.addToWorkspace(req.user!.id, workspace.id, 'owner');
     return res.status(201).json({ workspace });
   } catch (error) {
@@ -51,9 +54,13 @@ router.post('/', async (req: AuthRequest, res) => {
   }
 });
 
-// PATCH /api/workspaces/:id - Update workspace
-router.patch('/:id', async (req, res) => {
+// PATCH /api/workspaces/:id - Update workspace (owner/admin only)
+router.patch('/:id', async (req: AuthRequest, res) => {
   try {
+    const role = await UserRepository.getMemberRole(req.user!.id, req.params.id);
+    if (!role || !['owner', 'admin'].includes(role)) {
+      return res.status(403).json({ error: 'Only owners and admins can update workspace settings' });
+    }
     const workspace = await workspaceRepo.update(req.params.id, req.body);
     if (!workspace) {
       return res.status(404).json({ error: 'Workspace not found' });
@@ -65,9 +72,13 @@ router.patch('/:id', async (req, res) => {
   }
 });
 
-// DELETE /api/workspaces/:id - Delete workspace
-router.delete('/:id', async (req, res) => {
+// DELETE /api/workspaces/:id - Delete workspace (owner only)
+router.delete('/:id', async (req: AuthRequest, res) => {
   try {
+    const role = await UserRepository.getMemberRole(req.user!.id, req.params.id);
+    if (role !== 'owner') {
+      return res.status(403).json({ error: 'Only the workspace owner can delete it' });
+    }
     const deleted = await workspaceRepo.delete(req.params.id);
     if (!deleted) {
       return res.status(404).json({ error: 'Workspace not found' });
@@ -80,8 +91,11 @@ router.delete('/:id', async (req, res) => {
 });
 
 // GET /api/workspaces/:id/health - Get workspace health
-router.get('/:id/health', async (req, res) => {
+router.get('/:id/health', async (req: AuthRequest, res) => {
   try {
+    const isMember = await UserRepository.isWorkspaceMember(req.user!.id, req.params.id);
+    if (!isMember) return res.status(403).json({ error: 'Access denied' });
+
     const health = await workspaceRepo.getHealth(req.params.id);
     if (!health) {
       return res.status(404).json({ error: 'Workspace not found' });
@@ -93,9 +107,16 @@ router.get('/:id/health', async (req, res) => {
   }
 });
 
-// GET /api/workspaces/:id/files - List workspace Figma files
-router.get('/:id/files', async (req, res) => {
+// ==========================================
+// Figma Files
+// ==========================================
+
+// GET /api/workspaces/:id/files
+router.get('/:id/files', async (req: AuthRequest, res) => {
   try {
+    const isMember = await UserRepository.isWorkspaceMember(req.user!.id, req.params.id);
+    if (!isMember) return res.status(403).json({ error: 'Access denied' });
+
     const files = await figmaFileRepo.findAll(req.params.id);
     return res.json({ files });
   } catch (error) {
@@ -104,23 +125,30 @@ router.get('/:id/files', async (req, res) => {
   }
 });
 
-// POST /api/workspaces/:id/files - Add Figma file to workspace (upsert)
-router.post('/:id/files', async (req, res) => {
+// POST /api/workspaces/:id/files (upsert)
+router.post('/:id/files', async (req: AuthRequest, res) => {
   try {
+    const isMember = await UserRepository.isWorkspaceMember(req.user!.id, req.params.id);
+    if (!isMember) return res.status(403).json({ error: 'Access denied' });
+
     const file = await figmaFileRepo.create({
       ...req.body,
       workspace_id: req.params.id
     });
     return res.status(201).json({ file });
-  } catch (error: any) {
+  } catch (error) {
     console.error('Error adding Figma file:', error);
     return res.status(500).json({ error: 'Failed to add Figma file' });
   }
 });
 
-// DELETE /api/workspaces/:workspaceId/files/:fileId - Remove Figma file
-router.delete('/:workspaceId/files/:fileId', async (req, res) => {
+// DELETE /api/workspaces/:workspaceId/files/:fileId
+router.delete('/:workspaceId/files/:fileId', async (req: AuthRequest, res) => {
   try {
+    const role = await UserRepository.getMemberRole(req.user!.id, req.params.workspaceId);
+    if (!role || !['owner', 'admin'].includes(role)) {
+      return res.status(403).json({ error: 'Only owners and admins can remove files' });
+    }
     const deleted = await figmaFileRepo.delete(req.params.fileId);
     if (!deleted) {
       return res.status(404).json({ error: 'File not found' });
@@ -132,9 +160,16 @@ router.delete('/:workspaceId/files/:fileId', async (req, res) => {
   }
 });
 
-// GET /api/workspaces/:id/settings - Get workspace settings
-router.get('/:id/settings', async (req, res) => {
+// ==========================================
+// Settings
+// ==========================================
+
+// GET /api/workspaces/:id/settings
+router.get('/:id/settings', async (req: AuthRequest, res) => {
   try {
+    const isMember = await UserRepository.isWorkspaceMember(req.user!.id, req.params.id);
+    if (!isMember) return res.status(403).json({ error: 'Access denied' });
+
     const workspace = await workspaceRepo.findById(req.params.id);
     if (!workspace) {
       return res.status(404).json({ error: 'Workspace not found' });
@@ -146,28 +181,167 @@ router.get('/:id/settings', async (req, res) => {
   }
 });
 
-// PUT /api/workspaces/:id/settings - Update workspace settings
-router.put('/:id/settings', async (req, res) => {
+// PUT /api/workspaces/:id/settings
+router.put('/:id/settings', async (req: AuthRequest, res) => {
   try {
+    const role = await UserRepository.getMemberRole(req.user!.id, req.params.id);
+    if (!role || !['owner', 'admin'].includes(role)) {
+      return res.status(403).json({ error: 'Only owners and admins can update settings' });
+    }
+
     const workspace = await workspaceRepo.findById(req.params.id);
     if (!workspace) {
       return res.status(404).json({ error: 'Workspace not found' });
     }
 
-    // Merge new settings with existing settings
-    const updatedSettings = {
-      ...(workspace.settings || {}),
-      ...req.body
-    };
-
-    const updated = await workspaceRepo.update(req.params.id, {
-      settings: updatedSettings
-    });
-
+    const updatedSettings = { ...(workspace.settings || {}), ...req.body };
+    const updated = await workspaceRepo.update(req.params.id, { settings: updatedSettings });
     return res.json(updated?.settings || {});
   } catch (error) {
     console.error('Error updating workspace settings:', error);
     return res.status(500).json({ error: 'Failed to update workspace settings' });
+  }
+});
+
+// ==========================================
+// Members
+// ==========================================
+
+// GET /api/workspaces/:id/members
+router.get('/:id/members', async (req: AuthRequest, res) => {
+  try {
+    const isMember = await UserRepository.isWorkspaceMember(req.user!.id, req.params.id);
+    if (!isMember) return res.status(403).json({ error: 'Access denied' });
+
+    const members = await UserRepository.getWorkspaceMembers(req.params.id);
+    return res.json({ members });
+  } catch (error) {
+    console.error('Error fetching members:', error);
+    return res.status(500).json({ error: 'Failed to fetch members' });
+  }
+});
+
+// POST /api/workspaces/:id/members/invite
+router.post('/:id/members/invite', async (req: AuthRequest, res) => {
+  try {
+    const role = await UserRepository.getMemberRole(req.user!.id, req.params.id);
+    if (!role || !['owner', 'admin'].includes(role)) {
+      return res.status(403).json({ error: 'Only owners and admins can invite members' });
+    }
+
+    const { email, role: inviteRole } = req.body;
+    if (!email) {
+      return res.status(400).json({ error: 'Email is required' });
+    }
+
+    const validRoles = ['admin', 'member'];
+    const targetRole = validRoles.includes(inviteRole) ? inviteRole : 'member';
+
+    if (targetRole === 'admin' && role !== 'owner') {
+      return res.status(403).json({ error: 'Only owners can invite admins' });
+    }
+
+    // Check if already a member
+    const existingUser = await UserRepository.findByEmail(email.toLowerCase());
+    if (existingUser) {
+      const alreadyMember = await UserRepository.isWorkspaceMember(existingUser.id, req.params.id);
+      if (alreadyMember) {
+        return res.status(409).json({ error: 'User is already a workspace member' });
+      }
+    }
+
+    const invitation = await UserRepository.createInvitation(
+      req.params.id, email, targetRole, req.user!.id
+    );
+    return res.status(201).json({ invitation });
+  } catch (error) {
+    console.error('Error inviting member:', error);
+    return res.status(500).json({ error: 'Failed to send invitation' });
+  }
+});
+
+// GET /api/workspaces/:id/members/invitations
+router.get('/:id/members/invitations', async (req: AuthRequest, res) => {
+  try {
+    const role = await UserRepository.getMemberRole(req.user!.id, req.params.id);
+    if (!role || !['owner', 'admin'].includes(role)) {
+      return res.status(403).json({ error: 'Access denied' });
+    }
+
+    const invitations = await UserRepository.getWorkspaceInvitations(req.params.id);
+    return res.json({ invitations });
+  } catch (error) {
+    console.error('Error fetching invitations:', error);
+    return res.status(500).json({ error: 'Failed to fetch invitations' });
+  }
+});
+
+// DELETE /api/workspaces/:id/members/invitations/:invitationId
+router.delete('/:id/members/invitations/:invitationId', async (req: AuthRequest, res) => {
+  try {
+    const role = await UserRepository.getMemberRole(req.user!.id, req.params.id);
+    if (!role || !['owner', 'admin'].includes(role)) {
+      return res.status(403).json({ error: 'Access denied' });
+    }
+
+    const cancelled = await UserRepository.cancelInvitation(req.params.invitationId);
+    if (!cancelled) {
+      return res.status(404).json({ error: 'Invitation not found or already responded' });
+    }
+    return res.json({ success: true });
+  } catch (error) {
+    console.error('Error cancelling invitation:', error);
+    return res.status(500).json({ error: 'Failed to cancel invitation' });
+  }
+});
+
+// PATCH /api/workspaces/:id/members/:userId/role
+router.patch('/:id/members/:userId/role', async (req: AuthRequest, res) => {
+  try {
+    const myRole = await UserRepository.getMemberRole(req.user!.id, req.params.id);
+    if (myRole !== 'owner') {
+      return res.status(403).json({ error: 'Only the workspace owner can change roles' });
+    }
+
+    if (req.params.userId === req.user!.id) {
+      return res.status(400).json({ error: 'Cannot change your own role' });
+    }
+
+    const { role: newRole } = req.body;
+    if (!['admin', 'member'].includes(newRole)) {
+      return res.status(400).json({ error: 'Invalid role. Must be admin or member' });
+    }
+
+    await UserRepository.updateMemberRole(req.params.userId, req.params.id, newRole);
+    return res.json({ success: true });
+  } catch (error) {
+    console.error('Error updating member role:', error);
+    return res.status(500).json({ error: 'Failed to update member role' });
+  }
+});
+
+// DELETE /api/workspaces/:id/members/:userId
+router.delete('/:id/members/:userId', async (req: AuthRequest, res) => {
+  try {
+    const myRole = await UserRepository.getMemberRole(req.user!.id, req.params.id);
+    const isRemovingSelf = req.params.userId === req.user!.id;
+
+    if (!isRemovingSelf && myRole !== 'owner') {
+      return res.status(403).json({ error: 'Only the owner can remove members' });
+    }
+
+    if (isRemovingSelf && myRole === 'owner') {
+      return res.status(400).json({ error: 'Workspace owner cannot leave. Transfer ownership or delete the workspace.' });
+    }
+
+    const removed = await UserRepository.removeFromWorkspace(req.params.userId, req.params.id);
+    if (!removed) {
+      return res.status(404).json({ error: 'Member not found' });
+    }
+    return res.json({ success: true });
+  } catch (error) {
+    console.error('Error removing member:', error);
+    return res.status(500).json({ error: 'Failed to remove member' });
   }
 });
 
