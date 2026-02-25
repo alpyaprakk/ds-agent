@@ -36,6 +36,7 @@ services:
         condition: service_healthy
     volumes:
       - ./.ds-agent:/app/.ds-agent:ro
+      - uploads_data:/app/uploads
     ports:
       - "3000:3000"
     healthcheck:
@@ -65,6 +66,8 @@ services:
 
 volumes:
   postgres_data:
+    driver: local
+  uploads_data:
     driver: local
 
 networks:
