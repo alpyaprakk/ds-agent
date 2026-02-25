@@ -29,7 +29,7 @@ const io = new SocketIOServer(httpServer, {
   pingTimeout: 60000,
   pingInterval: 25000,
   // Increase max message size for large design system syncs (default: 1MB)
-  maxHttpBufferSize: 10e6 // 10MB - allows syncing 500+ variables and components
+  maxHttpBufferSize: 50e6 // 50MB - supports enterprise design systems with 1000+ variables and components
 });
 
 // Add middleware to Socket.IO engine to manually set CORS headers
@@ -63,7 +63,7 @@ app.use((req, res, next) => {
   next();
 });
 
-app.use(express.json());
+app.use(express.json({ limit: '50mb' })); // Support large design system payloads
 
 // Log Socket.IO requests for debugging
 app.use((req, _res, next) => {
