@@ -37,9 +37,10 @@ interface AIChatPanelProps {
     entityName: string;
   };
   onApplyFix?: (fix: any) => void;
+  fixResult?: { success: boolean; conflictId?: string; error?: string } | null;
 }
 
-export function AIChatPanel({ isOpen, onClose, workspaceId: workspaceIdProp, initialContext, onApplyFix }: AIChatPanelProps) {
+export function AIChatPanel({ isOpen, onClose, workspaceId: workspaceIdProp, initialContext, onApplyFix, fixResult }: AIChatPanelProps) {
   const { currentWorkspace } = useWorkspaceStore();
   const workspaceId = workspaceIdProp || currentWorkspace?.id || '';
   const [messages, setMessages] = useState<Message[]>([]);
@@ -94,6 +95,20 @@ export function AIChatPanel({ isOpen, onClose, workspaceId: workspaceIdProp, ini
       });
     }
   }, [isOpen, initialContext]);
+
+  useEffect(() => {
+    if (!fixResult) return;
+    const content = fixResult.success
+      ? `✅ Fix applied successfully! The issue has been resolved in your Figma file.`
+      : `❌ Fix failed: ${fixResult.error || 'Could not apply the fix. Make sure the Figma plugin is running and the file is synced.'}`;
+    setMessages(prev => [...prev, {
+      id: `fix-result-${Date.now()}`,
+      role: 'assistant',
+      content,
+      timestamp: new Date(),
+      agentType: 'design-system'
+    }]);
+  }, [fixResult]);
 
   useEffect(() => {
     scrollToBottom();

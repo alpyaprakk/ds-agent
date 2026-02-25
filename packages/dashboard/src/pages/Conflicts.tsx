@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useWorkspaceStore } from '../store/workspace-store';
 import { HugeiconsIcon } from '@hugeicons/react';
 import {
@@ -61,6 +61,7 @@ export function Conflicts() {
   const [selectedCategory, setSelectedCategory] = useState<string | null>(null);
   const [chatOpen, setChatOpen] = useState(false);
   const [chatContext, setChatContext] = useState<any>(null);
+  const [chatFixResult, setChatFixResult] = useState<{ success: boolean; conflictId?: string; error?: string } | null>(null);
   const [dismissingId, setDismissingId] = useState<string | null>(null);
   const [autoFixingId, setAutoFixingId] = useState<string | null>(null);
   const [autoFixingAll, setAutoFixingAll] = useState(false);
@@ -137,19 +138,33 @@ export function Conflicts() {
   };
 
   const handleApplyFix = (fix: any) => {
+    setChatFixResult(null);
     wsClient.emit('apply-fix', {
       conflictId: fix.conflictId,
       entityId: fix.entityId,
       action: fix.action,
       suggestion: fix.suggestion
     });
-
-    toast.info('Fix request sent to plugin', {
-      description: 'Please make sure the Figma plugin is running',
-    });
-
-    setChatOpen(false);
   };
+
+  useEffect(() => {
+    const onSuccess = (data: any) => {
+      if (chatOpen) {
+        setChatFixResult({ success: true, conflictId: data.conflictId });
+      }
+    };
+    const onError = (data: any) => {
+      if (chatOpen) {
+        setChatFixResult({ success: false, conflictId: data.conflictId, error: data.error });
+      }
+    };
+    wsClient.on('fix-success', onSuccess);
+    wsClient.on('fix-error', onError);
+    return () => {
+      wsClient.off('fix-success', onSuccess);
+      wsClient.off('fix-error', onError);
+    };
+  }, [chatOpen]);
 
   if (!currentWorkspace) {
     return (
@@ -429,9 +444,10 @@ export function Conflicts() {
       {/* AI Chat Panel */}
       <AIChatPanel
         isOpen={chatOpen}
-        onClose={() => setChatOpen(false)}
+        onClose={() => { setChatOpen(false); setChatFixResult(null); }}
         initialContext={chatContext}
         onApplyFix={handleApplyFix}
+        fixResult={chatFixResult}
       />
     </div>
   );
