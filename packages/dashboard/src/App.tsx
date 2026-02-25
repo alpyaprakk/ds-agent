@@ -75,6 +75,40 @@ function App() {
       }
     });
 
+    wsClient.on('analysis_started', (data) => {
+      console.log('AI analysis started:', data);
+      toast.info('AI Analysis in progress', {
+        description: 'Analyzing design system for issues and conflicts...',
+        duration: 5000,
+      });
+    });
+
+    wsClient.on('analysis_complete', (data) => {
+      console.log('AI analysis complete:', data);
+      const { summary, score } = data.report;
+
+      toast.success('AI Analysis complete', {
+        description: `Found ${summary.totalIssues} issues. Health score: ${score}/100`,
+        duration: 10000,
+      });
+
+      // Refresh conflicts
+      if (useWorkspaceStore.getState().currentWorkspace) {
+        useWorkspaceStore.getState().fetchConflicts(
+          useWorkspaceStore.getState().currentWorkspace!.id,
+          'active'
+        );
+      }
+    });
+
+    wsClient.on('analysis_failed', (data) => {
+      console.error('AI analysis failed:', data);
+      toast.error('AI Analysis failed', {
+        description: data.error || 'Unknown error',
+        duration: 5000,
+      });
+    });
+
     return () => {
       wsClient.disconnect();
     };

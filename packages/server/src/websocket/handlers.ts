@@ -2,6 +2,7 @@ import { Server as SocketIOServer, Socket } from 'socket.io';
 import { WorkspaceRepository } from '../db/repositories';
 import pool from '../db/connection';
 import { randomUUID } from 'crypto';
+import { AIAnalyzer, DesignSystemData } from '../services/ai-analyzer';
 
 const workspaceRepo = new WorkspaceRepository();
 
@@ -178,6 +179,10 @@ export function setupWebSocketHandlers(io: SocketIOServer) {
           timestamp: new Date().toISOString()
         });
 
+        // Trigger AI analysis (async, don't block sync response)
+        analyzeDesignSystemAsync(io, figmaFile.workspace_id, figmaFile.id, data.data)
+          .catch(err => console.error('❌ AI analysis failed:', err));
+
       } catch (error) {
         console.error('❌ Sync error:', error);
         socket.emit('sync-error', {
@@ -302,4 +307,104 @@ export function broadcastSyncStatus(
     error,
     timestamp: new Date().toISOString()
   });
+}
+
+// AI Analysis (async, triggered after sync)
+async function analyzeDesignSystemAsync(
+  io: SocketIOServer,
+  workspaceId: string,
+  fileId: string,
+  designSystemData: DesignSystemData
+) {
+  console.log('🤖 Starting AI analysis...');
+
+  try {
+    // Get workspace settings for AI configuration
+    const workspace = await workspaceRepo.findById(workspaceId);
+    if (!workspace) {
+      console.log('⚠️ Workspace not found, skipping AI analysis');
+      return;
+    }
+
+    const aiSettings = workspace.settings?.ai;
+    if (!aiSettings || (!aiSettings.anthropicApiKey && !aiSettings.openaiApiKey)) {
+      console.log('⚠️ AI not configured, skipping analysis');
+      return;
+    }
+
+    // Initialize AI analyzer
+    const analyzer = new AIAnalyzer({
+      provider: aiSettings.provider || 'anthropic',
+      anthropicApiKey: aiSettings.anthropicApiKey,
+      openaiApiKey: aiSettings.openaiApiKey
+    });
+
+    // Broadcast analysis started
+    io.to(workspaceId).emit('analysis_started', {
+      fileId,
+      timestamp: new Date().toISOString()
+    });
+
+    // Run analysis
+    const report = await analyzer.analyzeDesignSystem(designSystemData);
+
+    console.log(`✅ AI Analysis complete: ${report.summary.totalIssues} issues found, score: ${report.score}`);
+
+    // Save issues as conflicts in database
+    for (const issue of report.issues) {
+      await pool.query(
+        `INSERT INTO conflicts (
+          id, workspace_id, conflict_type, severity, status,
+          entity_type, entity_id, entity_name,
+          description, resolution_method, created_at
+        ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, NOW())
+        ON CONFLICT DO NOTHING`,
+        [
+          randomUUID(),
+          workspaceId,
+          issue.category,
+          issue.severity,
+          'active',
+          issue.entityType,
+          issue.entityId,
+          issue.entityName,
+          `${issue.title}\n\n${issue.description}\n\nSuggestion: ${issue.suggestion || 'N/A'}`,
+          issue.autoFixable ? 'auto' : 'manual'
+        ]
+      );
+    }
+
+    // Update workspace health score
+    await pool.query(
+      `UPDATE workspaces SET
+        health_score = $1,
+        last_audit = NOW(),
+        updated_at = NOW()
+       WHERE id = $2`,
+      [report.score, workspaceId]
+    );
+
+    // Broadcast analysis complete with results
+    io.to(workspaceId).emit('analysis_complete', {
+      fileId,
+      report: {
+        summary: report.summary,
+        score: report.score,
+        recommendations: report.recommendations
+      },
+      timestamp: new Date().toISOString()
+    });
+
+    console.log(`📊 Analysis broadcast to workspace ${workspaceId}`);
+
+  } catch (error) {
+    console.error('❌ AI analysis error:', error);
+
+    // Broadcast analysis failed
+    io.to(workspaceId).emit('analysis_failed', {
+      fileId,
+      error: error instanceof Error ? error.message : 'Unknown error',
+      timestamp: new Date().toISOString()
+    });
+  }
 }
