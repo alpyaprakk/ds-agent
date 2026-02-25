@@ -6,6 +6,13 @@ import { AIAnalyzer, DesignSystemData } from '../services/ai-analyzer';
 
 const workspaceRepo = new WorkspaceRepository();
 
+// Store IO instance for access from other modules
+let ioInstance: SocketIOServer | null = null;
+
+export function getIO(): SocketIOServer | null {
+  return ioInstance;
+}
+
 // Track connected plugins
 const connectedPlugins = new Map<string, {
   socketId: string;
@@ -16,6 +23,8 @@ const connectedPlugins = new Map<string, {
 }>();
 
 export function setupWebSocketHandlers(io: SocketIOServer) {
+  ioInstance = io;
+
   io.on('connection', (socket: Socket) => {
     console.log(`Client connected: ${socket.id}`);
     let pluginId: string | null = null;
@@ -86,16 +95,44 @@ export function setupWebSocketHandlers(io: SocketIOServer) {
         console.log(`📦 Variables: ${variables.length}, Collections: ${collections.length}, Components: ${components.length}`);
 
         // Find Figma file in database by key
-        const figmaFileResult = await pool.query(
+        let figmaFileResult = await pool.query(
           'SELECT * FROM figma_files WHERE figma_key = $1 LIMIT 1',
           [file.key]
         );
 
+        // Auto-register: if file not found, create it in the first available workspace
         if (figmaFileResult.rows.length === 0) {
-          socket.emit('sync-error', {
-            error: 'Figma file not found in database. Please add it via dashboard first.'
-          });
-          return;
+          console.log(`⚠️ Figma file not found in DB. Auto-registering: ${file.name} (${file.key})`);
+
+          // Find first workspace to associate with
+          const workspaceResult = await pool.query(
+            'SELECT id FROM workspaces ORDER BY created_at ASC LIMIT 1'
+          );
+
+          if (workspaceResult.rows.length === 0) {
+            socket.emit('sync-error', {
+              error: 'No workspace found. Please create a workspace in the dashboard first.'
+            });
+            return;
+          }
+
+          const workspaceId = workspaceResult.rows[0].id;
+
+          // Create the Figma file record
+          figmaFileResult = await pool.query(
+            `INSERT INTO figma_files (workspace_id, figma_key, name, url, role, type, sync_status)
+             VALUES ($1, $2, $3, $4, 'primary', 'design_system', 'syncing')
+             ON CONFLICT (figma_key) DO UPDATE SET name = EXCLUDED.name
+             RETURNING *`,
+            [
+              workspaceId,
+              file.key,
+              file.name,
+              `https://www.figma.com/design/${file.key}`
+            ]
+          );
+
+          console.log(`✅ Auto-registered Figma file: ${file.name} in workspace ${workspaceId}`);
         }
 
         const figmaFile = figmaFileResult.rows[0];
@@ -345,8 +382,8 @@ export function setupWebSocketHandlers(io: SocketIOServer) {
 
         // Broadcast plugin status
         io.emit('plugin-status', {
-          connected: false,
-          plugin: plugin.plugin,
+          connected: connectedPlugins.size > 0,
+          plugin: connectedPlugins.size > 0 ? Array.from(connectedPlugins.values())[0].plugin : plugin.plugin,
           count: connectedPlugins.size
         });
       }
@@ -361,6 +398,7 @@ export function getConnectedPluginsStatus() {
   return {
     count: connectedPlugins.size,
     plugins: Array.from(connectedPlugins.values()).map(p => ({
+      socketId: p.socketId,
       plugin: p.plugin,
       connectedAt: p.connectedAt,
       lastHeartbeat: p.lastHeartbeat,

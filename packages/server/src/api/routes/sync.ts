@@ -4,6 +4,7 @@ import { FigmaFileRepository } from '../../db/repositories';
 import { SyncOrchestrator } from '../../sync/orchestrator';
 import { figmaApi } from '../../services/figma-api';
 import pool from '../../db/connection';
+import { getConnectedPluginsStatus, getIO } from '../../websocket/handlers';
 
 const router = Router();
 const figmaFileRepo = new FigmaFileRepository();
@@ -42,12 +43,45 @@ router.post('/files/:fileId', async (req, res) => {
       return res.status(404).json({ error: 'File not found' });
     }
 
+    // Check if plugin is connected - prefer plugin-based sync
+    const pluginStatus = getConnectedPluginsStatus();
+
+    if (pluginStatus.count > 0) {
+      // Trigger sync via connected plugin (no Figma API token needed)
+      console.log(`🔄 Triggering sync via plugin for: ${file.name} (${file.figma_key})`);
+      await figmaFileRepo.updateSyncStatus(file.id, 'syncing');
+
+      // Send sync request to the first connected plugin
+      const ioInstance = getIO();
+      const pluginSocketId = pluginStatus.plugins[0]?.socketId;
+      if (ioInstance && pluginSocketId) {
+        ioInstance.to(pluginSocketId).emit('sync-request');
+      } else if (ioInstance) {
+        // Broadcast to all - fallback
+        ioInstance.emit('sync-request');
+      }
+
+      return res.json({
+        success: true,
+        message: 'Sync triggered via Figma plugin. Data will be synced momentarily.',
+        method: 'plugin'
+      });
+    }
+
+    // Fallback: Try Figma REST API (requires FIGMA_ACCESS_TOKEN)
+    if (!process.env.FIGMA_ACCESS_TOKEN) {
+      return res.status(400).json({
+        error: 'No Figma plugin connected and FIGMA_ACCESS_TOKEN not configured.',
+        message: 'Please open the Figma plugin and connect it, or set FIGMA_ACCESS_TOKEN in server environment.'
+      });
+    }
+
     // Update sync status to syncing
     await figmaFileRepo.updateSyncStatus(file.id, 'syncing');
 
     try {
       // Fetch data from Figma API
-      console.log(`🔄 Syncing Figma file: ${file.name} (${file.figma_key})`);
+      console.log(`🔄 Syncing Figma file via API: ${file.name} (${file.figma_key})`);
       const syncData = await figmaApi.syncFile(file.figma_key);
 
       console.log(`✅ Fetched ${syncData.variables.length} variables, ${syncData.collections.length} collections, ${syncData.components.length} components`);
@@ -128,6 +162,7 @@ router.post('/files/:fileId', async (req, res) => {
       return res.json({
         success: true,
         message: `Synced ${syncData.variables.length} variables and ${syncData.components.length} components`,
+        method: 'api',
         data: {
           variables: syncData.variables.length,
           collections: syncData.collections.length,
