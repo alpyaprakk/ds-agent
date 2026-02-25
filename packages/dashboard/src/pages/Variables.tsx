@@ -24,15 +24,20 @@ interface GroupNode {
   children: Map<string, GroupNode>;
   variables: DesignVariable[];
   count: number;
+  minSortOrder: number; // Track minimum sort_order for group ordering
 }
 
 function buildGroupTree(variables: DesignVariable[]): GroupNode {
-  const root: GroupNode = { name: '', path: '', children: new Map(), variables: [], count: 0 };
+  const root: GroupNode = { name: '', path: '', children: new Map(), variables: [], count: 0, minSortOrder: Infinity };
 
-  for (const v of variables) {
+  // Use array index as sort_order fallback (API returns variables sorted by sort_order ASC, name ASC)
+  for (let vi = 0; vi < variables.length; vi++) {
+    const v = variables[vi];
+    const effectiveOrder = (v.sort_order && v.sort_order > 0) ? v.sort_order : vi;
     const parts = v.name.split('/');
     if (parts.length <= 1) {
       root.variables.push(v);
+      root.minSortOrder = Math.min(root.minSortOrder, effectiveOrder);
       continue;
     }
 
@@ -48,23 +53,35 @@ function buildGroupTree(variables: DesignVariable[]): GroupNode {
           children: new Map(),
           variables: [],
           count: 0,
+          minSortOrder: Infinity,
         });
       }
-      current = current.children.get(segment)!;
+      const child = current.children.get(segment)!;
+      child.minSortOrder = Math.min(child.minSortOrder, effectiveOrder);
+      current = child;
     }
     current.variables.push(v);
+    current.minSortOrder = Math.min(current.minSortOrder, effectiveOrder);
   }
 
-  // Compute counts bottom-up
-  function computeCount(node: GroupNode): number {
+  // Compute counts and sort children bottom-up
+  function computeStats(node: GroupNode): number {
     let count = node.variables.length;
+
     for (const child of node.children.values()) {
-      count += computeCount(child);
+      count += computeStats(child);
     }
+
     node.count = count;
+
+    // Sort children by minSortOrder to preserve Figma ordering
+    const sortedEntries = Array.from(node.children.entries())
+      .sort(([, a], [, b]) => a.minSortOrder - b.minSortOrder);
+    node.children = new Map(sortedEntries);
+
     return count;
   }
-  computeCount(root);
+  computeStats(root);
 
   return root;
 }

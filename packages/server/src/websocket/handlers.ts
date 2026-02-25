@@ -247,6 +247,19 @@ export function setupWebSocketHandlers(io: SocketIOServer) {
         if (variables.length > 0) {
           console.log(`🔑 Sample variable id: "${variables[0].id}", name: "${variables[0].name}"`);
           console.log(`🗺️ Sort order map size: ${variableSortOrderMap.size}, has sample: ${variableSortOrderMap.has(variables[0].id)}`);
+          // Log first 5 map entries and first 5 variable IDs to diagnose ID format mismatch
+          const mapEntries = Array.from(variableSortOrderMap.entries()).slice(0, 5);
+          console.log(`🗺️ First 5 map keys:`, mapEntries.map(([k, v]) => `${k} → ${v}`));
+          const varIds = variables.slice(0, 5).map((v: any) => v.id);
+          console.log(`🔑 First 5 variable IDs:`, varIds);
+          // Count how many variables got a non-zero sort_order
+          let matchCount = 0;
+          for (const v of variables) {
+            if (variableSortOrderMap.has(v.id) || variableSortOrderMap.has(`VariableID:${v.id}`)) {
+              matchCount++;
+            }
+          }
+          console.log(`✅ Sort order matches: ${matchCount}/${variables.length}`);
         }
 
         // Start transaction for batch inserts

@@ -93,13 +93,13 @@ function NotificationItem({
 
   return (
     <div
-      className={`group flex items-start gap-3 px-4 py-3 border-b last:border-b-0 transition-colors cursor-pointer hover:bg-accent/50 ${
-        !notification.read ? 'bg-accent/30' : ''
+      className={`group flex items-start gap-3 px-4 py-3 border-b last:border-b-0 transition-colors cursor-pointer hover:bg-muted/60 dark:hover:bg-white/8 ${
+        !notification.read ? 'bg-muted/40 dark:bg-white/6' : ''
       }`}
       onClick={() => onClick(notification)}
     >
       <div className={`mt-0.5 flex-shrink-0 rounded-full p-1.5 ${
-        !notification.read ? 'bg-primary/10 text-primary' : 'bg-muted text-muted-foreground'
+        !notification.read ? 'bg-primary/10 text-primary dark:bg-white/15 dark:text-white' : 'bg-muted text-muted-foreground dark:bg-white/8 dark:text-white/50'
       }`}>
         <HugeiconsIcon icon={Icon} size={14} />
       </div>
@@ -130,7 +130,7 @@ function NotificationItem({
           e.stopPropagation();
           onDelete(notification.id);
         }}
-        className="flex-shrink-0 mt-0.5 p-1 rounded-md text-muted-foreground hover:text-foreground hover:bg-accent opacity-0 group-hover:opacity-100 transition-opacity"
+        className="flex-shrink-0 mt-0.5 p-1 rounded-md text-muted-foreground hover:text-foreground hover:bg-muted dark:hover:bg-white/10 opacity-0 group-hover:opacity-100 transition-opacity"
       >
         <HugeiconsIcon icon={Cancel01Icon} size={12} />
       </button>
@@ -246,7 +246,7 @@ export function NotificationPanel() {
             <div>
               {groupedNotifications.map((group) => (
                 <div key={group.label}>
-                  <div className="px-4 py-1.5 bg-muted/50 border-b">
+                  <div className="px-4 py-1.5 bg-muted/50 dark:bg-white/4 border-b">
                     <p className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider">
                       {group.label}
                     </p>
