@@ -9,7 +9,6 @@ import apiRoutes from './api/routes';
 import { setupWebSocketHandlers } from './websocket/handlers';
 import pool from './db/connection';
 import { NotificationRepository } from './db/repositories/notification.repository';
-import path from 'path';
 
 // Load environment variables
 dotenv.config();
@@ -69,9 +68,6 @@ app.use((req, res, next) => {
 });
 
 app.use(express.json({ limit: '50mb' })); // Support large design system payloads
-
-// Serve uploaded files (avatars etc.)
-app.use('/uploads', express.static(path.join(__dirname, '../uploads')));
 
 // Log Socket.IO requests for debugging
 app.use((req, _res, next) => {
