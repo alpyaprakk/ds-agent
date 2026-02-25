@@ -99,8 +99,8 @@ function applyFillFromSpec(node: RectangleNode | FrameNode | ComponentNode, spec
     const v = resolveVariable(spec.variableName);
     if (v) {
       const fill: SolidPaint = { type: 'SOLID', color: { r: 1, g: 1, b: 1 } };
-      node.fills = [fill];
-      node.setBoundVariable('fills', v);
+      const boundFill = figma.variables.setBoundVariableForPaint(fill, 'color', v);
+      node.fills = [boundFill];
       return;
     }
   }

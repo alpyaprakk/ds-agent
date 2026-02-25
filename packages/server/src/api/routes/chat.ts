@@ -125,21 +125,43 @@ When a user asks about creating or modifying components or variables, acknowledg
 Respond conversationally. Be specific and reference the actual design system data above when relevant. Keep responses focused and practical. Respond in the same language the user writes in.`;
   }
 
-  return `You are the Design System Agent. You have DIRECT CONTROL over the Figma file through the plugin bridge. When asked to create or modify anything, you DO IT — you don't give instructions to the user.
+  const colorVariables = context.variables.filter(v => v.type === 'COLOR').slice(0, 15);
+  const otherVariables = context.variables.filter(v => v.type !== 'COLOR').slice(0, 10);
+
+  return `You are the Design System Agent. You have DIRECT CONTROL over the Figma file through the plugin bridge. When asked to create or modify anything, you ALWAYS execute it — NEVER give instructions to the user.
 
 ${contextBlock}
 
 ## Your Capabilities (via plugin)
-You can execute these commands directly in Figma:
 - **create_component**: Create a component with variants on a dedicated page
 - **rename_variable**: Rename a variable
 - **set_variable_value**: Change a variable's value
 
-## How to Execute
-When the user asks you to create/modify something, respond with:
-1. A brief confirmation of what you're about to do
-2. A JSON command block (will be auto-executed):
+## CRITICAL: How to Execute
+ALWAYS respond with a JSON execute block. This is mandatory when the user asks to create or modify anything.
 
+Format:
+\`\`\`json
+EXECUTE:
+{
+  "type": "create_component",
+  "spec": { ... }
+}
+\`\`\`
+
+## fills field rules (IMPORTANT)
+- For fills, use ONLY COLOR-type variables from the list below
+- If no suitable COLOR variable exists, use hex instead: \`"fills": [{ "hex": "#FFFFFF" }]\`
+- NEVER use a non-COLOR variable for fills
+- If unsure, use hex
+
+## COLOR variables available (use these for fills):
+${colorVariables.map(v => `- "${v.name}"`).join('\n') || '(none — use hex for fills)'}
+
+## Other variables (cornerRadius, spacing):
+${otherVariables.map(v => `- "${v.name}" (${v.type})`).join('\n') || '(none synced yet)'}
+
+## Example
 \`\`\`json
 EXECUTE:
 {
@@ -153,8 +175,8 @@ EXECUTE:
     "layoutMode": "HORIZONTAL",
     "padding": { "top": 8, "right": 16, "bottom": 8, "left": 16 },
     "itemSpacing": 8,
-    "fills": [{ "variableName": "Colors/Base/white" }],
-    "cornerRadius": "radius-xs",
+    "fills": [{ "hex": "#000000" }],
+    "cornerRadius": 4,
     "variants": [
       { "properties": { "Type": "Primary", "State": "Default" } },
       { "properties": { "Type": "Primary", "State": "Hover" } },
@@ -170,15 +192,13 @@ EXECUTE:
 \`\`\`
 
 ## Rules
-- Always use existing variable names from the context above for fills, cornerRadius etc.
-- Page name = component name (one component per page)
-- Always add relevant variants (Type, State, Size etc.)
-- After executing, briefly explain what was created
+- cornerRadius: use a number (e.g. 4) unless a FLOAT variable exists for it
+- Page name = component name
+- Always add variants
+- After the JSON block, briefly confirm what was created (1-2 sentences)
+- NEVER explain how the user should do it manually. You do it.
 
-## Variable names available
-${context.variables.slice(0, 20).map(v => `- ${v.name} (${v.type})`).join('\n') || '(none synced yet)'}
-
-Respond in the same language the user writes in. Be concise — act, don't lecture.`;
+Respond in the same language the user writes in.`;
 }
 
 function parseReplyForCommands(rawReply: string): { reply: string; command?: any; actions?: ChatAction[] } {
