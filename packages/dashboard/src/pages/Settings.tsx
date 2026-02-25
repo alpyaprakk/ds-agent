@@ -4,6 +4,7 @@ import {
   AiCloudIcon, SaveMoneyDollarIcon, User02Icon, FigmaIcon,
   UserGroupIcon, Mail01Icon, Delete02Icon, Crown02Icon,
   Tick02Icon, Cancel01Icon, Camera01Icon, Notification03Icon,
+  LinkSquare01Icon,
 } from '@hugeicons/core-free-icons';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
@@ -218,37 +219,98 @@ export function Settings() {
   const myRole = currentWorkspace?.member_role;
   const isOwnerOrAdmin = myRole === 'owner' || myRole === 'admin';
 
+  const notifCategories = [
+    {
+      group: 'Workspace',
+      items: [
+        { type: 'workspace_invitation', label: 'Workspace invitations', desc: 'When you are invited to a workspace' },
+        { type: 'member_removed', label: 'Member removed', desc: 'When you are removed from a workspace' },
+        { type: 'role_changed', label: 'Role changed', desc: 'When your workspace role is updated' },
+      ],
+    },
+    {
+      group: 'Invitations',
+      items: [
+        { type: 'invitation_accepted', label: 'Invitation accepted', desc: 'When someone accepts your invitation' },
+        { type: 'invitation_rejected', label: 'Invitation rejected', desc: 'When someone declines your invitation' },
+      ],
+    },
+    {
+      group: 'Design System',
+      items: [
+        { type: 'figma_file_added', label: 'Figma file added', desc: 'When a Figma file is added to workspace' },
+        { type: 'figma_file_removed', label: 'Figma file removed', desc: 'When a Figma file is removed' },
+        { type: 'figma_synced', label: 'Figma synced', desc: 'When a Figma file is synced' },
+        { type: 'conflict_detected', label: 'Conflicts detected', desc: 'When design system issues are found' },
+        { type: 'conflict_resolved', label: 'Conflict resolved', desc: 'When a conflict is resolved' },
+      ],
+    },
+  ];
+
   return (
-    <div className="p-8">
-      <div className="max-w-4xl mx-auto space-y-10">
+    <div className="p-6 md:p-8">
+      <div className="max-w-3xl mx-auto space-y-8">
+        {/* Page Header */}
         <div>
-          <h1 className="text-3xl font-semibold tracking-tight">Settings</h1>
-          <p className="text-muted-foreground mt-3">
-            Manage your profile, workspace team, and API keys
+          <h1 className="text-lg font-semibold tracking-tight">Settings</h1>
+          <p className="text-xs text-muted-foreground mt-1">
+            Manage your profile, workspace team, and integrations.
           </p>
         </div>
 
-        <Separator />
+        {/* My Pending Invitations - shown prominently at top */}
+        {myInvitations.length > 0 && (
+          <div className="space-y-2">
+            {myInvitations.map((inv) => (
+              <div key={inv.id} className="flex items-center gap-3 p-3 rounded-lg bg-blue-500/5 ring-1 ring-blue-500/20">
+                <span className="text-base flex-shrink-0">{inv.workspace_icon || '📦'}</span>
+                <div className="flex-1 min-w-0">
+                  <p className="text-xs font-medium">{inv.workspace_name || 'Workspace'}</p>
+                  <p className="text-xs text-muted-foreground">
+                    Invited by {inv.inviter_name || 'someone'} as <span className="capitalize font-medium">{inv.role}</span>
+                  </p>
+                </div>
+                <div className="flex items-center gap-2">
+                  <Button
+                    size="sm"
+                    variant="ghost"
+                    className="text-muted-foreground hover:text-destructive"
+                    onClick={() => handleRejectInvitation(inv.token)}
+                  >
+                    Decline
+                  </Button>
+                  <Button
+                    size="sm"
+                    onClick={() => handleAcceptInvitation(inv.token, inv.workspace_name || 'Workspace')}
+                  >
+                    <HugeiconsIcon icon={Tick02Icon} size={14} className="mr-1" />
+                    Accept
+                  </Button>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
 
-        {/* Profile Card */}
+        {/* Profile */}
         <Card>
-          <CardHeader className="pb-2">
+          <CardHeader>
             <div className="flex items-center gap-3">
-              <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-primary/10">
-                <HugeiconsIcon icon={User02Icon} size={20} className="text-primary" />
+              <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary/10">
+                <HugeiconsIcon icon={User02Icon} size={16} className="text-primary" />
               </div>
               <div>
-                <CardTitle className="text-base">Profile</CardTitle>
-                <CardDescription className="mt-1">Your personal information</CardDescription>
+                <CardTitle>Profile</CardTitle>
+                <CardDescription>Your personal information</CardDescription>
               </div>
             </div>
           </CardHeader>
-          <CardContent className="space-y-6 pt-6">
-            <div className="flex items-center gap-5">
+          <CardContent className="space-y-5">
+            <div className="flex items-center gap-4">
               <div className="relative group">
-                <Avatar className="h-16 w-16">
+                <Avatar className="h-14 w-14">
                   <AvatarImage src={getAvatarUrl(user?.avatar)} />
-                  <AvatarFallback className="bg-primary text-primary-foreground text-lg font-semibold">
+                  <AvatarFallback className="bg-primary text-primary-foreground text-base font-semibold">
                     {user ? getInitials(user.name) : 'U'}
                   </AvatarFallback>
                 </Avatar>
@@ -259,9 +321,9 @@ export function Settings() {
                   className="absolute inset-0 flex items-center justify-center rounded-full bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity cursor-pointer"
                 >
                   {uploadingAvatar ? (
-                    <div className="h-5 w-5 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                    <div className="h-4 w-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
                   ) : (
-                    <HugeiconsIcon icon={Camera01Icon} size={20} className="text-white" />
+                    <HugeiconsIcon icon={Camera01Icon} size={16} className="text-white" />
                   )}
                 </button>
                 <input
@@ -272,89 +334,42 @@ export function Settings() {
                   className="hidden"
                 />
               </div>
-              <div>
-                <p className="font-semibold text-base">{user?.name}</p>
-                <p className="text-sm text-muted-foreground mt-0.5">{user?.email}</p>
+              <div className="flex-1 min-w-0">
+                <p className="text-sm font-medium truncate">{user?.name}</p>
+                <p className="text-xs text-muted-foreground truncate">{user?.email}</p>
               </div>
             </div>
             <Separator />
-            <div className="space-y-3">
-              <Label htmlFor="profile-name">Display Name</Label>
-              <Input
-                id="profile-name"
-                value={profileName}
-                onChange={(e) => setProfileName(e.target.value)}
-                placeholder="Your name"
-              />
+            <div className="flex items-end gap-3">
+              <div className="flex-1 space-y-2">
+                <Label htmlFor="profile-name">Display Name</Label>
+                <Input
+                  id="profile-name"
+                  value={profileName}
+                  onChange={(e) => setProfileName(e.target.value)}
+                  placeholder="Your name"
+                  autoComplete="off"
+                />
+              </div>
+              <Button onClick={saveProfile} disabled={savingProfile} size="default">
+                {savingProfile ? 'Saving...' : 'Save'}
+              </Button>
             </div>
-            <Button onClick={saveProfile} disabled={savingProfile}>
-              {savingProfile ? 'Saving...' : 'Update Profile'}
-            </Button>
           </CardContent>
         </Card>
 
-        {/* My Pending Invitations */}
-        {myInvitations.length > 0 && (
-          <Card className="border-blue-500/30 bg-blue-500/5">
-            <CardHeader className="pb-2">
-              <div className="flex items-center gap-3">
-                <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-blue-500/10">
-                  <HugeiconsIcon icon={Mail01Icon} size={20} className="text-blue-500" />
-                </div>
-                <div>
-                  <CardTitle className="text-base">Pending Invitations</CardTitle>
-                  <CardDescription className="mt-1">
-                    You have {myInvitations.length} workspace invitation{myInvitations.length !== 1 ? 's' : ''}
-                  </CardDescription>
-                </div>
-              </div>
-            </CardHeader>
-            <CardContent className="space-y-3 pt-4">
-              {myInvitations.map((inv) => (
-                <div key={inv.id} className="flex items-center gap-3 p-4 rounded-lg bg-card border">
-                  <span className="text-xl flex-shrink-0">{inv.workspace_icon || '📦'}</span>
-                  <div className="flex-1 min-w-0">
-                    <p className="text-sm font-semibold">{inv.workspace_name || 'Workspace'}</p>
-                    <p className="text-xs text-muted-foreground">
-                      Invited by {inv.inviter_name || 'someone'} as <span className="capitalize font-medium">{inv.role}</span>
-                    </p>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <Button
-                      size="sm"
-                      variant="outline"
-                      className="text-destructive hover:text-destructive hover:bg-destructive/10"
-                      onClick={() => handleRejectInvitation(inv.token)}
-                    >
-                      <HugeiconsIcon icon={Cancel01Icon} size={14} className="mr-1.5" />
-                      Decline
-                    </Button>
-                    <Button
-                      size="sm"
-                      onClick={() => handleAcceptInvitation(inv.token, inv.workspace_name || 'Workspace')}
-                    >
-                      <HugeiconsIcon icon={Tick02Icon} size={14} className="mr-1.5" />
-                      Accept
-                    </Button>
-                  </div>
-                </div>
-              ))}
-            </CardContent>
-          </Card>
-        )}
-
-        {/* Team / Members Card */}
+        {/* Team / Members */}
         {currentWorkspace && (
           <Card>
-            <CardHeader className="pb-2">
+            <CardHeader>
               <div className="flex items-center gap-3">
-                <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-blue-500/10">
-                  <HugeiconsIcon icon={UserGroupIcon} size={20} className="text-blue-500" />
+                <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-blue-500/10">
+                  <HugeiconsIcon icon={UserGroupIcon} size={16} className="text-blue-500" />
                 </div>
-                <div className="flex-1">
-                  <CardTitle className="text-base">Team Members</CardTitle>
-                  <CardDescription className="mt-1">
-                    {currentWorkspace.name} - {members.length} member{members.length !== 1 ? 's' : ''}
+                <div className="flex-1 min-w-0">
+                  <CardTitle>Team Members</CardTitle>
+                  <CardDescription>
+                    {currentWorkspace.name} &middot; {members.length} member{members.length !== 1 ? 's' : ''}
                   </CardDescription>
                 </div>
                 {myRole && (
@@ -362,25 +377,26 @@ export function Settings() {
                 )}
               </div>
             </CardHeader>
-            <CardContent className="space-y-6 pt-6">
+            <CardContent className="space-y-5">
               {/* Invite Form */}
               {isOwnerOrAdmin && (
                 <>
-                  <div className="space-y-3">
+                  <div className="space-y-2">
                     <Label>Invite by Email</Label>
                     <div className="flex gap-2">
                       <div className="relative flex-1">
-                        <HugeiconsIcon icon={Mail01Icon} size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
+                        <HugeiconsIcon icon={Mail01Icon} size={14} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-muted-foreground" />
                         <Input
                           placeholder="colleague@company.com"
                           value={inviteEmail}
                           onChange={(e) => setInviteEmail(e.target.value)}
-                          className="pl-9"
+                          className="pl-8"
+                          autoComplete="off"
                           onKeyDown={(e) => e.key === 'Enter' && handleInvite()}
                         />
                       </div>
                       <Select value={inviteRole} onValueChange={setInviteRole}>
-                        <SelectTrigger className="w-[120px]">
+                        <SelectTrigger className="w-[110px]">
                           <SelectValue />
                         </SelectTrigger>
                         <SelectContent>
@@ -399,158 +415,119 @@ export function Settings() {
 
               {/* Pending Invitations */}
               {isOwnerOrAdmin && invitations.length > 0 && (
-                <div className="space-y-3">
-                  <Label className="text-muted-foreground text-xs uppercase tracking-wider">Pending Invitations</Label>
-                  <div className="space-y-2">
-                    {invitations.map((inv) => (
-                      <div key={inv.id} className="flex items-center gap-3 p-3 rounded-lg bg-muted/30 border border-dashed">
-                        <Avatar className="h-8 w-8">
-                          <AvatarFallback className="bg-muted text-muted-foreground text-xs">
-                            <HugeiconsIcon icon={Mail01Icon} size={14} />
-                          </AvatarFallback>
-                        </Avatar>
-                        <div className="flex-1 min-w-0">
-                          <p className="text-sm font-medium truncate">{inv.email}</p>
-                          <p className="text-xs text-muted-foreground">Invited as {inv.role}</p>
-                        </div>
-                        <Badge variant="outline" className="text-xs">Pending</Badge>
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          className="h-8 w-8 text-muted-foreground hover:text-destructive"
-                          onClick={() => handleCancelInvite(inv.id)}
-                        >
-                          <HugeiconsIcon icon={Delete02Icon} size={14} />
-                        </Button>
+                <div className="space-y-2">
+                  <p className="text-xs text-muted-foreground font-medium uppercase tracking-wider">Pending</p>
+                  {invitations.map((inv) => (
+                    <div key={inv.id} className="flex items-center gap-3 py-2">
+                      <Avatar className="h-8 w-8">
+                        <AvatarFallback className="bg-muted text-muted-foreground text-xs">
+                          <HugeiconsIcon icon={Mail01Icon} size={12} />
+                        </AvatarFallback>
+                      </Avatar>
+                      <div className="flex-1 min-w-0">
+                        <p className="text-xs font-medium truncate">{inv.email}</p>
+                        <p className="text-xs text-muted-foreground">Invited as {inv.role}</p>
                       </div>
-                    ))}
-                  </div>
+                      <Badge variant="outline" className="text-xs">Pending</Badge>
+                      <Button
+                        variant="ghost"
+                        size="icon-sm"
+                        className="text-muted-foreground hover:text-destructive"
+                        onClick={() => handleCancelInvite(inv.id)}
+                      >
+                        <HugeiconsIcon icon={Cancel01Icon} size={14} />
+                      </Button>
+                    </div>
+                  ))}
                   <Separator />
                 </div>
               )}
 
               {/* Members List */}
-              <div className="space-y-3">
-                <Label className="text-muted-foreground text-xs uppercase tracking-wider">Members</Label>
-                <div className="space-y-2">
-                  {members.map((member) => {
-                    const isMe = member.user_id === user?.id;
-                    const isOwner = member.role === 'owner';
+              <div className="space-y-1">
+                <p className="text-xs text-muted-foreground font-medium uppercase tracking-wider mb-2">Members</p>
+                {members.map((member) => {
+                  const isMe = member.user_id === user?.id;
+                  const isOwner = member.role === 'owner';
 
-                    return (
-                      <div key={member.id} className="flex items-center gap-3 p-3 rounded-lg hover:bg-muted/30 transition">
-                        <Avatar className="h-9 w-9">
-                          <AvatarImage src={getAvatarUrl(member.avatar)} />
-                          <AvatarFallback className="bg-primary/10 text-primary text-xs font-semibold">
-                            {getInitials(member.name)}
-                          </AvatarFallback>
-                        </Avatar>
-                        <div className="flex-1 min-w-0">
-                          <div className="flex items-center gap-2">
-                            <p className="text-sm font-medium truncate">{member.name}</p>
-                            {isMe && <Badge variant="outline" className="text-[10px] py-0">You</Badge>}
-                          </div>
-                          <p className="text-xs text-muted-foreground truncate">{member.email}</p>
+                  return (
+                    <div key={member.id} className="flex items-center gap-3 py-2 rounded-lg hover:bg-muted/30 px-1 -mx-1 transition-colors">
+                      <Avatar className="h-8 w-8">
+                        <AvatarImage src={getAvatarUrl(member.avatar)} />
+                        <AvatarFallback className="bg-primary/10 text-primary text-xs font-medium">
+                          {getInitials(member.name)}
+                        </AvatarFallback>
+                      </Avatar>
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center gap-1.5">
+                          <p className="text-xs font-medium truncate">{member.name}</p>
+                          {isMe && <Badge variant="outline" className="text-[10px] py-0 h-4">You</Badge>}
                         </div>
-
-                        {isOwner ? (
-                          <div className="flex items-center gap-1.5">
-                            <HugeiconsIcon icon={Crown02Icon} size={14} className="text-amber-500" />
-                            <span className="text-xs font-medium text-amber-600">Owner</span>
-                          </div>
-                        ) : myRole === 'owner' && !isMe ? (
-                          <Select
-                            value={member.role}
-                            onValueChange={(val) => handleRoleChange(member.user_id, val)}
-                          >
-                            <SelectTrigger className="w-[100px] h-8 text-xs">
-                              <SelectValue />
-                            </SelectTrigger>
-                            <SelectContent>
-                              <SelectItem value="admin">Admin</SelectItem>
-                              <SelectItem value="member">Member</SelectItem>
-                            </SelectContent>
-                          </Select>
-                        ) : (
-                          <Badge variant="secondary" className="text-xs capitalize">{member.role}</Badge>
-                        )}
-
-                        {myRole === 'owner' && !isMe && !isOwner && (
-                          <Button
-                            variant="ghost"
-                            size="icon"
-                            className="h-8 w-8 text-muted-foreground hover:text-destructive"
-                            onClick={() => handleRemoveMember(member.user_id, member.name)}
-                          >
-                            <HugeiconsIcon icon={Delete02Icon} size={14} />
-                          </Button>
-                        )}
+                        <p className="text-xs text-muted-foreground truncate">{member.email}</p>
                       </div>
-                    );
-                  })}
-                </div>
+
+                      {isOwner ? (
+                        <div className="flex items-center gap-1.5">
+                          <HugeiconsIcon icon={Crown02Icon} size={12} className="text-amber-500" />
+                          <span className="text-xs font-medium text-amber-600 dark:text-amber-400">Owner</span>
+                        </div>
+                      ) : myRole === 'owner' && !isMe ? (
+                        <Select
+                          value={member.role}
+                          onValueChange={(val) => handleRoleChange(member.user_id, val)}
+                        >
+                          <SelectTrigger className="w-[100px] h-7 text-xs">
+                            <SelectValue />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="admin">Admin</SelectItem>
+                            <SelectItem value="member">Member</SelectItem>
+                          </SelectContent>
+                        </Select>
+                      ) : (
+                        <Badge variant="secondary" className="text-xs capitalize">{member.role}</Badge>
+                      )}
+
+                      {myRole === 'owner' && !isMe && !isOwner && (
+                        <Button
+                          variant="ghost"
+                          size="icon-sm"
+                          className="text-muted-foreground hover:text-destructive"
+                          onClick={() => handleRemoveMember(member.user_id, member.name)}
+                        >
+                          <HugeiconsIcon icon={Delete02Icon} size={14} />
+                        </Button>
+                      )}
+                    </div>
+                  );
+                })}
               </div>
             </CardContent>
           </Card>
         )}
 
-        {/* Notification Preferences */}
-        {notifPrefsLoaded && (
-          <Card>
-            <CardHeader className="pb-2">
-              <div className="flex items-center gap-3">
-                <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-orange-500/10">
-                  <HugeiconsIcon icon={Notification03Icon} size={20} className="text-orange-500" />
-                </div>
-                <div>
-                  <CardTitle className="text-base">Notification Preferences</CardTitle>
-                  <CardDescription className="mt-1">Choose which notifications you want to receive</CardDescription>
-                </div>
-              </div>
-            </CardHeader>
-            <CardContent className="space-y-1 pt-6">
-              {[
-                { type: 'workspace_invitation', label: 'Workspace invitations', desc: 'When you are invited to a workspace' },
-                { type: 'invitation_accepted', label: 'Invitation accepted', desc: 'When someone accepts your invitation' },
-                { type: 'invitation_rejected', label: 'Invitation rejected', desc: 'When someone declines your invitation' },
-                { type: 'member_removed', label: 'Member removed', desc: 'When you are removed from a workspace' },
-                { type: 'role_changed', label: 'Role changed', desc: 'When your workspace role is updated' },
-                { type: 'figma_file_added', label: 'Figma file added', desc: 'When a Figma file is added to workspace' },
-                { type: 'figma_file_removed', label: 'Figma file removed', desc: 'When a Figma file is removed' },
-                { type: 'figma_synced', label: 'Figma synced', desc: 'When a Figma file is synced' },
-                { type: 'conflict_detected', label: 'Conflicts detected', desc: 'When design system issues are found' },
-                { type: 'conflict_resolved', label: 'Conflict resolved', desc: 'When a conflict is resolved' },
-              ].map(({ type, label, desc }) => (
-                <div key={type} className="flex items-center justify-between py-3">
-                  <div>
-                    <p className="text-sm font-medium">{label}</p>
-                    <p className="text-xs text-muted-foreground">{desc}</p>
-                  </div>
-                  <Switch
-                    checked={notifPrefs[type] !== false}
-                    onCheckedChange={(checked) => handleNotifPrefToggle(type, checked)}
-                  />
-                </div>
-              ))}
-            </CardContent>
-          </Card>
-        )}
+        {/* Integrations section header */}
+        <div className="pt-2">
+          <h2 className="text-sm font-medium">Integrations</h2>
+          <p className="text-xs text-muted-foreground mt-0.5">Connect external services and configure API keys.</p>
+        </div>
 
-        {/* Figma Token Card */}
+        {/* Figma Token */}
         <Card>
-          <CardHeader className="pb-2">
+          <CardHeader>
             <div className="flex items-center gap-3">
-              <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-purple-500/10">
-                <HugeiconsIcon icon={FigmaIcon} size={20} className="text-purple-500" />
+              <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-purple-500/10">
+                <HugeiconsIcon icon={FigmaIcon} size={16} className="text-purple-500" />
               </div>
-              <div>
-                <CardTitle className="text-base">Figma Access Token</CardTitle>
-                <CardDescription className="mt-1">Required for direct Figma API access</CardDescription>
+              <div className="flex-1">
+                <CardTitle>Figma</CardTitle>
+                <CardDescription>Connect your Figma account for design system access</CardDescription>
               </div>
+              <div className={`h-2 w-2 rounded-full ${userSettings?.has_figma_token ? 'bg-green-500' : 'bg-red-500'}`} />
             </div>
           </CardHeader>
-          <CardContent className="space-y-6 pt-6">
-            <div className="space-y-3">
+          <CardContent className="space-y-4">
+            <div className="space-y-2">
               <Label htmlFor="figma-token">Personal Access Token</Label>
               <Input
                 id="figma-token"
@@ -558,104 +535,179 @@ export function Settings() {
                 placeholder={userSettings?.has_figma_token ? 'Token saved - enter new to replace' : 'figd_...'}
                 value={figmaToken}
                 onChange={(e) => setFigmaToken(e.target.value)}
+                autoComplete="off"
               />
               <p className="text-xs text-muted-foreground">
                 Generate a token from{' '}
-                <a href="https://www.figma.com/developers/api#access-tokens" target="_blank" rel="noopener noreferrer" className="text-primary hover:underline">
-                  Figma Settings &gt; Personal Access Tokens
+                <a href="https://www.figma.com/developers/api#access-tokens" target="_blank" rel="noopener noreferrer" className="text-primary hover:underline inline-flex items-center gap-0.5">
+                  Figma Settings <HugeiconsIcon icon={LinkSquare01Icon} size={10} />
                 </a>
               </p>
             </div>
-            <div className="flex items-center gap-3 p-4 bg-muted/50 rounded-lg">
-              <div className={`h-2 w-2 rounded-full ${userSettings?.has_figma_token ? 'bg-green-500 animate-pulse' : 'bg-red-500'}`} />
-              <span className="text-sm font-medium">
-                {userSettings?.has_figma_token ? 'Figma Token Configured' : 'Token Required'}
-              </span>
-              {userSettings?.figma_access_token_preview && (
-                <Badge variant="secondary" className="ml-auto text-xs">{userSettings.figma_access_token_preview}</Badge>
-              )}
-            </div>
+            {userSettings?.has_figma_token && userSettings?.figma_access_token_preview && (
+              <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                <span className="text-green-600 dark:text-green-400 font-medium">Connected</span>
+                <span className="text-muted-foreground/50">&middot;</span>
+                <code className="text-xs bg-muted px-1.5 py-0.5 rounded">{userSettings.figma_access_token_preview}</code>
+              </div>
+            )}
           </CardContent>
         </Card>
 
         {/* AI Configuration */}
         <Card>
-          <CardHeader className="pb-2">
+          <CardHeader>
             <div className="flex items-center gap-3">
-              <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-primary/10">
-                <HugeiconsIcon icon={AiCloudIcon} size={20} className="text-primary" />
+              <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary/10">
+                <HugeiconsIcon icon={AiCloudIcon} size={16} className="text-primary" />
               </div>
-              <div>
-                <CardTitle className="text-base">AI Configuration</CardTitle>
-                <CardDescription className="mt-1">Configure AI providers for design system analysis</CardDescription>
+              <div className="flex-1">
+                <CardTitle>AI Provider</CardTitle>
+                <CardDescription>Configure AI for design system analysis</CardDescription>
               </div>
+              <div className={`h-2 w-2 rounded-full ${
+                (aiProvider === 'anthropic' && userSettings?.has_anthropic_key) || (aiProvider === 'openai' && userSettings?.has_openai_key)
+                  ? 'bg-green-500' : 'bg-red-500'
+              }`} />
             </div>
           </CardHeader>
-          <CardContent className="space-y-6 pt-6">
-            <div className="space-y-3">
-              <Label>AI Provider</Label>
-              <div className="flex gap-3">
-                <Button variant={aiProvider === 'anthropic' ? 'default' : 'outline'} onClick={() => setAiProvider('anthropic')} className="flex-1">
-                  <HugeiconsIcon icon={AiCloudIcon} size={18} className="mr-2" />
+          <CardContent className="space-y-5">
+            <div className="space-y-2">
+              <Label>Provider</Label>
+              <div className="grid grid-cols-2 gap-2">
+                <button
+                  type="button"
+                  onClick={() => setAiProvider('anthropic')}
+                  className={`flex items-center gap-2 rounded-lg border px-3 py-2.5 text-xs font-medium transition-colors ${
+                    aiProvider === 'anthropic'
+                      ? 'border-primary bg-primary/5 text-foreground'
+                      : 'border-border text-muted-foreground hover:border-foreground/20 hover:text-foreground'
+                  }`}
+                >
+                  <HugeiconsIcon icon={AiCloudIcon} size={14} />
                   Anthropic Claude
-                  <Badge variant="secondary" className="ml-2">Recommended</Badge>
-                </Button>
-                <Button variant={aiProvider === 'openai' ? 'default' : 'outline'} onClick={() => setAiProvider('openai')} className="flex-1">
-                  <HugeiconsIcon icon={AiCloudIcon} size={18} className="mr-2" />
+                  {aiProvider === 'anthropic' && <Badge variant="secondary" className="ml-auto text-[10px]">Active</Badge>}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setAiProvider('openai')}
+                  className={`flex items-center gap-2 rounded-lg border px-3 py-2.5 text-xs font-medium transition-colors ${
+                    aiProvider === 'openai'
+                      ? 'border-primary bg-primary/5 text-foreground'
+                      : 'border-border text-muted-foreground hover:border-foreground/20 hover:text-foreground'
+                  }`}
+                >
+                  <HugeiconsIcon icon={AiCloudIcon} size={14} />
                   OpenAI GPT
-                </Button>
+                  {aiProvider === 'openai' && <Badge variant="secondary" className="ml-auto text-[10px]">Active</Badge>}
+                </button>
               </div>
             </div>
 
             <Separator />
 
             {aiProvider === 'anthropic' && (
-              <div className="space-y-3">
+              <div className="space-y-2">
                 <Label htmlFor="anthropic-key">Anthropic API Key</Label>
-                <Input id="anthropic-key" type="password" placeholder={userSettings?.has_anthropic_key ? 'Key saved - enter new to replace' : 'sk-ant-...'} value={anthropicKey} onChange={(e) => setAnthropicKey(e.target.value)} />
+                <Input
+                  id="anthropic-key"
+                  type="password"
+                  placeholder={userSettings?.has_anthropic_key ? 'Key saved - enter new to replace' : 'sk-ant-...'}
+                  value={anthropicKey}
+                  onChange={(e) => setAnthropicKey(e.target.value)}
+                  autoComplete="off"
+                />
                 <p className="text-xs text-muted-foreground">
-                  Get your API key from{' '}
-                  <a href="https://console.anthropic.com/settings/keys" target="_blank" rel="noopener noreferrer" className="text-primary hover:underline">Anthropic Console</a>
+                  Get your key from{' '}
+                  <a href="https://console.anthropic.com/settings/keys" target="_blank" rel="noopener noreferrer" className="text-primary hover:underline inline-flex items-center gap-0.5">
+                    Anthropic Console <HugeiconsIcon icon={LinkSquare01Icon} size={10} />
+                  </a>
                 </p>
+                {userSettings?.has_anthropic_key && userSettings?.anthropic_api_key_preview && (
+                  <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                    <span className="text-green-600 dark:text-green-400 font-medium">Connected</span>
+                    <span className="text-muted-foreground/50">&middot;</span>
+                    <code className="text-xs bg-muted px-1.5 py-0.5 rounded">{userSettings.anthropic_api_key_preview}</code>
+                  </div>
+                )}
               </div>
             )}
 
             {aiProvider === 'openai' && (
-              <div className="space-y-3">
+              <div className="space-y-2">
                 <Label htmlFor="openai-key">OpenAI API Key</Label>
-                <Input id="openai-key" type="password" placeholder={userSettings?.has_openai_key ? 'Key saved - enter new to replace' : 'sk-...'} value={openaiKey} onChange={(e) => setOpenaiKey(e.target.value)} />
+                <Input
+                  id="openai-key"
+                  type="password"
+                  placeholder={userSettings?.has_openai_key ? 'Key saved - enter new to replace' : 'sk-...'}
+                  value={openaiKey}
+                  onChange={(e) => setOpenaiKey(e.target.value)}
+                  autoComplete="off"
+                />
                 <p className="text-xs text-muted-foreground">
-                  Get your API key from{' '}
-                  <a href="https://platform.openai.com/api-keys" target="_blank" rel="noopener noreferrer" className="text-primary hover:underline">OpenAI Platform</a>
+                  Get your key from{' '}
+                  <a href="https://platform.openai.com/api-keys" target="_blank" rel="noopener noreferrer" className="text-primary hover:underline inline-flex items-center gap-0.5">
+                    OpenAI Platform <HugeiconsIcon icon={LinkSquare01Icon} size={10} />
+                  </a>
                 </p>
+                {userSettings?.has_openai_key && userSettings?.openai_api_key_preview && (
+                  <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                    <span className="text-green-600 dark:text-green-400 font-medium">Connected</span>
+                    <span className="text-muted-foreground/50">&middot;</span>
+                    <code className="text-xs bg-muted px-1.5 py-0.5 rounded">{userSettings.openai_api_key_preview}</code>
+                  </div>
+                )}
               </div>
             )}
 
-            <div className="flex items-center justify-between p-4 bg-muted/50 rounded-lg">
-              <div className="flex items-center gap-3">
-                <div className={`h-2 w-2 rounded-full ${
-                  (aiProvider === 'anthropic' && userSettings?.has_anthropic_key) || (aiProvider === 'openai' && userSettings?.has_openai_key)
-                    ? 'bg-green-500 animate-pulse' : 'bg-red-500'
-                }`} />
-                <span className="text-sm font-medium">
-                  {(aiProvider === 'anthropic' && userSettings?.has_anthropic_key) || (aiProvider === 'openai' && userSettings?.has_openai_key)
-                    ? 'AI Ready' : 'API Key Required'}
-                </span>
-              </div>
-              {aiProvider === 'anthropic' && userSettings?.anthropic_api_key_preview && (
-                <Badge variant="secondary" className="text-xs">{userSettings.anthropic_api_key_preview}</Badge>
-              )}
-              {aiProvider === 'openai' && userSettings?.openai_api_key_preview && (
-                <Badge variant="secondary" className="text-xs">{userSettings.openai_api_key_preview}</Badge>
-              )}
-            </div>
-
             <Button onClick={saveApiKeys} disabled={savingKeys} className="w-full">
-              <HugeiconsIcon icon={SaveMoneyDollarIcon} size={18} className="mr-2" />
-              {savingKeys ? 'Saving...' : 'Save API Keys & Tokens'}
+              <HugeiconsIcon icon={SaveMoneyDollarIcon} size={14} className="mr-1.5" />
+              {savingKeys ? 'Saving...' : 'Save All Keys & Tokens'}
             </Button>
           </CardContent>
         </Card>
+
+        {/* Notification Preferences */}
+        {notifPrefsLoaded && (
+          <Card>
+            <CardHeader>
+              <div className="flex items-center gap-3">
+                <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-orange-500/10">
+                  <HugeiconsIcon icon={Notification03Icon} size={16} className="text-orange-500" />
+                </div>
+                <div>
+                  <CardTitle>Notifications</CardTitle>
+                  <CardDescription>Choose which notifications you want to receive</CardDescription>
+                </div>
+              </div>
+            </CardHeader>
+            <CardContent className="space-y-5">
+              {notifCategories.map((category, catIdx) => (
+                <div key={category.group}>
+                  {catIdx > 0 && <Separator className="mb-4" />}
+                  <p className="text-xs text-muted-foreground font-medium uppercase tracking-wider mb-3">{category.group}</p>
+                  <div className="space-y-0">
+                    {category.items.map(({ type, label, desc }) => (
+                      <div key={type} className="flex items-center justify-between py-2.5">
+                        <div>
+                          <p className="text-xs font-medium">{label}</p>
+                          <p className="text-xs text-muted-foreground">{desc}</p>
+                        </div>
+                        <Switch
+                          checked={notifPrefs[type] !== false}
+                          onCheckedChange={(checked) => handleNotifPrefToggle(type, checked)}
+                        />
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              ))}
+            </CardContent>
+          </Card>
+        )}
+
+        {/* Bottom spacing */}
+        <div className="h-4" />
       </div>
     </div>
   );
