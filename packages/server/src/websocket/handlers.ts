@@ -199,8 +199,8 @@ export function setupWebSocketHandlers(io: SocketIOServer) {
           for (let i = 0; i < variables.length; i += variableChunkSize) {
             const chunk = variables.slice(i, i + variableChunkSize);
             const variableValues = chunk.map((_: any, idx: number) => {
-              const baseIndex = idx * 9;
-              return `($${baseIndex + 1}, $${baseIndex + 2}, $${baseIndex + 3}, $${baseIndex + 4}, $${baseIndex + 5}, $${baseIndex + 6}, $${baseIndex + 7}, $${baseIndex + 8}, $${baseIndex + 9})`;
+              const baseIndex = idx * 10;
+              return `($${baseIndex + 1}, $${baseIndex + 2}, $${baseIndex + 3}, $${baseIndex + 4}, $${baseIndex + 5}, $${baseIndex + 6}, $${baseIndex + 7}, $${baseIndex + 8}, $${baseIndex + 9}, $${baseIndex + 10})`;
             }).join(',');
 
             const variableParams = chunk.flatMap((v: any) => [
@@ -209,6 +209,7 @@ export function setupWebSocketHandlers(io: SocketIOServer) {
               figmaFile.id,
               v.name,
               v.key,
+              v.id,
               v.resolvedType,
               JSON.stringify(v.valuesByMode),
               v.variableCollectionId,
@@ -216,10 +217,11 @@ export function setupWebSocketHandlers(io: SocketIOServer) {
             ]);
 
             await client.query(
-              `INSERT INTO variables (id, workspace_id, figma_file_id, name, figma_key, type, value, collection_id, scopes)
+              `INSERT INTO variables (id, workspace_id, figma_file_id, name, figma_key, figma_id, type, value, collection_id, scopes)
                VALUES ${variableValues}
                ON CONFLICT (workspace_id, figma_key) DO UPDATE SET
                  name = EXCLUDED.name,
+                 figma_id = EXCLUDED.figma_id,
                  type = EXCLUDED.type,
                  value = EXCLUDED.value,
                  updated_at = NOW()`,

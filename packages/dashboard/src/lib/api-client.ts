@@ -58,6 +58,7 @@ export interface DesignVariable {
   figma_file_id?: string;
   name: string;
   figma_key: string;
+  figma_id?: string;
   type: string;
   value: any;
   collection_id: string;

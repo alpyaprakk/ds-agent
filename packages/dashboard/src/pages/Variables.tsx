@@ -74,18 +74,23 @@ function getVariableLeafName(name: string): string {
   return parts[parts.length - 1].trim();
 }
 
-function renderValue(variable: DesignVariable): { color: string | null; label: string } {
+function renderValue(
+  variable: DesignVariable,
+  aliasMap: Map<string, string>
+): { color: string | null; label: string; isAlias: boolean } {
   const value = variable.value;
-  if (!value) return { color: null, label: '—' };
+  if (!value) return { color: null, label: '—', isAlias: false };
 
   const modeValues = typeof value === 'object' && !Array.isArray(value) ? Object.values(value) : [value];
   const firstVal = modeValues[0] as any;
 
-  if (firstVal === undefined || firstVal === null) return { color: null, label: '—' };
+  if (firstVal === undefined || firstVal === null) return { color: null, label: '—', isAlias: false };
 
   // Alias reference
   if (typeof firstVal === 'object' && firstVal.type === 'VARIABLE_ALIAS') {
-    return { color: null, label: firstVal.name || firstVal.id || 'Alias' };
+    const aliasId = firstVal.id as string;
+    const resolvedName = aliasMap.get(aliasId);
+    return { color: null, label: resolvedName || aliasId, isAlias: true };
   }
 
   if (variable.type === 'COLOR') {
@@ -95,31 +100,31 @@ function renderValue(variable: DesignVariable): { color: string | null; label: s
       const g = Math.round((firstVal.g ?? 0) * 255);
       const b = Math.round((firstVal.b ?? 0) * 255);
       const hex = `#${r.toString(16).padStart(2, '0')}${g.toString(16).padStart(2, '0')}${b.toString(16).padStart(2, '0')}`;
-      return { color: hex, label: hex.toUpperCase() };
+      return { color: hex, label: hex.toUpperCase(), isAlias: false };
     }
 
     // String alias like "Colors/Base/white"
     if (typeof firstVal === 'string') {
-      return { color: null, label: firstVal };
+      return { color: null, label: firstVal, isAlias: false };
     }
   }
 
   // FLOAT
   if (typeof firstVal === 'number') {
-    return { color: null, label: String(firstVal) };
+    return { color: null, label: String(firstVal), isAlias: false };
   }
 
   // STRING
   if (typeof firstVal === 'string') {
-    return { color: null, label: firstVal };
+    return { color: null, label: firstVal, isAlias: false };
   }
 
   // BOOLEAN
   if (typeof firstVal === 'boolean') {
-    return { color: null, label: firstVal ? 'true' : 'false' };
+    return { color: null, label: firstVal ? 'true' : 'false', isAlias: false };
   }
 
-  return { color: null, label: JSON.stringify(firstVal) };
+  return { color: null, label: JSON.stringify(firstVal), isAlias: false };
 }
 
 function getTypeIcon(type: string) {
@@ -213,6 +218,17 @@ export function Variables() {
 
     return groups;
   }, [visibleVariables]);
+
+  // Build alias lookup: figma_id → variable name (for resolving VARIABLE_ALIAS references)
+  const aliasMap = useMemo(() => {
+    const map = new Map<string, string>();
+    for (const v of variables) {
+      if (v.figma_id) {
+        map.set(v.figma_id, v.name);
+      }
+    }
+    return map;
+  }, [variables]);
 
   const toggleGroup = (path: string) => {
     setExpandedGroups(prev => {
@@ -443,7 +459,7 @@ export function Variables() {
 
                   {/* Variables in this group */}
                   {vars.map((variable) => {
-                    const { color, label } = renderValue(variable);
+                    const { color, label, isAlias } = renderValue(variable, aliasMap);
                     const Icon = getTypeIcon(variable.type);
                     const leafName = getVariableLeafName(variable.name);
 
@@ -466,10 +482,20 @@ export function Variables() {
                               style={{ backgroundColor: color }}
                             />
                           )}
-                          {variable.type === 'COLOR' && !color && (
+                          {variable.type === 'COLOR' && !color && !isAlias && (
                             <div className="w-4 h-4 rounded-[3px] border border-border/50 bg-muted flex-shrink-0" />
                           )}
-                          <span className="text-[13px] text-muted-foreground truncate">
+                          {isAlias && (
+                            <div className="w-4 h-4 rounded-[3px] border border-border/50 flex-shrink-0 flex items-center justify-center bg-muted">
+                              <svg width="8" height="8" viewBox="0 0 8 8" className="text-muted-foreground">
+                                <path d="M1 7L4 1L7 7" fill="none" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round" strokeLinejoin="round"/>
+                              </svg>
+                            </div>
+                          )}
+                          <span className={cn(
+                            'text-[13px] truncate',
+                            isAlias ? 'text-primary/80' : 'text-muted-foreground'
+                          )}>
                             {label}
                           </span>
                         </div>

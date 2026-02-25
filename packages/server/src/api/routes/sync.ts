@@ -124,10 +124,11 @@ router.post('/files/:fileId', async (req, res) => {
       // Save variables
       for (const variable of syncData.variables) {
         await pool.query(
-          `INSERT INTO variables (id, workspace_id, figma_file_id, name, figma_key, type, value, collection_id, scopes)
-           VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+          `INSERT INTO variables (id, workspace_id, figma_file_id, name, figma_key, figma_id, type, value, collection_id, scopes)
+           VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
            ON CONFLICT (workspace_id, figma_key) DO UPDATE SET
              name = EXCLUDED.name,
+             figma_id = EXCLUDED.figma_id,
              type = EXCLUDED.type,
              value = EXCLUDED.value,
              updated_at = NOW()`,
@@ -137,6 +138,7 @@ router.post('/files/:fileId', async (req, res) => {
             file.id,
             variable.name,
             variable.key,
+            variable.id,
             variable.resolvedType,
             JSON.stringify(variable.valuesByMode),
             variable.variableCollectionId,
