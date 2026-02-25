@@ -9,7 +9,10 @@ import {
   Alert02Icon,
   SidebarLeft01Icon,
   SidebarRight01Icon,
-  Settings02Icon
+  Settings02Icon,
+  Add01Icon,
+  Tick02Icon,
+  ArrowDown01Icon,
 } from '@hugeicons/core-free-icons';
 import { Separator } from '@/components/ui/separator';
 import { ScrollArea } from '@/components/ui/scroll-area';
@@ -19,10 +22,21 @@ import {
   TooltipProvider,
   TooltipTrigger,
 } from '@/components/ui/tooltip';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
 import { useLayout } from '@/contexts/LayoutContext';
+import { useWorkspaceStore } from '@/store/workspace-store';
+import { wsClient } from '@/lib/websocket';
 import { Header } from './Header';
+import { CreateWorkspaceModal } from './CreateWorkspaceModal';
 
 interface LayoutProps {
   children: ReactNode;
@@ -39,28 +53,26 @@ const navigation = [
 export function Layout({ children }: LayoutProps) {
   const location = useLocation();
   const { sidebarCollapsed, toggleSidebar } = useLayout();
+  const { workspaces, currentWorkspace, setCurrentWorkspace } = useWorkspaceStore();
   const [pluginConnected, setPluginConnected] = useState(false);
+  const [showCreateModal, setShowCreateModal] = useState(false);
 
   useEffect(() => {
-    // Connect to WebSocket server
     const WS_URL = import.meta.env.VITE_WS_URL || 'http://localhost:3000';
     const socket = io(WS_URL, {
-      path: '/api/socket.io' // Use /api prefix to work with proxy
+      path: '/api/socket.io'
     });
 
     socket.on('connect', () => {
-      console.log('✅ Connected to server');
+      console.log('Connected to server');
     });
 
     socket.on('plugin-status', (data: { connected: boolean; plugin: string; count: number }) => {
-      console.log('📥 Plugin status update received:', data);
       const newStatus = data.connected && data.count > 0;
-      console.log(`🔄 Setting pluginConnected to:`, newStatus);
       setPluginConnected(newStatus);
     });
 
     socket.on('disconnect', () => {
-      console.log('❌ Disconnected from server');
       setPluginConnected(false);
     });
 
@@ -68,6 +80,13 @@ export function Layout({ children }: LayoutProps) {
       socket.close();
     };
   }, []);
+
+  const handleSelectWorkspace = (workspace: typeof currentWorkspace) => {
+    if (workspace && workspace.id !== currentWorkspace?.id) {
+      setCurrentWorkspace(workspace);
+      wsClient.joinWorkspace(workspace.id);
+    }
+  };
 
   return (
     <TooltipProvider delayDuration={0}>
@@ -81,7 +100,7 @@ export function Layout({ children }: LayoutProps) {
         >
           <div className="flex h-full flex-col">
             {/* Logo with Collapse Button */}
-            <div className="flex items-center border-b h-16 transition-all duration-300 px-3">
+            <div className="flex items-center border-b h-14 transition-all duration-300 px-3">
               <div className="flex items-center w-full">
                 <div className="flex items-center flex-1 overflow-hidden">
                   {sidebarCollapsed ? (
@@ -124,6 +143,94 @@ export function Layout({ children }: LayoutProps) {
                   </Button>
                 )}
               </div>
+            </div>
+
+            {/* Workspace Switcher */}
+            <div className="px-3 py-3 border-b">
+              {sidebarCollapsed ? (
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <DropdownMenu>
+                      <DropdownMenuTrigger asChild>
+                        <button className="flex h-10 w-10 items-center justify-center rounded-lg hover:bg-muted/50 transition-all text-lg">
+                          {currentWorkspace?.icon || '📦'}
+                        </button>
+                      </DropdownMenuTrigger>
+                      <DropdownMenuContent side="right" align="start" className="w-64">
+                        <DropdownMenuLabel className="text-xs text-muted-foreground">
+                          Workspaces
+                        </DropdownMenuLabel>
+                        {workspaces.map((ws) => (
+                          <DropdownMenuItem
+                            key={ws.id}
+                            onClick={() => handleSelectWorkspace(ws)}
+                            className="gap-2 p-2"
+                          >
+                            <span className="text-base">{ws.icon || '📦'}</span>
+                            <div className="flex-1 min-w-0">
+                              <span className="truncate text-sm font-medium">{ws.name}</span>
+                            </div>
+                            {currentWorkspace?.id === ws.id && (
+                              <HugeiconsIcon icon={Tick02Icon} size={16} className="text-primary flex-shrink-0" />
+                            )}
+                          </DropdownMenuItem>
+                        ))}
+                        <DropdownMenuSeparator />
+                        <DropdownMenuItem onClick={() => setShowCreateModal(true)} className="gap-2 p-2">
+                          <HugeiconsIcon icon={Add01Icon} size={16} />
+                          <span className="text-sm font-medium">New Workspace</span>
+                        </DropdownMenuItem>
+                      </DropdownMenuContent>
+                    </DropdownMenu>
+                  </TooltipTrigger>
+                  <TooltipContent side="right">
+                    {currentWorkspace?.name || 'Select Workspace'}
+                  </TooltipContent>
+                </Tooltip>
+              ) : (
+                <DropdownMenu>
+                  <DropdownMenuTrigger asChild>
+                    <button className="flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-left hover:bg-muted/50 transition-all">
+                      <span className="text-lg flex-shrink-0">{currentWorkspace?.icon || '📦'}</span>
+                      <div className="flex-1 min-w-0">
+                        <div className="truncate text-sm font-semibold">{currentWorkspace?.name || 'Select Workspace'}</div>
+                        <div className="truncate text-[11px] text-muted-foreground">
+                          {currentWorkspace?.description || 'Design System'}
+                        </div>
+                      </div>
+                      <HugeiconsIcon icon={ArrowDown01Icon} size={16} className="text-muted-foreground flex-shrink-0" />
+                    </button>
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent align="start" className="w-[232px]">
+                    <DropdownMenuLabel className="text-xs text-muted-foreground">
+                      Workspaces
+                    </DropdownMenuLabel>
+                    {workspaces.map((ws) => (
+                      <DropdownMenuItem
+                        key={ws.id}
+                        onClick={() => handleSelectWorkspace(ws)}
+                        className="gap-2 p-2"
+                      >
+                        <span className="text-base">{ws.icon || '📦'}</span>
+                        <div className="flex-1 min-w-0">
+                          <div className="truncate text-sm font-medium">{ws.name}</div>
+                          {ws.description && (
+                            <div className="truncate text-[11px] text-muted-foreground">{ws.description}</div>
+                          )}
+                        </div>
+                        {currentWorkspace?.id === ws.id && (
+                          <HugeiconsIcon icon={Tick02Icon} size={16} className="text-primary flex-shrink-0" />
+                        )}
+                      </DropdownMenuItem>
+                    ))}
+                    <DropdownMenuSeparator />
+                    <DropdownMenuItem onClick={() => setShowCreateModal(true)} className="gap-2 p-2">
+                      <HugeiconsIcon icon={Add01Icon} size={16} />
+                      <span className="text-sm font-medium">New Workspace</span>
+                    </DropdownMenuItem>
+                  </DropdownMenuContent>
+                </DropdownMenu>
+              )}
             </div>
 
             {/* Navigation */}
@@ -207,6 +314,12 @@ export function Layout({ children }: LayoutProps) {
             {children}
           </main>
         </div>
+
+        {/* Create Workspace Modal */}
+        <CreateWorkspaceModal
+          isOpen={showCreateModal}
+          onClose={() => setShowCreateModal(false)}
+        />
       </div>
     </TooltipProvider>
   );

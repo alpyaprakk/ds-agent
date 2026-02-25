@@ -9,6 +9,7 @@ export interface Workspace {
   health_score?: number;
   total_components?: number;
   total_variables?: number;
+  member_role?: string;
 }
 
 export interface FigmaFile {
@@ -35,6 +36,24 @@ export interface Conflict {
   created_at: string;
 }
 
+export interface AuthUser {
+  id: string;
+  email: string;
+  name: string;
+  avatar?: string;
+}
+
+export interface UserSettings {
+  ai_provider: string;
+  has_anthropic_key: boolean;
+  has_openai_key: boolean;
+  has_figma_token: boolean;
+  anthropic_api_key_preview?: string;
+  openai_api_key_preview?: string;
+  figma_access_token_preview?: string;
+  preferences: Record<string, any>;
+}
+
 class ApiClient {
   private baseUrl: string;
 
@@ -42,18 +61,31 @@ class ApiClient {
     this.baseUrl = baseUrl;
   }
 
+  private getToken(): string | null {
+    return localStorage.getItem('auth_token');
+  }
+
   private async request<T>(
     endpoint: string,
     options?: RequestInit
   ): Promise<T> {
     const url = `${this.baseUrl}${endpoint}`;
+    const token = this.getToken();
+
     const response = await fetch(url, {
       ...options,
       headers: {
         'Content-Type': 'application/json',
+        ...(token ? { Authorization: `Bearer ${token}` } : {}),
         ...options?.headers,
       },
     });
+
+    if (response.status === 401) {
+      localStorage.removeItem('auth_token');
+      window.location.href = '/login';
+      throw new Error('Session expired');
+    }
 
     if (!response.ok) {
       const error = await response.json().catch(() => ({}));
@@ -61,6 +93,48 @@ class ApiClient {
     }
 
     return response.json();
+  }
+
+  // Auth
+  async login(email: string, password: string): Promise<{ user: AuthUser; token: string }> {
+    return this.request('/api/auth/login', {
+      method: 'POST',
+      body: JSON.stringify({ email, password }),
+    });
+  }
+
+  async register(email: string, password: string, name: string): Promise<{ user: AuthUser; token: string }> {
+    return this.request('/api/auth/register', {
+      method: 'POST',
+      body: JSON.stringify({ email, password, name }),
+    });
+  }
+
+  async getMe(): Promise<{ user: AuthUser }> {
+    return this.request('/api/auth/me');
+  }
+
+  async getUserSettings(): Promise<{ settings: UserSettings | null }> {
+    return this.request('/api/auth/settings');
+  }
+
+  async updateUserSettings(data: {
+    ai_provider?: string;
+    anthropic_api_key?: string;
+    openai_api_key?: string;
+    figma_access_token?: string;
+  }): Promise<{ settings: any }> {
+    return this.request('/api/auth/settings', {
+      method: 'PUT',
+      body: JSON.stringify(data),
+    });
+  }
+
+  async updateProfile(data: { name?: string; avatar?: string }): Promise<{ user: AuthUser }> {
+    return this.request('/api/auth/profile', {
+      method: 'PUT',
+      body: JSON.stringify(data),
+    });
   }
 
   // Workspaces

@@ -1,5 +1,5 @@
 import { useEffect } from 'react';
-import { BrowserRouter, Routes, Route } from 'react-router-dom';
+import { BrowserRouter, Routes, Route, Navigate, useLocation } from 'react-router-dom';
 import { Toaster, toast } from 'sonner';
 import { Layout } from './components/Layout';
 import { Dashboard } from './pages/Dashboard';
@@ -7,19 +7,66 @@ import { Conflicts } from './pages/Conflicts';
 import { Variables } from './pages/Variables';
 import { Components } from './pages/Components';
 import { Settings } from './pages/Settings';
+import { Login } from './pages/Login';
+import { Register } from './pages/Register';
 import { useWorkspaceStore } from './store/workspace-store';
+import { useAuthStore } from './store/auth-store';
 import { wsClient } from './lib/websocket';
 import { LayoutProvider } from './contexts/LayoutContext';
 import { ThemeProvider } from './contexts/ThemeContext';
 
-function App() {
+// Auth guard component
+function RequireAuth({ children }: { children: React.ReactNode }) {
+  const { user, initialized } = useAuthStore();
+  const location = useLocation();
+
+  if (!initialized) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-background">
+        <div className="flex flex-col items-center gap-3">
+          <img src="/logo.svg" alt="DS Agent" className="h-10 w-10 dark:invert animate-pulse" />
+          <p className="text-sm text-muted-foreground">Loading...</p>
+        </div>
+      </div>
+    );
+  }
+
+  if (!user) {
+    return <Navigate to="/login" state={{ from: location }} replace />;
+  }
+
+  return <>{children}</>;
+}
+
+// Redirect if already logged in
+function PublicRoute({ children }: { children: React.ReactNode }) {
+  const { user, initialized } = useAuthStore();
+
+  if (!initialized) {
+    return null;
+  }
+
+  if (user) {
+    return <Navigate to="/" replace />;
+  }
+
+  return <>{children}</>;
+}
+
+function AppContent() {
   const { fetchWorkspaces, setCurrentWorkspace, workspaces } = useWorkspaceStore();
+  const { user, checkAuth } = useAuthStore();
 
+  // Check auth on mount
   useEffect(() => {
-    // Connect WebSocket
-    wsClient.connect();
+    checkAuth();
+  }, [checkAuth]);
 
-    // Fetch initial data
+  // Initialize app data when user is authenticated
+  useEffect(() => {
+    if (!user) return;
+
+    wsClient.connect();
     fetchWorkspaces();
 
     // Setup WebSocket listeners
@@ -50,7 +97,6 @@ function App() {
         });
       }
 
-      // Refresh conflicts
       if (useWorkspaceStore.getState().currentWorkspace) {
         useWorkspaceStore.getState().fetchConflicts(
           useWorkspaceStore.getState().currentWorkspace!.id,
@@ -66,7 +112,6 @@ function App() {
         duration: 3000,
       });
 
-      // Refresh workspace data
       if (useWorkspaceStore.getState().currentWorkspace) {
         useWorkspaceStore.getState().fetchConflicts(
           useWorkspaceStore.getState().currentWorkspace!.id,
@@ -82,9 +127,8 @@ function App() {
         duration: 5000,
       });
 
-      // Refresh file list, workspace stats, and conflicts
       const store = useWorkspaceStore.getState();
-      store.fetchWorkspaces(); // Updates workspace stats (total_variables, total_components)
+      store.fetchWorkspaces();
       if (store.currentWorkspace) {
         store.fetchFigmaFiles(store.currentWorkspace.id);
         store.fetchConflicts(store.currentWorkspace.id, 'active');
@@ -108,7 +152,6 @@ function App() {
         duration: 10000,
       });
 
-      // Refresh conflicts
       if (useWorkspaceStore.getState().currentWorkspace) {
         useWorkspaceStore.getState().fetchConflicts(
           useWorkspaceStore.getState().currentWorkspace!.id,
@@ -132,7 +175,6 @@ function App() {
         duration: 5000,
       });
 
-      // Refresh conflicts
       if (useWorkspaceStore.getState().currentWorkspace) {
         useWorkspaceStore.getState().fetchConflicts(
           useWorkspaceStore.getState().currentWorkspace!.id,
@@ -152,10 +194,9 @@ function App() {
     return () => {
       wsClient.disconnect();
     };
-  }, [fetchWorkspaces]);
+  }, [user, fetchWorkspaces]);
 
   useEffect(() => {
-    // Auto-select first workspace if available
     if (workspaces.length > 0 && !useWorkspaceStore.getState().currentWorkspace) {
       setCurrentWorkspace(workspaces[0]);
       wsClient.joinWorkspace(workspaces[0].id);
@@ -163,20 +204,37 @@ function App() {
   }, [workspaces, setCurrentWorkspace]);
 
   return (
+    <Routes>
+      {/* Public routes */}
+      <Route path="/login" element={<PublicRoute><Login /></PublicRoute>} />
+      <Route path="/register" element={<PublicRoute><Register /></PublicRoute>} />
+
+      {/* Protected routes */}
+      <Route path="/*" element={
+        <RequireAuth>
+          <LayoutProvider>
+            <Layout>
+              <Routes>
+                <Route path="/" element={<Dashboard />} />
+                <Route path="/variables" element={<Variables />} />
+                <Route path="/components" element={<Components />} />
+                <Route path="/conflicts" element={<Conflicts />} />
+                <Route path="/settings" element={<Settings />} />
+              </Routes>
+            </Layout>
+          </LayoutProvider>
+        </RequireAuth>
+      } />
+    </Routes>
+  );
+}
+
+function App() {
+  return (
     <ThemeProvider>
       <BrowserRouter>
-        <LayoutProvider>
-          <Toaster position="top-right" richColors />
-          <Layout>
-            <Routes>
-              <Route path="/" element={<Dashboard />} />
-              <Route path="/variables" element={<Variables />} />
-              <Route path="/components" element={<Components />} />
-              <Route path="/conflicts" element={<Conflicts />} />
-              <Route path="/settings" element={<Settings />} />
-            </Routes>
-          </Layout>
-        </LayoutProvider>
+        <Toaster position="top-right" richColors />
+        <AppContent />
       </BrowserRouter>
     </ThemeProvider>
   );

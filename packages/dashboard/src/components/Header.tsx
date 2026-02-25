@@ -1,3 +1,4 @@
+import { useNavigate } from 'react-router-dom';
 import { HugeiconsIcon } from '@hugeicons/react';
 import {
   Search01Icon,
@@ -19,20 +20,36 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
-import { useWorkspaceStore } from '../store/workspace-store';
-import { useTheme } from '../contexts/ThemeContext';
+import { useWorkspaceStore } from '@/store/workspace-store';
+import { useAuthStore } from '@/store/auth-store';
+import { useTheme } from '@/contexts/ThemeContext';
 
 export function Header() {
+  const navigate = useNavigate();
   const { currentWorkspace } = useWorkspaceStore();
+  const { user, logout } = useAuthStore();
   const { theme, toggleTheme } = useTheme();
+
+  const handleLogout = () => {
+    logout();
+    navigate('/login');
+  };
+
+  const getInitials = (name: string) => {
+    return name
+      .split(' ')
+      .map(n => n[0])
+      .join('')
+      .toUpperCase()
+      .slice(0, 2);
+  };
 
   return (
     <header className="sticky top-0 z-40 border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
-      <div className="flex h-16 items-center gap-4 px-6">
+      <div className="flex h-14 items-center gap-4 px-6">
 
-        {/* Workspace Name */}
+        {/* Page context */}
         <div className="flex items-center gap-3">
-          <span className="text-xl">{currentWorkspace?.icon || '📦'}</span>
           <div>
             <h2 className="text-xs font-semibold">{currentWorkspace?.name || 'Select Workspace'}</h2>
             <p className="text-[10px] text-muted-foreground">Design System Manager</p>
@@ -47,32 +64,32 @@ export function Header() {
           <Input
             type="search"
             placeholder="Search..."
-            className="pl-10 pr-4 h-10"
+            className="pl-10 pr-4 h-9"
           />
         </div>
 
         {/* Theme Toggle */}
-        <Button variant="ghost" size="icon" className="h-10 w-10 rounded-lg" onClick={toggleTheme}>
+        <Button variant="ghost" size="icon" className="h-9 w-9 rounded-lg" onClick={toggleTheme}>
           {theme === 'dark' ? (
-            <HugeiconsIcon icon={Sun03Icon} size={20} />
+            <HugeiconsIcon icon={Sun03Icon} size={18} />
           ) : (
-            <HugeiconsIcon icon={Moon02Icon} size={20} />
+            <HugeiconsIcon icon={Moon02Icon} size={18} />
           )}
         </Button>
 
         {/* Notifications */}
-        <Button variant="ghost" size="icon" className="h-10 w-10 rounded-lg">
-          <HugeiconsIcon icon={Notification03Icon} size={20} />
+        <Button variant="ghost" size="icon" className="h-9 w-9 rounded-lg">
+          <HugeiconsIcon icon={Notification03Icon} size={18} />
         </Button>
 
         {/* User Menu */}
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
-            <Button variant="ghost" className="h-10 w-10 rounded-full p-0">
-              <Avatar className="h-10 w-10">
-                <AvatarImage src="" alt="User" />
-                <AvatarFallback className="bg-primary text-primary-foreground text-sm font-semibold">
-                  U
+            <Button variant="ghost" className="h-9 w-9 rounded-full p-0">
+              <Avatar className="h-9 w-9">
+                <AvatarImage src={user?.avatar || ''} alt={user?.name || 'User'} />
+                <AvatarFallback className="bg-primary text-primary-foreground text-xs font-semibold">
+                  {user ? getInitials(user.name) : 'U'}
                 </AvatarFallback>
               </Avatar>
             </Button>
@@ -80,21 +97,21 @@ export function Header() {
           <DropdownMenuContent align="end" className="w-56">
             <DropdownMenuLabel>
               <div className="flex flex-col space-y-1">
-                <p className="text-sm font-semibold">User Account</p>
-                <p className="text-xs text-muted-foreground font-normal">user@example.com</p>
+                <p className="text-sm font-semibold">{user?.name || 'User'}</p>
+                <p className="text-xs text-muted-foreground font-normal">{user?.email || ''}</p>
               </div>
             </DropdownMenuLabel>
             <DropdownMenuSeparator />
-            <DropdownMenuItem>
+            <DropdownMenuItem onClick={() => navigate('/settings')}>
               <HugeiconsIcon icon={User02Icon} size={16} className="mr-2" />
               <span className="font-medium">Profile</span>
             </DropdownMenuItem>
-            <DropdownMenuItem>
+            <DropdownMenuItem onClick={() => navigate('/settings')}>
               <HugeiconsIcon icon={Settings02Icon} size={16} className="mr-2" />
               <span className="font-medium">Settings</span>
             </DropdownMenuItem>
             <DropdownMenuSeparator />
-            <DropdownMenuItem className="text-destructive focus:text-destructive">
+            <DropdownMenuItem onClick={handleLogout} className="text-destructive focus:text-destructive">
               <HugeiconsIcon icon={Logout03Icon} size={16} className="mr-2" />
               <span className="font-medium">Log out</span>
             </DropdownMenuItem>

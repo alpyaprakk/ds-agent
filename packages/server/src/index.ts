@@ -94,36 +94,42 @@ setupWebSocketHandlers(io);
 
 // Run database migrations on startup
 async function runMigrations() {
-  try {
-    console.log('🔄 Running database migrations...');
+  const migrationFiles = [
+    '001_add_variable_collections_and_fix_columns.sql',
+    '002_add_auth_tables.sql',
+  ];
 
-    // Try multiple paths (works in both dev and Docker)
-    const possiblePaths = [
-      join(__dirname, '../../../database/migrations/001_add_variable_collections_and_fix_columns.sql'), // dev: packages/server/dist -> root
-      join(__dirname, '../database/migrations/001_add_variable_collections_and_fix_columns.sql'),       // docker: /app/dist -> /app/database
-      join(process.cwd(), 'database/migrations/001_add_variable_collections_and_fix_columns.sql'),      // cwd fallback
-    ];
+  for (const file of migrationFiles) {
+    try {
+      console.log(`🔄 Running migration: ${file}...`);
 
-    let migrationSQL: string | null = null;
-    for (const p of possiblePaths) {
-      try {
-        migrationSQL = readFileSync(p, 'utf-8');
-        console.log(`📄 Found migration at: ${p}`);
-        break;
-      } catch {
-        // Try next path
+      const possiblePaths = [
+        join(__dirname, `../../../database/migrations/${file}`),
+        join(__dirname, `../database/migrations/${file}`),
+        join(process.cwd(), `database/migrations/${file}`),
+      ];
+
+      let migrationSQL: string | null = null;
+      for (const p of possiblePaths) {
+        try {
+          migrationSQL = readFileSync(p, 'utf-8');
+          console.log(`📄 Found migration at: ${p}`);
+          break;
+        } catch {
+          // Try next path
+        }
       }
-    }
 
-    if (!migrationSQL) {
-      console.log('⚠️ Migration file not found, skipping');
-      return;
-    }
+      if (!migrationSQL) {
+        console.log(`⚠️ Migration ${file} not found, skipping`);
+        continue;
+      }
 
-    await pool.query(migrationSQL);
-    console.log('✅ Database migrations completed');
-  } catch (error) {
-    console.error('⚠️ Migration error (may be safe to ignore if already applied):', error instanceof Error ? error.message : error);
+      await pool.query(migrationSQL);
+      console.log(`✅ Migration ${file} completed`);
+    } catch (error) {
+      console.error(`⚠️ Migration ${file} error (may be safe to ignore if already applied):`, error instanceof Error ? error.message : error);
+    }
   }
 }
 

@@ -1,14 +1,18 @@
 import { Router } from 'express';
-import { WorkspaceRepository, FigmaFileRepository } from '../../db/repositories';
+import { WorkspaceRepository, FigmaFileRepository, UserRepository } from '../../db/repositories';
+import { authMiddleware, AuthRequest } from '../../middleware/auth';
 
 const router = Router();
 const workspaceRepo = new WorkspaceRepository();
 const figmaFileRepo = new FigmaFileRepository();
 
-// GET /api/workspaces - List all workspaces
-router.get('/', async (_req, res) => {
+// Apply auth middleware to all workspace routes
+router.use(authMiddleware);
+
+// GET /api/workspaces - List user's workspaces
+router.get('/', async (req: AuthRequest, res) => {
   try {
-    const workspaces = await workspaceRepo.findAll();
+    const workspaces = await UserRepository.getWorkspacesByUser(req.user!.id);
     return res.json({ workspaces });
   } catch (error) {
     console.error('Error fetching workspaces:', error);
@@ -17,8 +21,12 @@ router.get('/', async (_req, res) => {
 });
 
 // GET /api/workspaces/:id - Get workspace by ID
-router.get('/:id', async (req, res) => {
+router.get('/:id', async (req: AuthRequest, res) => {
   try {
+    const isMember = await UserRepository.isWorkspaceMember(req.user!.id, req.params.id);
+    if (!isMember) {
+      return res.status(403).json({ error: 'Access denied' });
+    }
     const workspace = await workspaceRepo.findById(req.params.id);
     if (!workspace) {
       return res.status(404).json({ error: 'Workspace not found' });
@@ -31,9 +39,11 @@ router.get('/:id', async (req, res) => {
 });
 
 // POST /api/workspaces - Create new workspace
-router.post('/', async (req, res) => {
+router.post('/', async (req: AuthRequest, res) => {
   try {
     const workspace = await workspaceRepo.create(req.body);
+    // Add creator as owner
+    await UserRepository.addToWorkspace(req.user!.id, workspace.id, 'owner');
     return res.status(201).json({ workspace });
   } catch (error) {
     console.error('Error creating workspace:', error);

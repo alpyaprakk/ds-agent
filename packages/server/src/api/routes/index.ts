@@ -1,4 +1,5 @@
 import { Router } from 'express';
+import authRouter from './auth';
 import workspacesRouter from './workspaces';
 import conflictsRouter from './conflicts';
 import syncRouter from './sync';
@@ -23,6 +24,9 @@ router.get('/plugins/status', (_req, res) => {
     ...status
   });
 });
+
+// Auth routes (public: register, login; protected: me, settings, profile)
+router.use('/auth', authRouter);
 
 router.use('/workspaces', workspacesRouter);
 router.use('/workspaces', conflictsRouter);
