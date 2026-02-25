@@ -24,11 +24,14 @@ export interface FigmaFile {
 export interface Conflict {
   id: string;
   workspace_id: string;
+  conflict_type: string;
   severity: 'low' | 'medium' | 'high';
   status: 'active' | 'resolved' | 'dismissed';
   entity_type: string;
+  entity_id: string;
   entity_name?: string;
   description?: string;
+  resolution_method?: string;
   created_at: string;
 }
 
