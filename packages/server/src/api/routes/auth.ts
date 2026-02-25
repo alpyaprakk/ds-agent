@@ -1,8 +1,33 @@
 import { Router, Response } from 'express';
 import bcrypt from 'bcryptjs';
+import multer from 'multer';
+import path from 'path';
+import { randomUUID } from 'crypto';
 import { UserRepository } from '../../db/repositories/user-repository';
 import { authMiddleware, generateToken, AuthRequest } from '../../middleware/auth';
 import { NotificationService } from '../../services/notification.service';
+
+// Configure multer for avatar uploads
+const avatarStorage = multer.diskStorage({
+  destination: path.join(__dirname, '../../../uploads/avatars'),
+  filename: (_req, file, cb) => {
+    const ext = path.extname(file.originalname).toLowerCase() || '.png';
+    cb(null, `${randomUUID()}${ext}`);
+  },
+});
+
+const avatarUpload = multer({
+  storage: avatarStorage,
+  limits: { fileSize: 5 * 1024 * 1024 }, // 5MB
+  fileFilter: (_req, file, cb) => {
+    const allowed = ['image/jpeg', 'image/png', 'image/gif', 'image/webp'];
+    if (allowed.includes(file.mimetype)) {
+      cb(null, true);
+    } else {
+      cb(new Error('Only JPEG, PNG, GIF, and WebP images are allowed'));
+    }
+  },
+});
 
 const router = Router();
 
@@ -194,6 +219,44 @@ router.put('/profile', authMiddleware, async (req: AuthRequest, res: Response) =
     console.error('Update profile error:', error);
     res.status(500).json({ error: 'Failed to update profile' });
   }
+});
+
+// POST /api/auth/avatar - Upload avatar image
+router.post('/avatar', authMiddleware, (req: AuthRequest, res: Response) => {
+  avatarUpload.single('avatar')(req, res, async (err: any) => {
+    if (err) {
+      if (err instanceof multer.MulterError) {
+        if (err.code === 'LIMIT_FILE_SIZE') {
+          res.status(400).json({ error: 'File size must be under 5MB' });
+          return;
+        }
+      }
+      res.status(400).json({ error: err.message || 'Upload failed' });
+      return;
+    }
+
+    if (!req.file) {
+      res.status(400).json({ error: 'No file provided' });
+      return;
+    }
+
+    try {
+      const avatarUrl = `/uploads/avatars/${req.file.filename}`;
+      const user = await UserRepository.update(req.user!.id, { avatar: avatarUrl });
+
+      res.json({
+        user: {
+          id: user.id,
+          email: user.email,
+          name: user.name,
+          avatar: user.avatar,
+        },
+      });
+    } catch (error) {
+      console.error('Avatar upload error:', error);
+      res.status(500).json({ error: 'Failed to update avatar' });
+    }
+  });
 });
 
 // ==========================================

@@ -22,6 +22,7 @@ import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { NotificationPanel } from '@/components/NotificationPanel';
 import { useWorkspaceStore } from '@/store/workspace-store';
 import { useAuthStore } from '@/store/auth-store';
+import { getAvatarUrl } from '@/lib/api-client';
 import { useTheme } from '@/contexts/ThemeContext';
 
 export function Header() {
@@ -45,8 +46,8 @@ export function Header() {
   };
 
   return (
-    <header className="sticky top-0 z-40 border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
-      <div className="flex h-14 items-center gap-4 px-6">
+    <header className="sticky top-0 z-40 h-14 border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
+      <div className="flex h-full items-center gap-4 px-6">
 
         {/* Page context */}
         <div className="flex items-center gap-3">
@@ -85,7 +86,7 @@ export function Header() {
           <DropdownMenuTrigger asChild>
             <Button variant="ghost" className="h-9 w-9 rounded-full p-0">
               <Avatar className="h-9 w-9">
-                <AvatarImage src={user?.avatar || ''} alt={user?.name || 'User'} />
+                <AvatarImage src={getAvatarUrl(user?.avatar)} alt={user?.name || 'User'} />
                 <AvatarFallback className="bg-primary text-primary-foreground text-xs font-semibold">
                   {user ? getInitials(user.name) : 'U'}
                 </AvatarFallback>

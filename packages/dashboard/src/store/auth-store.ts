@@ -21,6 +21,7 @@ interface AuthStore {
     figma_access_token?: string;
   }) => Promise<void>;
   updateProfile: (data: { name?: string; avatar?: string }) => Promise<void>;
+  uploadAvatar: (file: File) => Promise<void>;
 }
 
 export const useAuthStore = create<AuthStore>((set, get) => ({
@@ -101,6 +102,16 @@ export const useAuthStore = create<AuthStore>((set, get) => ({
       set({ user });
     } catch (error) {
       console.error('Failed to update profile:', error);
+      throw error;
+    }
+  },
+
+  uploadAvatar: async (file) => {
+    try {
+      const { user } = await apiClient.uploadAvatar(file);
+      set({ user });
+    } catch (error) {
+      console.error('Failed to upload avatar:', error);
       throw error;
     }
   },
