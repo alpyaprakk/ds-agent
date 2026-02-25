@@ -33,11 +33,13 @@ export function setupWebSocketHandlers(io: SocketIOServer) {
       console.log(`✅ Plugin connected: ${data.plugin} (${socket.id})`);
 
       // Broadcast plugin status to all clients
-      io.emit('plugin-status', {
+      const statusData = {
         connected: true,
         plugin: data.plugin,
         count: connectedPlugins.size
-      });
+      };
+      console.log(`📡 Broadcasting plugin-status:`, statusData);
+      io.emit('plugin-status', statusData);
 
       socket.emit('plugin-connected', {
         success: true,

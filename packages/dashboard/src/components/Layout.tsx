@@ -53,8 +53,10 @@ export function Layout({ children }: LayoutProps) {
     });
 
     socket.on('plugin-status', (data: { connected: boolean; plugin: string; count: number }) => {
-      console.log('Plugin status update:', data);
-      setPluginConnected(data.connected && data.count > 0);
+      console.log('📥 Plugin status update received:', data);
+      const newStatus = data.connected && data.count > 0;
+      console.log(`🔄 Setting pluginConnected to:`, newStatus);
+      setPluginConnected(newStatus);
     });
 
     socket.on('disconnect', () => {
