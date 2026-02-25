@@ -14,7 +14,7 @@ import { useAuthStore } from './store/auth-store';
 import { useNotificationStore } from './store/notification-store';
 import { wsClient } from './lib/websocket';
 import { LayoutProvider } from './contexts/LayoutContext';
-import { ThemeProvider } from './contexts/ThemeContext';
+import { ThemeProvider, useTheme } from './contexts/ThemeContext';
 
 // Auth guard component
 function RequireAuth({ children }: { children: React.ReactNode }) {
@@ -57,6 +57,7 @@ function PublicRoute({ children }: { children: React.ReactNode }) {
 function AppContent() {
   const { fetchWorkspaces, setCurrentWorkspace, workspaces } = useWorkspaceStore();
   const { user, checkAuth } = useAuthStore();
+  const { theme } = useTheme();
 
   // Check auth on mount
   useEffect(() => {
@@ -213,7 +214,22 @@ function AppContent() {
   }, [workspaces, setCurrentWorkspace]);
 
   return (
-    <Routes>
+    <>
+      <Toaster
+        position="bottom-right"
+        theme={theme}
+        toastOptions={{
+          classNames: {
+            toast: 'dark:bg-zinc-900 dark:border-zinc-800 dark:text-zinc-100',
+            title: 'dark:text-zinc-100',
+            description: 'dark:text-zinc-400',
+            actionButton: 'dark:bg-zinc-700 dark:text-zinc-100',
+            cancelButton: 'dark:bg-zinc-800 dark:text-zinc-400',
+            closeButton: 'dark:bg-zinc-800 dark:border-zinc-700 dark:text-zinc-400',
+          },
+        }}
+      />
+      <Routes>
       {/* Public routes */}
       <Route path="/login" element={<PublicRoute><Login /></PublicRoute>} />
       <Route path="/register" element={<PublicRoute><Register /></PublicRoute>} />
@@ -234,7 +250,8 @@ function AppContent() {
           </LayoutProvider>
         </RequireAuth>
       } />
-    </Routes>
+      </Routes>
+    </>
   );
 }
 
@@ -242,7 +259,6 @@ function App() {
   return (
     <ThemeProvider>
       <BrowserRouter>
-        <Toaster position="top-right" richColors />
         <AppContent />
       </BrowserRouter>
     </ThemeProvider>
