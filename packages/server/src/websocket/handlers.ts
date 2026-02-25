@@ -258,14 +258,30 @@ export function setupWebSocketHandlers(io: SocketIOServer) {
           client.release();
         }
 
-        // Update file sync status
+        // Update file sync status and stats
         await pool.query(
           `UPDATE figma_files SET
              sync_status = 'success',
              last_synced = NOW(),
+             stats = $2,
              updated_at = NOW()
            WHERE id = $1`,
-          [figmaFile.id]
+          [figmaFile.id, JSON.stringify({
+            variables: variables.length,
+            collections: collections.length,
+            components: components.length,
+            lastSyncedAt: new Date().toISOString()
+          })]
+        );
+
+        // Update workspace total counts from actual DB data
+        await pool.query(
+          `UPDATE workspaces SET
+             total_variables = (SELECT COUNT(*) FROM variables WHERE workspace_id = $1),
+             total_components = (SELECT COUNT(*) FROM components WHERE workspace_id = $1),
+             updated_at = NOW()
+           WHERE id = $1`,
+          [figmaFile.workspace_id]
         );
 
         console.log(`✅ Sync completed: ${variables.length} variables, ${components.length} components saved`);
@@ -296,7 +312,7 @@ export function setupWebSocketHandlers(io: SocketIOServer) {
         io.emit('figma_synced', syncedData);
 
         // Trigger AI analysis (async, don't block sync response)
-        analyzeDesignSystemAsync(io, figmaFile.workspace_id, figmaFile.id, data.data)
+        analyzeDesignSystemAsync(io, figmaFile.workspace_id, figmaFile.id, syncPayload)
           .catch(err => console.error('❌ AI analysis failed:', err));
 
       } catch (error) {

@@ -16,6 +16,22 @@ import {
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
+import { Input } from '@/components/ui/input';
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog';
+
+interface DeleteFileState {
+  isOpen: boolean;
+  file: { id: string; name: string } | null;
+  confirmText: string;
+  isDeleting: boolean;
+}
 
 export function Dashboard() {
   const {
@@ -23,21 +39,24 @@ export function Dashboard() {
     figmaFiles,
     conflicts,
     loading,
+    fetchWorkspaces,
+    deleteFigmaFile,
   } = useWorkspaceStore();
   const [showAddFileModal, setShowAddFileModal] = useState(false);
   const [showCreateWorkspaceModal, setShowCreateWorkspaceModal] = useState(false);
   const [syncingFileId, setSyncingFileId] = useState<string | null>(null);
+  const [deleteState, setDeleteState] = useState<DeleteFileState>({
+    isOpen: false,
+    file: null,
+    confirmText: '',
+    isDeleting: false,
+  });
 
   const handleSyncFile = async (fileId: string, fileName: string) => {
     setSyncingFileId(fileId);
     try {
       const result = await apiClient.syncFile(fileId);
       toast.success(result.message || `"${fileName}" synced successfully`);
-
-      // Refresh data after sync
-      if (currentWorkspace) {
-        // This will be handled by the store in a real implementation
-      }
     } catch (error) {
       toast.error(`Failed to sync "${fileName}"`);
       console.error('Sync error:', error);
@@ -46,16 +65,52 @@ export function Dashboard() {
     }
   };
 
+  const openDeleteDialog = (file: { id: string; name: string }) => {
+    setDeleteState({
+      isOpen: true,
+      file,
+      confirmText: '',
+      isDeleting: false,
+    });
+  };
+
+  const closeDeleteDialog = () => {
+    setDeleteState({
+      isOpen: false,
+      file: null,
+      confirmText: '',
+      isDeleting: false,
+    });
+  };
+
+  const handleDeleteFile = async () => {
+    if (!deleteState.file || !currentWorkspace) return;
+    if (deleteState.confirmText !== deleteState.file.name) return;
+
+    setDeleteState((prev) => ({ ...prev, isDeleting: true }));
+    try {
+      await deleteFigmaFile(currentWorkspace.id, deleteState.file.id);
+      toast.success(`"${deleteState.file.name}" deleted successfully`);
+      closeDeleteDialog();
+      // Refresh workspace data to update stats
+      fetchWorkspaces();
+    } catch (error) {
+      toast.error(`Failed to delete "${deleteState.file.name}"`);
+      console.error('Delete error:', error);
+      setDeleteState((prev) => ({ ...prev, isDeleting: false }));
+    }
+  };
+
   useEffect(() => {
-    // Auto-refresh data
+    // Auto-refresh workspace data periodically
     const interval = setInterval(() => {
       if (currentWorkspace) {
-        // Refresh would happen here
+        fetchWorkspaces();
       }
     }, 30000); // 30 seconds
 
     return () => clearInterval(interval);
-  }, [currentWorkspace]);
+  }, [currentWorkspace, fetchWorkspaces]);
 
   if (!currentWorkspace) {
     return (
@@ -100,10 +155,6 @@ export function Dashboard() {
               <div className="text-2xl font-bold">
                 {currentWorkspace.health_score || 0}%
               </div>
-              <div className="flex items-center text-xs text-emerald-600 dark:text-emerald-400">
-                <HugeiconsIcon icon={ChartUpIcon} className="h-3 w-3 mr-0.5" />
-                <span>+5%</span>
-              </div>
             </div>
             <div className="mt-3">
               <div className="w-full bg-muted rounded-full h-1.5">
@@ -126,14 +177,8 @@ export function Dashboard() {
             </div>
           </CardHeader>
           <CardContent>
-            <div className="flex items-baseline gap-2">
-              <div className="text-2xl font-bold">
-                {currentWorkspace.total_components || 0}
-              </div>
-              <div className="flex items-center text-xs text-emerald-600 dark:text-emerald-400">
-                <HugeiconsIcon icon={ChartUpIcon} className="h-3 w-3 mr-0.5" />
-                <span>+3</span>
-              </div>
+            <div className="text-2xl font-bold">
+              {currentWorkspace.total_components || 0}
             </div>
             <p className="text-xs text-muted-foreground mt-2">
               Total components
@@ -151,14 +196,8 @@ export function Dashboard() {
             </div>
           </CardHeader>
           <CardContent>
-            <div className="flex items-baseline gap-2">
-              <div className="text-2xl font-bold">
-                {currentWorkspace.total_variables || 0}
-              </div>
-              <div className="flex items-center text-xs text-emerald-600 dark:text-emerald-400">
-                <HugeiconsIcon icon={ChartUpIcon} className="h-3 w-3 mr-0.5" />
-                <span>+12</span>
-              </div>
+            <div className="text-2xl font-bold">
+              {currentWorkspace.total_variables || 0}
             </div>
             <p className="text-xs text-muted-foreground mt-2">
               Total variables
@@ -184,12 +223,7 @@ export function Dashboard() {
               <div className="text-2xl font-bold">
                 {conflicts.length}
               </div>
-              {conflicts.length > 0 ? (
-                <div className="flex items-center text-xs text-red-600 dark:text-red-400">
-                  <HugeiconsIcon icon={ChartUpIcon} className="h-3 w-3 mr-0.5" />
-                  <span>+{conflicts.length}</span>
-                </div>
-              ) : (
+              {conflicts.length === 0 && (
                 <div className="flex items-center text-xs text-emerald-600 dark:text-emerald-400">
                   <span>All clear</span>
                 </div>
@@ -227,24 +261,36 @@ export function Dashboard() {
                   key={file.id}
                   className="flex items-center justify-between p-4 bg-card rounded-lg hover:bg-muted/50 transition-colors border border-border/50 hover:border-border"
                 >
-                  <div>
+                  <div className="min-w-0 flex-1">
                     <div className="font-medium">{file.name}</div>
                     <div className="text-sm text-muted-foreground">
-                      Role: {file.role} • Status: {file.sync_status}
+                      Role: {file.role} {file.last_synced && `• Last synced: ${new Date(file.last_synced).toLocaleString()}`}
                     </div>
                   </div>
-                  <div className="flex items-center gap-2">
+                  <div className="flex items-center gap-2 ml-4">
                     <Button
                       variant="ghost"
                       size="sm"
                       onClick={() => handleSyncFile(file.id, file.name)}
                       disabled={syncingFileId === file.id}
                       className="h-8 w-8 p-0"
+                      title="Sync file"
                     >
                       <HugeiconsIcon
                         icon={ReloadIcon}
                         className={`h-4 w-4 ${syncingFileId === file.id ? 'animate-spin' : ''}`}
                       />
+                    </Button>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => openDeleteDialog({ id: file.id, name: file.name })}
+                      className="h-8 w-8 p-0 text-muted-foreground hover:text-red-600 dark:hover:text-red-400"
+                      title="Delete file"
+                    >
+                      <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                        <path d="M3 6h18" /><path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6" /><path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2" /><line x1="10" x2="10" y1="11" y2="17" /><line x1="14" x2="14" y1="11" y2="17" />
+                      </svg>
                     </Button>
                     <Badge
                       variant={
@@ -252,6 +298,8 @@ export function Dashboard() {
                           ? 'default'
                           : file.sync_status === 'syncing'
                           ? 'secondary'
+                          : file.sync_status === 'failed'
+                          ? 'destructive'
                           : 'outline'
                       }
                     >
@@ -282,6 +330,56 @@ export function Dashboard() {
         isOpen={showAddFileModal}
         onClose={() => setShowAddFileModal(false)}
       />
+
+      {/* Delete Confirmation Dialog */}
+      <Dialog open={deleteState.isOpen} onOpenChange={(open) => !open && closeDeleteDialog()}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle className="text-red-600 dark:text-red-400">
+              Delete Figma File
+            </DialogTitle>
+            <DialogDescription>
+              This action is <strong>irreversible</strong>. All synced variables, components,
+              and related data for this file will be permanently deleted.
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="py-4">
+            <p className="text-sm mb-3">
+              To confirm, type the file name: <strong className="font-mono text-foreground">{deleteState.file?.name}</strong>
+            </p>
+            <Input
+              value={deleteState.confirmText}
+              onChange={(e) =>
+                setDeleteState((prev) => ({ ...prev, confirmText: e.target.value }))
+              }
+              placeholder="Type file name to confirm..."
+              disabled={deleteState.isDeleting}
+              autoFocus
+            />
+          </div>
+
+          <DialogFooter>
+            <Button
+              variant="outline"
+              onClick={closeDeleteDialog}
+              disabled={deleteState.isDeleting}
+            >
+              Cancel
+            </Button>
+            <Button
+              variant="destructive"
+              onClick={handleDeleteFile}
+              disabled={
+                deleteState.confirmText !== deleteState.file?.name ||
+                deleteState.isDeleting
+              }
+            >
+              {deleteState.isDeleting ? 'Deleting...' : 'Delete File'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

@@ -111,6 +111,15 @@ class ApiClient {
     });
   }
 
+  async deleteFigmaFile(
+    workspaceId: string,
+    fileId: string
+  ): Promise<{ success: boolean }> {
+    return this.request(`/api/workspaces/${workspaceId}/files/${fileId}`, {
+      method: 'DELETE',
+    });
+  }
+
   async syncFile(fileId: string): Promise<{ success: boolean; message: string }> {
     return this.request(`/api/sync/files/${fileId}`, {
       method: 'POST',

@@ -82,11 +82,12 @@ function App() {
         duration: 5000,
       });
 
-      // Refresh file list and workspace data
-      const currentWorkspace = useWorkspaceStore.getState().currentWorkspace;
-      if (currentWorkspace) {
-        useWorkspaceStore.getState().fetchFigmaFiles(currentWorkspace.id);
-        useWorkspaceStore.getState().fetchConflicts(currentWorkspace.id, 'active');
+      // Refresh file list, workspace stats, and conflicts
+      const store = useWorkspaceStore.getState();
+      store.fetchWorkspaces(); // Updates workspace stats (total_variables, total_components)
+      if (store.currentWorkspace) {
+        store.fetchFigmaFiles(store.currentWorkspace.id);
+        store.fetchConflicts(store.currentWorkspace.id, 'active');
       }
     });
 

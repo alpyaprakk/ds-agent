@@ -19,6 +19,7 @@ interface WorkspaceStore {
 
   fetchFigmaFiles: (workspaceId: string) => Promise<void>;
   addFigmaFile: (workspaceId: string, data: Partial<FigmaFile>) => Promise<void>;
+  deleteFigmaFile: (workspaceId: string, fileId: string) => Promise<void>;
 
   fetchConflicts: (workspaceId: string, status?: string) => Promise<void>;
   resolveConflict: (conflictId: string, data: any) => Promise<void>;
@@ -39,7 +40,15 @@ export const useWorkspaceStore = create<WorkspaceStore>((set, get) => ({
     set({ loading: true, error: null });
     try {
       const { workspaces } = await apiClient.getWorkspaces();
-      set({ workspaces, loading: false });
+      const currentId = get().currentWorkspace?.id;
+      const updatedCurrent = currentId
+        ? workspaces.find((w) => w.id === currentId) || null
+        : null;
+      set({
+        workspaces,
+        currentWorkspace: updatedCurrent ?? get().currentWorkspace,
+        loading: false,
+      });
     } catch (error) {
       set({
         error: error instanceof Error ? error.message : 'Failed to fetch workspaces',
@@ -139,6 +148,19 @@ export const useWorkspaceStore = create<WorkspaceStore>((set, get) => ({
       }));
     } catch (error) {
       console.error('Failed to add Figma file:', error);
+      throw error;
+    }
+  },
+
+  // Delete Figma file
+  deleteFigmaFile: async (workspaceId, fileId) => {
+    try {
+      await apiClient.deleteFigmaFile(workspaceId, fileId);
+      set((state) => ({
+        figmaFiles: state.figmaFiles.filter((f) => f.id !== fileId),
+      }));
+    } catch (error) {
+      console.error('Failed to delete Figma file:', error);
       throw error;
     }
   },
