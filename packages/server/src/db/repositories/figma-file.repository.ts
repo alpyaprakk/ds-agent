@@ -25,7 +25,7 @@ export class FigmaFileRepository {
     const result = await query(
       `INSERT INTO figma_files (workspace_id, figma_key, name, url, role, type, config)
        VALUES ($1, $2, $3, $4, $5, $6, $7)
-       ON CONFLICT (figma_key) DO UPDATE SET
+       ON CONFLICT (workspace_id, figma_key) DO UPDATE SET
          name = COALESCE(EXCLUDED.name, figma_files.name),
          role = COALESCE(EXCLUDED.role, figma_files.role),
          url = COALESCE(EXCLUDED.url, figma_files.url),

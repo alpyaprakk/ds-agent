@@ -139,7 +139,7 @@ export function setupWebSocketHandlers(io: SocketIOServer) {
           figmaFileResult = await pool.query(
             `INSERT INTO figma_files (workspace_id, figma_key, name, url, role, type, sync_status)
              VALUES ($1, $2, $3, $4, 'primary', 'design_system', 'syncing')
-             ON CONFLICT (figma_key) DO UPDATE SET name = EXCLUDED.name
+             ON CONFLICT (workspace_id, figma_key) DO UPDATE SET name = EXCLUDED.name
              RETURNING *`,
             [
               workspaceId,
@@ -178,7 +178,7 @@ export function setupWebSocketHandlers(io: SocketIOServer) {
             await client.query(
               `INSERT INTO variable_collections (id, workspace_id, figma_file_id, name, figma_key, modes)
                VALUES ${collectionValues}
-               ON CONFLICT (figma_key) DO UPDATE SET
+               ON CONFLICT (workspace_id, figma_key) DO UPDATE SET
                  name = EXCLUDED.name,
                  modes = EXCLUDED.modes,
                  updated_at = NOW()`,
@@ -210,7 +210,7 @@ export function setupWebSocketHandlers(io: SocketIOServer) {
             await client.query(
               `INSERT INTO variables (id, workspace_id, figma_file_id, name, figma_key, type, value, collection_id, scopes)
                VALUES ${variableValues}
-               ON CONFLICT (figma_key) DO UPDATE SET
+               ON CONFLICT (workspace_id, figma_key) DO UPDATE SET
                  name = EXCLUDED.name,
                  type = EXCLUDED.type,
                  value = EXCLUDED.value,
@@ -242,7 +242,7 @@ export function setupWebSocketHandlers(io: SocketIOServer) {
             await client.query(
               `INSERT INTO components (id, workspace_id, figma_file_id, name, figma_key, description, type, properties)
                VALUES ${componentValues}
-               ON CONFLICT (figma_key) DO UPDATE SET
+               ON CONFLICT (workspace_id, figma_key) DO UPDATE SET
                  name = EXCLUDED.name,
                  description = EXCLUDED.description,
                  updated_at = NOW()`,

@@ -42,7 +42,7 @@ CREATE TABLE figma_files (
   workspace_id UUID NOT NULL REFERENCES workspaces(id) ON DELETE CASCADE,
 
   -- Figma info
-  figma_key VARCHAR(255) NOT NULL UNIQUE,
+  figma_key VARCHAR(255) NOT NULL,
   name VARCHAR(255) NOT NULL,
   url TEXT,
 
@@ -62,7 +62,9 @@ CREATE TABLE figma_files (
   stats JSONB DEFAULT '{}',
 
   added_at TIMESTAMP DEFAULT NOW(),
-  updated_at TIMESTAMP DEFAULT NOW()
+  updated_at TIMESTAMP DEFAULT NOW(),
+
+  UNIQUE (workspace_id, figma_key)
 );
 
 CREATE INDEX idx_figma_files_workspace ON figma_files(workspace_id);
@@ -79,11 +81,13 @@ CREATE TABLE variable_collections (
   figma_file_id UUID REFERENCES figma_files(id) ON DELETE CASCADE,
 
   name VARCHAR(255) NOT NULL,
-  figma_key VARCHAR(255) UNIQUE,
+  figma_key VARCHAR(255),
   modes JSONB DEFAULT '[]',
 
   created_at TIMESTAMP DEFAULT NOW(),
-  updated_at TIMESTAMP DEFAULT NOW()
+  updated_at TIMESTAMP DEFAULT NOW(),
+
+  UNIQUE (workspace_id, figma_key)
 );
 
 CREATE INDEX idx_variable_collections_workspace ON variable_collections(workspace_id);
@@ -101,7 +105,7 @@ CREATE TABLE variables (
 
   -- Variable info
   name VARCHAR(255) NOT NULL,
-  figma_key VARCHAR(255) UNIQUE,
+  figma_key VARCHAR(255),
   type VARCHAR(50), -- COLOR, FLOAT, STRING, BOOLEAN
   collection_id VARCHAR(255),
 
@@ -115,7 +119,9 @@ CREATE TABLE variables (
   description TEXT,
 
   created_at TIMESTAMP DEFAULT NOW(),
-  updated_at TIMESTAMP DEFAULT NOW()
+  updated_at TIMESTAMP DEFAULT NOW(),
+
+  UNIQUE (workspace_id, figma_key)
 );
 
 CREATE INDEX idx_variables_workspace ON variables(workspace_id);
@@ -134,7 +140,7 @@ CREATE TABLE components (
 
   -- Component info
   name VARCHAR(255) NOT NULL,
-  figma_key VARCHAR(255) UNIQUE,
+  figma_key VARCHAR(255),
   type VARCHAR(50), -- COMPONENT, COMPONENT_SET
 
   -- Metadata
@@ -142,7 +148,9 @@ CREATE TABLE components (
   properties JSONB DEFAULT '{}',
 
   created_at TIMESTAMP DEFAULT NOW(),
-  updated_at TIMESTAMP DEFAULT NOW()
+  updated_at TIMESTAMP DEFAULT NOW(),
+
+  UNIQUE (workspace_id, figma_key)
 );
 
 CREATE INDEX idx_components_workspace ON components(workspace_id);

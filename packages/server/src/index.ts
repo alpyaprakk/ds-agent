@@ -97,6 +97,7 @@ async function runMigrations() {
   const migrationFiles = [
     '001_add_variable_collections_and_fix_columns.sql',
     '002_add_auth_tables.sql',
+    '003_workspace_scoped_unique_constraints.sql',
   ];
 
   for (const file of migrationFiles) {
