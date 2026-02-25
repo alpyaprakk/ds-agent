@@ -3,6 +3,7 @@ import { HugeiconsIcon } from '@hugeicons/react';
 import {
   AiCloudIcon, SaveMoneyDollarIcon, User02Icon, FigmaIcon,
   UserGroupIcon, Mail01Icon, Delete02Icon, Crown02Icon,
+  Tick02Icon, Cancel01Icon,
 } from '@hugeicons/core-free-icons';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
@@ -25,9 +26,10 @@ import { toast } from 'sonner';
 export function Settings() {
   const { user, settings: userSettings, fetchSettings, updateSettings, updateProfile } = useAuthStore();
   const {
-    currentWorkspace, members, invitations,
+    currentWorkspace, members, invitations, myInvitations,
     fetchMembers, fetchInvitations, inviteMember, removeMember,
-    updateMemberRole, cancelInvitation,
+    updateMemberRole, cancelInvitation, fetchMyInvitations,
+    acceptInvitation, rejectInvitation,
   } = useWorkspaceStore();
 
   const [aiProvider, setAiProvider] = useState<'anthropic' | 'openai'>('anthropic');
@@ -44,6 +46,7 @@ export function Settings() {
 
   useEffect(() => {
     fetchSettings();
+    fetchMyInvitations();
   }, []);
 
   useEffect(() => {
@@ -147,6 +150,24 @@ export function Settings() {
     }
   };
 
+  const handleAcceptInvitation = async (token: string, workspaceName: string) => {
+    try {
+      await acceptInvitation(token);
+      toast.success(`Joined workspace "${workspaceName}"`);
+    } catch (error: any) {
+      toast.error(error?.message || 'Failed to accept invitation');
+    }
+  };
+
+  const handleRejectInvitation = async (token: string) => {
+    try {
+      await rejectInvitation(token);
+      toast.success('Invitation declined');
+    } catch (error: any) {
+      toast.error(error?.message || 'Failed to decline invitation');
+    }
+  };
+
   const getInitials = (name: string) => {
     return name.split(' ').map(n => n[0]).join('').toUpperCase().slice(0, 2);
   };
@@ -207,6 +228,56 @@ export function Settings() {
             </Button>
           </CardContent>
         </Card>
+
+        {/* My Pending Invitations */}
+        {myInvitations.length > 0 && (
+          <Card className="border-blue-500/30 bg-blue-500/5">
+            <CardHeader className="pb-2">
+              <div className="flex items-center gap-3">
+                <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-blue-500/10">
+                  <HugeiconsIcon icon={Mail01Icon} size={20} className="text-blue-500" />
+                </div>
+                <div>
+                  <CardTitle className="text-base">Pending Invitations</CardTitle>
+                  <CardDescription className="mt-1">
+                    You have {myInvitations.length} workspace invitation{myInvitations.length !== 1 ? 's' : ''}
+                  </CardDescription>
+                </div>
+              </div>
+            </CardHeader>
+            <CardContent className="space-y-3 pt-4">
+              {myInvitations.map((inv) => (
+                <div key={inv.id} className="flex items-center gap-3 p-4 rounded-lg bg-card border">
+                  <span className="text-xl flex-shrink-0">{inv.workspace_icon || '📦'}</span>
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm font-semibold">{inv.workspace_name || 'Workspace'}</p>
+                    <p className="text-xs text-muted-foreground">
+                      Invited by {inv.inviter_name || 'someone'} as <span className="capitalize font-medium">{inv.role}</span>
+                    </p>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      className="text-destructive hover:text-destructive hover:bg-destructive/10"
+                      onClick={() => handleRejectInvitation(inv.token)}
+                    >
+                      <HugeiconsIcon icon={Cancel01Icon} size={14} className="mr-1.5" />
+                      Decline
+                    </Button>
+                    <Button
+                      size="sm"
+                      onClick={() => handleAcceptInvitation(inv.token, inv.workspace_name || 'Workspace')}
+                    >
+                      <HugeiconsIcon icon={Tick02Icon} size={14} className="mr-1.5" />
+                      Accept
+                    </Button>
+                  </div>
+                </div>
+              ))}
+            </CardContent>
+          </Card>
+        )}
 
         {/* Team / Members Card */}
         {currentWorkspace && (
