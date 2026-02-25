@@ -306,9 +306,9 @@ export function Dashboard() {
                       <Badge
                         variant={
                           file.sync_status === 'success'
-                            ? 'default'
+                            ? 'success'
                             : file.sync_status === 'syncing'
-                            ? 'secondary'
+                            ? 'info'
                             : file.sync_status === 'failed'
                             ? 'destructive'
                             : 'outline'

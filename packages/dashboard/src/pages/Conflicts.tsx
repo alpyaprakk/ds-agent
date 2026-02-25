@@ -14,7 +14,6 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { AIChatPanel } from '@/components/AIChatPanel';
-import { cn } from '@/lib/utils';
 import { wsClient } from '@/lib/websocket';
 import { toast } from 'sonner';
 import type { Conflict } from '@/lib/api-client';
@@ -336,16 +335,12 @@ export function Conflicts() {
                       <div className="mb-3">
                         <div className="flex items-center gap-1.5 mb-2 flex-wrap">
                           <Badge
-                            variant="secondary"
-                            className={cn(
-                              'text-[10px] font-semibold',
-                              conflict.severity === 'high' &&
-                                'bg-red-500/10 text-red-700 dark:text-red-400 hover:bg-red-500/20',
-                              conflict.severity === 'medium' &&
-                                'bg-yellow-500/10 text-yellow-700 dark:text-yellow-400 hover:bg-yellow-500/20',
-                              conflict.severity === 'low' &&
-                                'bg-blue-500/10 text-blue-700 dark:text-blue-400 hover:bg-blue-500/20'
-                            )}
+                            variant={
+                              conflict.severity === 'high' ? 'destructive'
+                              : conflict.severity === 'medium' ? 'warning'
+                              : 'info'
+                            }
+                            className="text-[10px] font-semibold"
                           >
                             {conflict.severity.toUpperCase()}
                           </Badge>
@@ -357,7 +352,7 @@ export function Conflicts() {
                             {conflict.entity_type}
                           </Badge>
                           {isAutoFixable && (
-                            <Badge className="gap-1 text-[10px] bg-emerald-500/10 text-emerald-700 dark:text-emerald-400 hover:bg-emerald-500/20">
+                            <Badge variant="success" className="gap-1 text-[10px]">
                               <HugeiconsIcon icon={SparklesIcon} size={10} />
                               Auto-fixable
                             </Badge>
