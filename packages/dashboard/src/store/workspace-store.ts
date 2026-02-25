@@ -168,6 +168,8 @@ export const useWorkspaceStore = create<WorkspaceStore>((set, get) => ({
       set((state) => ({
         figmaFiles: state.figmaFiles.filter((f) => f.id !== fileId),
       }));
+      // Refresh conflicts — server dismisses orphaned conflicts on delete
+      await get().fetchConflicts(workspaceId, 'active');
     } catch (error) {
       console.error('Failed to delete Figma file:', error);
       throw error;
