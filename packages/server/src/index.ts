@@ -1,7 +1,6 @@
 import express from 'express';
 import { createServer } from 'http';
 import { Server as SocketIOServer } from 'socket.io';
-import cors from 'cors';
 import helmet from 'helmet';
 import dotenv from 'dotenv';
 import apiRoutes from './api/routes';
@@ -29,25 +28,24 @@ const io = new SocketIOServer(httpServer, {
 const PORT = process.env.PORT || 3000;
 
 // Middleware
-app.use(helmet());
-app.use(cors({
-  origin: '*', // Allow all origins (including Figma plugin)
-  credentials: false
+app.use(helmet({
+  crossOriginResourcePolicy: false // Disable CORP to allow CORS
 }));
-app.use(express.json());
 
-// Explicit CORS for all requests (including Socket.IO)
+// Custom CORS middleware (replaces cors package)
 app.use((req, res, next) => {
-  res.header('Access-Control-Allow-Origin', '*');
-  res.header('Access-Control-Allow-Methods', 'GET, POST, OPTIONS, PUT, DELETE');
-  res.header('Access-Control-Allow-Headers', 'Content-Type, Authorization');
+  res.setHeader('Access-Control-Allow-Origin', '*');
+  res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS, PUT, DELETE');
+  res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization');
+
   if (req.method === 'OPTIONS') {
-    res.sendStatus(200);
+    res.status(200).end();
     return;
   }
   next();
-  return;
 });
+
+app.use(express.json());
 
 // API routes (includes /api/health)
 app.use('/api', apiRoutes);
