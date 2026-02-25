@@ -220,8 +220,8 @@ export function Dashboard() {
             }[color];
             return (
               <Card>
-                <CardContent className="p-4">
-                  <div className="flex items-center justify-between mb-3">
+                <CardContent className="p-4 flex flex-col gap-3">
+                  <div className="flex items-center justify-between">
                     <div className="flex items-center gap-2">
                       <div className={`flex h-7 w-7 items-center justify-center rounded-lg ${colorMap.bg}`}>
                         <HugeiconsIcon icon={Activity01Icon} size={13} className={colorMap.icon} />
@@ -233,13 +233,11 @@ export function Dashboard() {
                     </span>
                   </div>
                   <p className={`text-2xl font-bold tracking-tight ${colorMap.icon}`}>{score}%</p>
-                  <div className="mt-2.5">
-                    <div className="w-full bg-muted rounded-full h-1.5">
-                      <div
-                        className={`${colorMap.bar} h-1.5 rounded-full transition-all duration-500`}
-                        style={{ width: `${score}%` }}
-                      />
-                    </div>
+                  <div className="w-full bg-muted rounded-full h-1.5">
+                    <div
+                      className={`${colorMap.bar} h-1.5 rounded-full transition-all duration-500`}
+                      style={{ width: `${score}%` }}
+                    />
                   </div>
                 </CardContent>
               </Card>
@@ -247,48 +245,45 @@ export function Dashboard() {
           })()}
 
           <Card>
-            <CardContent className="p-4">
-              <div className="flex items-center gap-3">
-                <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-blue-500/10">
-                  <HugeiconsIcon icon={PackageIcon} size={14} className="text-blue-500" />
+            <CardContent className="p-4 flex flex-col gap-3">
+              <div className="flex items-center gap-2">
+                <div className="flex h-7 w-7 items-center justify-center rounded-lg bg-blue-500/10">
+                  <HugeiconsIcon icon={PackageIcon} size={13} className="text-blue-500" />
                 </div>
-                <div>
-                  <p className="text-xs text-muted-foreground font-medium">Components</p>
-                  <p className="text-lg font-bold">{currentWorkspace.total_components || 0}</p>
-                </div>
+                <p className="text-xs text-muted-foreground font-medium">Components</p>
               </div>
+              <p className="text-2xl font-bold tracking-tight">{currentWorkspace.total_components || 0}</p>
+              <div className="h-1.5" />
             </CardContent>
           </Card>
 
           <Card>
-            <CardContent className="p-4">
-              <div className="flex items-center gap-3">
-                <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-purple-500/10">
-                  <HugeiconsIcon icon={ChartUpIcon} size={14} className="text-purple-500" />
+            <CardContent className="p-4 flex flex-col gap-3">
+              <div className="flex items-center gap-2">
+                <div className="flex h-7 w-7 items-center justify-center rounded-lg bg-purple-500/10">
+                  <HugeiconsIcon icon={ChartUpIcon} size={13} className="text-purple-500" />
                 </div>
-                <div>
-                  <p className="text-xs text-muted-foreground font-medium">Variables</p>
-                  <p className="text-lg font-bold">{currentWorkspace.total_variables || 0}</p>
-                </div>
+                <p className="text-xs text-muted-foreground font-medium">Variables</p>
               </div>
+              <p className="text-2xl font-bold tracking-tight">{currentWorkspace.total_variables || 0}</p>
+              <div className="h-1.5" />
             </CardContent>
           </Card>
 
           <Card>
-            <CardContent className="p-4">
-              <div className="flex items-center gap-3">
-                <div className={`flex h-8 w-8 items-center justify-center rounded-lg ${conflicts.length > 0 ? 'bg-red-500/10' : 'bg-emerald-500/10'}`}>
+            <CardContent className="p-4 flex flex-col gap-3">
+              <div className="flex items-center gap-2">
+                <div className={`flex h-7 w-7 items-center justify-center rounded-lg ${conflicts.length > 0 ? 'bg-red-500/10' : 'bg-emerald-500/10'}`}>
                   <HugeiconsIcon
                     icon={conflicts.length > 0 ? AlertDiamondIcon : ChartUpIcon}
-                    size={14}
+                    size={13}
                     className={conflicts.length > 0 ? 'text-red-500' : 'text-emerald-500'}
                   />
                 </div>
-                <div>
-                  <p className="text-xs text-muted-foreground font-medium">Conflicts</p>
-                  <p className="text-lg font-bold">{conflicts.length}</p>
-                </div>
+                <p className="text-xs text-muted-foreground font-medium">Conflicts</p>
               </div>
+              <p className={`text-2xl font-bold tracking-tight ${conflicts.length > 0 ? 'text-red-500' : ''}`}>{conflicts.length}</p>
+              <div className="h-1.5" />
             </CardContent>
           </Card>
         </div>

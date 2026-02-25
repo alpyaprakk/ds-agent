@@ -384,7 +384,7 @@ export function Variables() {
       {/* Left Sidebar */}
       <div className="w-56 border-r flex flex-col flex-shrink-0 bg-card overflow-hidden">
         {/* Search */}
-        <div className="p-2.5 border-b flex-shrink-0">
+        <div className="h-[48px] px-2.5 flex items-center border-b flex-shrink-0">
           <div className="relative">
             <HugeiconsIcon icon={Search01Icon} size={14} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-muted-foreground" />
             <Input
@@ -498,9 +498,9 @@ export function Variables() {
       {/* Main Content - Variable Table */}
       <div className="flex-1 flex flex-col min-w-0">
         {/* Table Header */}
-        <div className="flex items-center border-b bg-muted/30 text-[11px] font-medium text-muted-foreground uppercase tracking-wider flex-shrink-0">
-          <div className="flex-1 px-4 py-2.5">Name</div>
-          <div className="w-[320px] px-4 py-2.5 border-l flex-shrink-0">Value</div>
+        <div className="h-[48px] flex items-center border-b bg-muted/30 text-[11px] font-medium text-muted-foreground uppercase tracking-wider flex-shrink-0">
+          <div className="flex-1 px-4">Name</div>
+          <div className="w-[320px] px-4 border-l flex-shrink-0 h-full flex items-center">Value</div>
         </div>
 
         {/* Table Body */}
