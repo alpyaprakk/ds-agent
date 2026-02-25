@@ -29,11 +29,11 @@ app.use(cors({
 }));
 app.use(express.json());
 
-// Explicit CORS for Socket.IO endpoints
-app.use('/socket.io/*', (req, res, next) => {
+// Explicit CORS for all requests (including Socket.IO)
+app.use((req, res, next) => {
   res.header('Access-Control-Allow-Origin', '*');
-  res.header('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
-  res.header('Access-Control-Allow-Headers', 'Content-Type');
+  res.header('Access-Control-Allow-Methods', 'GET, POST, OPTIONS, PUT, DELETE');
+  res.header('Access-Control-Allow-Headers', 'Content-Type, Authorization');
   if (req.method === 'OPTIONS') {
     res.sendStatus(200);
     return;
