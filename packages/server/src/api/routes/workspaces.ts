@@ -168,15 +168,20 @@ router.delete('/:workspaceId/files/:fileId', async (req: AuthRequest, res) => {
     const fileResult = await pool.query('SELECT name FROM figma_files WHERE id = $1', [req.params.fileId]);
     const fileName = fileResult.rows[0]?.name;
 
-    // Dismiss all active conflicts whose entity belongs to this file
-    // entity_id stores figma_key of the variable or component
+    // Dismiss all active conflicts whose entity belongs to this file.
+    // AI analyzer writes figma_id (e.g. "VariableID:123:456") into entity_id.
+    // We also check figma_key as fallback for conflicts created by other sources.
     await pool.query(
       `UPDATE conflicts
        SET status = 'dismissed', updated_at = NOW()
        WHERE workspace_id = $1
          AND status = 'active'
          AND entity_id IN (
+           SELECT figma_id FROM variables WHERE figma_file_id = $2 AND figma_id IS NOT NULL
+           UNION ALL
            SELECT figma_key FROM variables WHERE figma_file_id = $2 AND figma_key IS NOT NULL
+           UNION ALL
+           SELECT figma_id FROM components WHERE figma_file_id = $2 AND figma_id IS NOT NULL
            UNION ALL
            SELECT figma_key FROM components WHERE figma_file_id = $2 AND figma_key IS NOT NULL
          )`,
