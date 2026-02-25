@@ -102,10 +102,11 @@ router.post('/files/:fileId', async (req, res) => {
       // Save variable collections
       for (const collection of syncData.collections) {
         await pool.query(
-          `INSERT INTO variable_collections (id, workspace_id, figma_file_id, name, figma_key, modes)
-           VALUES ($1, $2, $3, $4, $5, $6)
+          `INSERT INTO variable_collections (id, workspace_id, figma_file_id, name, figma_key, figma_id, modes)
+           VALUES ($1, $2, $3, $4, $5, $6, $7)
            ON CONFLICT (workspace_id, figma_key) DO UPDATE SET
              name = EXCLUDED.name,
+             figma_id = EXCLUDED.figma_id,
              modes = EXCLUDED.modes,
              updated_at = NOW()`,
           [
@@ -114,6 +115,7 @@ router.post('/files/:fileId', async (req, res) => {
             file.id,
             collection.name,
             collection.key,
+            collection.id,
             JSON.stringify(collection.modes)
           ]
         );

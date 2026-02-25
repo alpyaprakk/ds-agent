@@ -45,6 +45,7 @@ export interface VariableCollection {
   figma_file_id?: string;
   name: string;
   figma_key: string;
+  figma_id: string;
   modes: any[];
   variable_count: number;
   created_at: string;

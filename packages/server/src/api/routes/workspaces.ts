@@ -358,7 +358,7 @@ router.get('/:id/collections', async (req: AuthRequest, res) => {
 
     const result = await pool.query(
       `SELECT vc.*,
-              (SELECT COUNT(*) FROM variables v WHERE v.workspace_id = vc.workspace_id AND v.collection_id = vc.figma_key) as variable_count
+              (SELECT COUNT(*) FROM variables v WHERE v.workspace_id = vc.workspace_id AND v.collection_id = vc.figma_id) as variable_count
        FROM variable_collections vc
        WHERE vc.workspace_id = $1
        ORDER BY vc.name ASC`,
@@ -377,17 +377,17 @@ router.get('/:id/variables', async (req: AuthRequest, res) => {
     const isMember = await UserRepository.isWorkspaceMember(req.user!.id, req.params.id);
     if (!isMember) return res.status(403).json({ error: 'Access denied' });
 
-    const collectionKey = req.query.collection as string | undefined;
+    const collectionFigmaId = req.query.collection as string | undefined;
 
     let queryText = `SELECT v.*, vc.name as collection_name
        FROM variables v
-       LEFT JOIN variable_collections vc ON vc.figma_key = v.collection_id AND vc.workspace_id = v.workspace_id
+       LEFT JOIN variable_collections vc ON vc.figma_id = v.collection_id AND vc.workspace_id = v.workspace_id
        WHERE v.workspace_id = $1`;
     const params: any[] = [req.params.id];
 
-    if (collectionKey) {
+    if (collectionFigmaId) {
       queryText += ` AND v.collection_id = $2`;
-      params.push(collectionKey);
+      params.push(collectionFigmaId);
     }
 
     queryText += ` ORDER BY v.name ASC`;

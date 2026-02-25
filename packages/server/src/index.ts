@@ -99,6 +99,7 @@ async function runMigrations() {
     '002_add_auth_tables.sql',
     '003_workspace_scoped_unique_constraints.sql',
     '004_add_workspace_invitations.sql',
+    '005_add_collection_figma_id.sql',
   ];
 
   for (const file of migrationFiles) {

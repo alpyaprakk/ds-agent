@@ -135,7 +135,7 @@ export function Variables() {
   const { currentWorkspace } = useWorkspaceStore();
   const [collections, setCollections] = useState<VariableCollection[]>([]);
   const [variables, setVariables] = useState<DesignVariable[]>([]);
-  const [selectedCollectionKey, setSelectedCollectionKey] = useState<string | null>(null);
+  const [selectedCollectionId, setSelectedCollectionId] = useState<string | null>(null);
   const [expandedGroups, setExpandedGroups] = useState<Set<string>>(new Set());
   const [searchQuery, setSearchQuery] = useState('');
   const [loading, setLoading] = useState(false);
@@ -164,14 +164,14 @@ export function Variables() {
     }
   };
 
-  const handleCollectionSelect = async (figmaKey: string | null) => {
-    setSelectedCollectionKey(figmaKey);
+  const handleCollectionSelect = async (figmaId: string | null) => {
+    setSelectedCollectionId(figmaId);
     setSelectedGroup(null);
     setExpandedGroups(new Set());
 
     if (!currentWorkspace) return;
     try {
-      const res = await apiClient.getVariables(currentWorkspace.id, figmaKey || undefined);
+      const res = await apiClient.getVariables(currentWorkspace.id, figmaId || undefined);
       setVariables(res.variables);
     } catch (error) {
       console.error('Failed to load variables:', error);
@@ -310,11 +310,11 @@ export function Variables() {
               <button
                 key={col.id}
                 onClick={() => handleCollectionSelect(
-                  selectedCollectionKey === col.figma_key ? null : col.figma_key
+                  selectedCollectionId === col.figma_id ? null : col.figma_id
                 )}
                 className={cn(
                   'w-full flex items-center gap-2 px-2 py-1.5 text-[13px] rounded-md transition-colors text-left',
-                  selectedCollectionKey === col.figma_key
+                  selectedCollectionId === col.figma_id
                     ? 'bg-primary text-primary-foreground font-medium'
                     : 'text-foreground hover:bg-muted/50'
                 )}
@@ -322,7 +322,7 @@ export function Variables() {
                 <span className="flex-1 truncate">{col.name}</span>
                 <span className={cn(
                   'text-[11px] tabular-nums',
-                  selectedCollectionKey === col.figma_key ? 'text-primary-foreground/70' : 'text-muted-foreground'
+                  selectedCollectionId === col.figma_id ? 'text-primary-foreground/70' : 'text-muted-foreground'
                 )}>
                   {col.variable_count}
                 </span>

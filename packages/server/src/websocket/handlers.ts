@@ -168,8 +168,8 @@ export function setupWebSocketHandlers(io: SocketIOServer) {
           // Batch save variable collections
           if (collections.length > 0) {
             const collectionValues = collections.map((_c: any, i: number) => {
-              const baseIndex = i * 6;
-              return `($${baseIndex + 1}, $${baseIndex + 2}, $${baseIndex + 3}, $${baseIndex + 4}, $${baseIndex + 5}, $${baseIndex + 6})`;
+              const baseIndex = i * 7;
+              return `($${baseIndex + 1}, $${baseIndex + 2}, $${baseIndex + 3}, $${baseIndex + 4}, $${baseIndex + 5}, $${baseIndex + 6}, $${baseIndex + 7})`;
             }).join(',');
 
             const collectionParams = collections.flatMap((c: any) => [
@@ -178,14 +178,16 @@ export function setupWebSocketHandlers(io: SocketIOServer) {
               figmaFile.id,
               c.name,
               c.key,
+              c.id,
               JSON.stringify(c.modes)
             ]);
 
             await client.query(
-              `INSERT INTO variable_collections (id, workspace_id, figma_file_id, name, figma_key, modes)
+              `INSERT INTO variable_collections (id, workspace_id, figma_file_id, name, figma_key, figma_id, modes)
                VALUES ${collectionValues}
                ON CONFLICT (workspace_id, figma_key) DO UPDATE SET
                  name = EXCLUDED.name,
+                 figma_id = EXCLUDED.figma_id,
                  modes = EXCLUDED.modes,
                  updated_at = NOW()`,
               collectionParams
