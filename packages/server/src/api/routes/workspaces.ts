@@ -2,6 +2,7 @@ import { Router } from 'express';
 import { WorkspaceRepository, FigmaFileRepository, UserRepository } from '../../db/repositories';
 import { authMiddleware, AuthRequest } from '../../middleware/auth';
 import { NotificationService } from '../../services/notification.service';
+import { PlanRepository } from '../../db/repositories/plan.repository';
 import pool from '../../db/connection';
 
 const router = Router();
@@ -47,6 +48,10 @@ router.get('/:id', async (req: AuthRequest, res) => {
 // POST /api/workspaces - Create new workspace
 router.post('/', async (req: AuthRequest, res) => {
   try {
+    const allowed = await PlanRepository.checkLimit(req.user!.id, 'workspace');
+    if (!allowed) {
+      return res.status(403).json({ error: 'plan_limit_exceeded', limit: 'workspace' });
+    }
     const workspace = await workspaceRepo.create(req.body);
     await UserRepository.addToWorkspace(req.user!.id, workspace.id, 'owner');
     return res.status(201).json({ workspace });
@@ -291,6 +296,11 @@ router.post('/:id/members/invite', async (req: AuthRequest, res) => {
 
     if (targetRole === 'admin' && role !== 'owner') {
       return res.status(403).json({ error: 'Only owners can invite admins' });
+    }
+
+    const seatAllowed = await PlanRepository.checkSeatLimit(req.params.id);
+    if (!seatAllowed) {
+      return res.status(403).json({ error: 'plan_limit_exceeded', limit: 'seat' });
     }
 
     // Check if already a member

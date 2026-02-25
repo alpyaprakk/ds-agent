@@ -4,6 +4,7 @@ import { AIAnalyzer, ChatMessage, ChatAction } from '../../services/ai-analyzer'
 import { query } from '../../db/connection';
 import { UserRepository } from '../../db/repositories';
 import { AgentConfigRepository } from '../../db/repositories/agent-config.repository';
+import { PlanRepository } from '../../db/repositories/plan.repository';
 import { getConnectedPluginsStatus, emitToPlugin } from '../../websocket/handlers';
 import { randomUUID } from 'crypto';
 
@@ -269,6 +270,11 @@ router.post('/', async (req: AuthRequest, res) => {
       return res.status(403).json({ error: 'Access denied' });
     }
 
+    const aiAllowed = await PlanRepository.checkLimit(req.user!.id, 'ai_message');
+    if (!aiAllowed) {
+      return res.status(403).json({ error: 'plan_limit_exceeded', limit: 'ai_message' });
+    }
+
     const ownerResult = await query(
       `SELECT us.ai_provider, us.anthropic_api_key, us.openai_api_key
        FROM workspace_members wm
@@ -302,6 +308,9 @@ router.post('/', async (req: AuthRequest, res) => {
 
     const aiReply = await analyzer.chat(systemPrompt, fullHistory);
     const { reply, command, actions } = parseReplyForCommands(aiReply);
+
+    // Track AI usage for this user
+    PlanRepository.incrementAiUsage(req.user!.id).catch(() => {});
 
     // If AI produced a command and plugin is connected, execute it
     let commandStatus: 'sent' | 'no_plugin' | undefined;

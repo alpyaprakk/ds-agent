@@ -106,6 +106,9 @@ async function runMigrations() {
     '007_add_notifications.sql',
     '008_add_notification_preferences.sql',
     '009_add_sort_order.sql',
+    '011_add_superadmin.sql',
+    '012_add_plans.sql',
+    '013_add_usage_tracking.sql',
   ];
 
   for (const file of migrationFiles) {

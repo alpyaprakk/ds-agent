@@ -4,6 +4,7 @@ import multer from 'multer';
 import { UserRepository } from '../../db/repositories/user-repository';
 import { authMiddleware, generateToken, AuthRequest } from '../../middleware/auth';
 import { NotificationService } from '../../services/notification.service';
+import { PlanRepository } from '../../db/repositories/plan.repository';
 
 // Store avatar in memory, convert to base64 data URL and save to DB
 const avatarUpload = multer({
@@ -49,6 +50,9 @@ router.post('/register', async (req, res: Response) => {
 
     // Create default settings
     await UserRepository.upsertSettings(user.id, { ai_provider: 'anthropic' });
+
+    // Assign free plan
+    await PlanRepository.assignFreePlan(user.id);
 
     // Generate token
     const token = generateToken({ id: user.id, email: user.email, name: user.name });
