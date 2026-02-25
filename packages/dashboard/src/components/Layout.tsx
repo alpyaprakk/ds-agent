@@ -8,7 +8,8 @@ import {
   PackageIcon,
   Alert02Icon,
   SidebarLeft01Icon,
-  SidebarRight01Icon
+  SidebarRight01Icon,
+  Settings02Icon
 } from '@hugeicons/core-free-icons';
 import { Separator } from '@/components/ui/separator';
 import { ScrollArea } from '@/components/ui/scroll-area';
@@ -32,6 +33,7 @@ const navigation = [
   { name: 'Variables', path: '/variables', icon: PaintBoardIcon },
   { name: 'Components', path: '/components', icon: PackageIcon },
   { name: 'Conflicts', path: '/conflicts', icon: Alert02Icon },
+  { name: 'Settings', path: '/settings', icon: Settings02Icon },
 ];
 
 export function Layout({ children }: LayoutProps) {

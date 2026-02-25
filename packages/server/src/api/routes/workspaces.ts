@@ -108,4 +108,43 @@ router.post('/:id/files', async (req, res) => {
   }
 });
 
+// GET /api/workspaces/:id/settings - Get workspace settings
+router.get('/:id/settings', async (req, res) => {
+  try {
+    const workspace = await workspaceRepo.findById(req.params.id);
+    if (!workspace) {
+      return res.status(404).json({ error: 'Workspace not found' });
+    }
+    return res.json(workspace.settings || {});
+  } catch (error) {
+    console.error('Error fetching workspace settings:', error);
+    return res.status(500).json({ error: 'Failed to fetch workspace settings' });
+  }
+});
+
+// PUT /api/workspaces/:id/settings - Update workspace settings
+router.put('/:id/settings', async (req, res) => {
+  try {
+    const workspace = await workspaceRepo.findById(req.params.id);
+    if (!workspace) {
+      return res.status(404).json({ error: 'Workspace not found' });
+    }
+
+    // Merge new settings with existing settings
+    const updatedSettings = {
+      ...(workspace.settings || {}),
+      ...req.body
+    };
+
+    const updated = await workspaceRepo.update(req.params.id, {
+      settings: updatedSettings
+    });
+
+    return res.json(updated?.settings || {});
+  } catch (error) {
+    console.error('Error updating workspace settings:', error);
+    return res.status(500).json({ error: 'Failed to update workspace settings' });
+  }
+});
+
 export default router;

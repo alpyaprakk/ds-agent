@@ -6,6 +6,7 @@ import { Dashboard } from './pages/Dashboard';
 import { Conflicts } from './pages/Conflicts';
 import { Variables } from './pages/Variables';
 import { Components } from './pages/Components';
+import { Settings } from './pages/Settings';
 import { useWorkspaceStore } from './store/workspace-store';
 import { wsClient } from './lib/websocket';
 import { LayoutProvider } from './contexts/LayoutContext';
@@ -98,6 +99,7 @@ function App() {
               <Route path="/variables" element={<Variables />} />
               <Route path="/components" element={<Components />} />
               <Route path="/conflicts" element={<Conflicts />} />
+              <Route path="/settings" element={<Settings />} />
             </Routes>
           </Layout>
         </LayoutProvider>
