@@ -86,6 +86,7 @@
     function connectToServer() {
       try {
         socket = io(SERVER_URL, {
+          path: '/api/socket.io', // Use /api prefix to work with proxy
           transports: ['polling'], // Force polling instead of websocket
           reconnection: true,
           reconnectionDelay: 5000,

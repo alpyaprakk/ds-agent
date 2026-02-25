@@ -13,8 +13,9 @@ const app = express();
 const httpServer = createServer(app);
 
 // Configure Socket.IO with permissive CORS
+// Use /api/socket.io path to work with Dokploy proxy configuration
 const io = new SocketIOServer(httpServer, {
-  path: '/socket.io',
+  path: '/api/socket.io',
   serveClient: false,
   cors: {
     origin: '*',
