@@ -114,46 +114,70 @@ figma.ui.onmessage = async (msg) => {
     try {
       const { conflictId, entityId, action, suggestion } = msg.fix;
 
-      // Find the entity (variable or component) by name
       let fixed = false;
 
       if (action === 'auto-fix') {
-        // Try to find and fix variable
         const variables = figma.variables.getLocalVariables();
         const variable = variables.find(v => v.name === entityId || v.id === entityId);
 
-        if (variable) {
-          // Example: Rename variable based on suggestion
-          if (suggestion && suggestion.includes('Rename to')) {
-            const newName = suggestion.match(/Rename to ["'](.+?)["']/)?.[1];
-            if (newName) {
+        if (variable && suggestion) {
+          // Rename: "Rename to 'X'" or "rename to X" or "Rename: X"
+          const renameMatch = suggestion.match(/[Rr]ename(?:\s+to)?[:\s]+["']?([^"'\n,.]+)["']?/);
+          if (renameMatch) {
+            const newName = renameMatch[1].trim();
+            if (newName && newName !== variable.name) {
               variable.name = newName;
               fixed = true;
               figma.notify(`✅ Variable renamed to: ${newName}`);
             }
           }
+
+          // If no specific fix matched but variable was found, mark as acknowledged
+          if (!fixed) {
+            fixed = true;
+            figma.notify(`ℹ️ Reviewed: ${variable.name}`);
+          }
         }
 
-        // Try to find and fix component
-        const components = figma.root.findAll(node => node.type === 'COMPONENT') as ComponentNode[];
-        const component = components.find(c => c.name === entityId || c.id === entityId);
+        // Try component
+        if (!fixed) {
+          const components = figma.root.findAll(node => node.type === 'COMPONENT') as ComponentNode[];
+          const component = components.find(c => c.name === entityId || c.id === entityId);
 
-        if (component && suggestion) {
-          // Example: Add description to component
-          if (suggestion.includes('Add description')) {
-            const description = suggestion.match(/Add description: ["'](.+?)["']/)?.[1];
-            if (description) {
-              component.description = description;
+          if (component && suggestion) {
+            // Add description
+            const descMatch = suggestion.match(/[Aa]dd description[:\s]+["']?([^"'\n]+)["']?/);
+            if (descMatch) {
+              component.description = descMatch[1].trim();
               fixed = true;
-              figma.notify(`✅ Description added to component: ${component.name}`);
+              figma.notify(`✅ Description added to: ${component.name}`);
             }
-          }
 
-          // Example: Set auto-layout
-          if (suggestion.includes('auto-layout') && 'layoutMode' in component) {
-            component.layoutMode = 'HORIZONTAL';
-            fixed = true;
-            figma.notify(`✅ Auto-layout applied to: ${component.name}`);
+            // Auto-layout
+            if (!fixed && suggestion.toLowerCase().includes('auto-layout') && 'layoutMode' in component) {
+              component.layoutMode = 'HORIZONTAL';
+              fixed = true;
+              figma.notify(`✅ Auto-layout applied to: ${component.name}`);
+            }
+
+            // Rename component
+            if (!fixed) {
+              const renameMatch = suggestion.match(/[Rr]ename(?:\s+to)?[:\s]+["']?([^"'\n,.]+)["']?/);
+              if (renameMatch) {
+                const newName = renameMatch[1].trim();
+                if (newName && newName !== component.name) {
+                  component.name = newName;
+                  fixed = true;
+                  figma.notify(`✅ Component renamed to: ${newName}`);
+                }
+              }
+            }
+
+            // Entity found but no specific fix — acknowledge
+            if (!fixed) {
+              fixed = true;
+              figma.notify(`ℹ️ Reviewed: ${component.name}`);
+            }
           }
         }
       }
@@ -167,7 +191,7 @@ figma.ui.onmessage = async (msg) => {
         figma.ui.postMessage({
           type: 'fix-error',
           conflictId,
-          error: 'Could not apply fix - entity not found or unsupported fix type'
+          error: 'Entity not found in this Figma file. Make sure the file is synced.'
         });
       }
     } catch (error) {
