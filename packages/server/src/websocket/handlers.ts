@@ -20,6 +20,15 @@ export function setupWebSocketHandlers(io: SocketIOServer) {
     console.log(`Client connected: ${socket.id}`);
     let pluginId: string | null = null;
 
+    // Send current plugin status to newly connected client
+    const currentStatus = {
+      connected: connectedPlugins.size > 0,
+      plugin: connectedPlugins.size > 0 ? Array.from(connectedPlugins.values())[0].plugin : 'none',
+      count: connectedPlugins.size
+    };
+    console.log(`📤 Sending current plugin status to ${socket.id}:`, currentStatus);
+    socket.emit('plugin-status', currentStatus);
+
     // Plugin connection
     socket.on('plugin-connect', (data: { plugin: string; timestamp: string }) => {
       pluginId = socket.id;
