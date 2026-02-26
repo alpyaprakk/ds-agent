@@ -673,7 +673,9 @@ router.post('/', async (req: AuthRequest, res) => {
       }
     }
 
-    return res.json({ reply, agentType, actions, command, commandStatus });
+    // rawReply includes the EXECUTE block — clients should use this for history
+    // so AI sees its own previous EXECUTE blocks in conversation context
+    return res.json({ reply, rawReply: aiReply, agentType, actions, command, commandStatus });
   } catch (error: any) {
     console.error('Chat route error:', error);
     return res.status(500).json({ error: 'Failed to process chat message' });

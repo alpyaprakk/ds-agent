@@ -83,7 +83,8 @@ async function chat(message, label, opts = {}) {
   }
 
   history.push({ role: 'user',      content: message });
-  history.push({ role: 'assistant', content: data.reply });
+  // Use rawReply (includes EXECUTE block) so AI sees its own prior commands in context
+  history.push({ role: 'assistant', content: data.rawReply || data.reply });
 
   reply(data.reply.slice(0, 300) + (data.reply.length > 300 ? '…' : ''));
 
