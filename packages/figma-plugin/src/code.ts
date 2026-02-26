@@ -446,9 +446,6 @@ async function executeCreateComponent(spec: ComponentSpec): Promise<{ success: b
   }
   await figma.setCurrentPageAsync(page);
 
-  const w = spec.width || 120;
-  const defaultH = spec.height || 40;
-
   if (spec.variants && spec.variants.length > 0 && spec.properties && spec.properties.length > 0) {
     const components: ComponentNode[] = [];
 
@@ -461,12 +458,17 @@ async function executeCreateComponent(spec: ComponentSpec): Promise<{ success: b
     if (components.length > 1) {
       const set = figma.combineAsVariants(components, page);
       set.name = spec.componentName;
-
-      const cols = Math.ceil(Math.sqrt(components.length));
-      components.forEach((comp, i) => {
-        comp.x = (i % cols) * (w + 24);
-        comp.y = Math.floor(i / cols) * (defaultH + 16);
-      });
+      // Clear the default pink/purple fill that Figma adds to component sets
+      set.fills = [];
+      set.strokes = [];
+      set.itemSpacing = 24;
+      set.paddingTop = 24;
+      set.paddingRight = 24;
+      set.paddingBottom = 24;
+      set.paddingLeft = 24;
+      set.layoutMode = 'HORIZONTAL';
+      set.layoutWrap = 'WRAP';
+      set.counterAxisSpacing = 16;
 
       const siblings = page.children.filter(n => n !== set);
       if (siblings.length > 0) {
@@ -514,13 +516,53 @@ async function executeCommand(command: any): Promise<{ success: boolean; message
         return await executeCreateComponent(command.spec);
 
       case 'rename_variable': {
-        const result = applyVariableOp({ action: 'rename', variableName: command.variableName, newName: command.newName });
+        const renameSpec = command.spec || command;
+        const result = applyVariableOp({ action: 'rename', variableName: renameSpec.oldName || command.variableName, newName: renameSpec.newName || command.newName });
         return { success: result.success, message: result.message || result.error || 'Unknown error' };
       }
 
       case 'set_variable_value': {
-        const result = applyVariableOp({ action: 'set-value', variableName: command.variableName, newValue: command.value, modeId: command.modeId });
-        return { success: result.success, message: result.message || result.error || 'Unknown error' };
+        // Support both single spec and array spec
+        const rawSpec = command.spec ?? { variableName: command.variableName, value: command.value };
+        const entries: Array<{ variableName: string; value: any }> = Array.isArray(rawSpec) ? rawSpec : [rawSpec];
+
+        let count = 0;
+        const errors: string[] = [];
+
+        for (const entry of entries) {
+          const { variableName, value } = entry;
+          if (!variableName) continue;
+
+          // Determine type from value
+          const inferredType: VariableType = typeof value === 'string' ? 'COLOR' : 'FLOAT';
+
+          // Resolve or create the variable
+          const variable = resolveOrCreateVariable({
+            name: variableName,
+            type: inferredType,
+            createWithValue: value,
+          });
+
+          // Set value in default mode
+          const collection = figma.variables.getVariableCollectionById(variable.variableCollectionId);
+          const modeId = command.modeId || collection?.defaultModeId;
+          if (!modeId) { errors.push(`No modeId for ${variableName}`); continue; }
+
+          if (inferredType === 'COLOR' && typeof value === 'string') {
+            const hex = value.replace('#', '');
+            const r = parseInt(hex.slice(0, 2), 16) / 255;
+            const g = parseInt(hex.slice(2, 4), 16) / 255;
+            const b = parseInt(hex.slice(4, 6), 16) / 255;
+            variable.setValueForMode(modeId, { r, g, b, a: 1 });
+          } else {
+            variable.setValueForMode(modeId, value);
+          }
+          count++;
+        }
+
+        if (errors.length > 0) figma.notify(`⚠️ ${errors.length} errors setting variables`);
+        figma.notify(`✅ Set ${count} variable(s)`);
+        return { success: true, message: `Set ${count} variable(s)${errors.length > 0 ? ` (${errors.length} errors)` : ''}` };
       }
 
       case 'sync':
