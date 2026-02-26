@@ -100,7 +100,7 @@ export class AIAnalyzer {
     if (this.provider === 'anthropic' && this.anthropic) {
       const message = await this.anthropic.messages.create({
         model: 'claude-opus-4-6',
-        max_tokens: 4096,
+        max_tokens: 16000,
         temperature: 0.7,
         system: systemPrompt,
         messages: history.map(m => ({ role: m.role, content: m.content }))
@@ -113,12 +113,11 @@ export class AIAnalyzer {
     } else if (this.provider === 'openai' && this.openai) {
       const completion = await this.openai.chat.completions.create({
         model: 'o3',
-        max_tokens: 4096,
+        max_completion_tokens: 16000,
         messages: [
           { role: 'system', content: systemPrompt },
           ...history.map(m => ({ role: m.role as 'user' | 'assistant', content: m.content }))
         ],
-        temperature: 0.7
       });
       return completion.choices[0]?.message?.content || '';
     }
