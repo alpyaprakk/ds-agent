@@ -458,17 +458,30 @@ async function executeCreateComponent(spec: ComponentSpec): Promise<{ success: b
     if (components.length > 1) {
       const set = figma.combineAsVariants(components, page);
       set.name = spec.componentName;
-      // Clear the default pink/purple fill that Figma adds to component sets
+      // Free-form layout — position each variant manually in a grid
+      set.layoutMode = 'NONE';
       set.fills = [];
       set.strokes = [];
-      set.itemSpacing = 24;
-      set.paddingTop = 24;
-      set.paddingRight = 24;
-      set.paddingBottom = 24;
-      set.paddingLeft = 24;
-      set.layoutMode = 'HORIZONTAL';
-      set.layoutWrap = 'WRAP';
-      set.counterAxisSpacing = 16;
+      set.paddingTop = 40;
+      set.paddingRight = 40;
+      set.paddingBottom = 40;
+      set.paddingLeft = 40;
+
+      // Build a grid: use the last property as columns, group rows by earlier properties
+      const GAP_X = 24;
+      const GAP_Y = 16;
+      const props = spec.properties || [];
+      // Last property drives columns; all others combined drive rows
+      const colProp = props[props.length - 1];
+      const colValues = colProp?.values || [];
+      const numCols = colValues.length || 1;
+
+      components.forEach((comp, i) => {
+        const col = i % numCols;
+        const row = Math.floor(i / numCols);
+        comp.x = col * (comp.width + GAP_X);
+        comp.y = row * (comp.height + GAP_Y);
+      });
 
       const siblings = page.children.filter(n => n !== set);
       if (siblings.length > 0) {
