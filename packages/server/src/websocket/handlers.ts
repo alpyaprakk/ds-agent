@@ -11,6 +11,25 @@ const workspaceRepo = new WorkspaceRepository();
 // Store IO instance for access from other modules
 let ioInstance: SocketIOServer | null = null;
 
+// ─── In-memory command result store (5 min TTL) ───────────────────────────────
+interface CommandResult {
+  success: boolean;
+  message: string;
+  data?: any;
+  resolvedAt: number;
+}
+const commandResults = new Map<string, CommandResult>();
+
+/** Store a command result and schedule its cleanup after 5 minutes. */
+function storeCommandResult(commandId: string, result: CommandResult) {
+  commandResults.set(commandId, result);
+  setTimeout(() => commandResults.delete(commandId), 5 * 60 * 1000);
+}
+
+export function getCommandResult(commandId: string): CommandResult | undefined {
+  return commandResults.get(commandId);
+}
+
 export function getIO(): SocketIOServer | null {
   return ioInstance;
 }
@@ -524,6 +543,15 @@ export function setupWebSocketHandlers(io: SocketIOServer) {
     // Command result from plugin
     socket.on('command-result', (data: any) => {
       console.log('✅ Command result:', data);
+      // Persist so polling clients (MCP) can retrieve it
+      if (data.commandId) {
+        storeCommandResult(data.commandId, {
+          success: data.result?.success ?? false,
+          message: data.result?.message ?? '',
+          data: data.result?.data,
+          resolvedAt: Date.now(),
+        });
+      }
       io.emit('command-result', data);
     });
 

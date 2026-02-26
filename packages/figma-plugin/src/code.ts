@@ -195,7 +195,7 @@ function getOrCreateCollection(collectionName: string): { collection: VariableCo
   const existing = figma.variables.getLocalVariableCollections().find(c => c.name === collectionName);
   if (existing) return { collection: existing, defaultModeId: existing.defaultModeId };
   const created = figma.variables.createVariableCollection(collectionName);
-  figma.notify(`📦 Created collection: ${collectionName}`);
+  console.log(`📦 Created collection: ${collectionName}`);
   return { collection: created, defaultModeId: created.defaultModeId };
 }
 
@@ -247,7 +247,7 @@ function resolveOrCreateVariable(spec: TokenSpec): Variable {
     }
   }
 
-  figma.notify(`✨ Created token: ${spec.name}`);
+  console.log(`✨ Created token: ${spec.name}`);
   return newVar;
 }
 
@@ -1008,8 +1008,7 @@ async function executeCommand(command: any): Promise<{ success: boolean; message
           count++;
         }
 
-        if (errors.length > 0) figma.notify(`⚠️ ${errors.length} errors setting variables`);
-        figma.notify(`✅ Set ${count} variable(s)`);
+        console.log(`✅ Set ${count} variable(s)`);
         return { success: true, message: `Set ${count} variable(s)${errors.length > 0 ? ` (${errors.length} errors)` : ''}` };
       }
 
@@ -1028,6 +1027,12 @@ async function executeCommand(command: any): Promise<{ success: boolean; message
 // ─── Message Handler ─────────────────────────────────────────────────────────
 
 figma.ui.onmessage = async (msg) => {
+  // Resize plugin window
+  if (msg.type === 'resize') {
+    figma.ui.resize(msg.width ?? 300, msg.height ?? 420);
+    return;
+  }
+
   console.log('Received message:', msg.type);
 
   if (msg.type === 'full-sync') {

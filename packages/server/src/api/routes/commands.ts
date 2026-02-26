@@ -1,7 +1,7 @@
 import { Router } from 'express';
 import { authMiddleware, AuthRequest } from '../../middleware/auth';
 import { UserRepository } from '../../db/repositories';
-import { emitToPlugin, getConnectedPluginsStatus } from '../../websocket/handlers';
+import { emitToPlugin, getConnectedPluginsStatus, getCommandResult } from '../../websocket/handlers';
 import { randomUUID } from 'crypto';
 
 const router = Router();
@@ -44,6 +44,31 @@ router.post('/execute', async (req: AuthRequest, res) => {
     console.error('Commands route error:', error);
     return res.status(500).json({ error: 'Failed to execute command' });
   }
+});
+
+/**
+ * GET /api/commands/:commandId/result
+ *
+ * Poll for the result of a previously dispatched command.
+ * Returns 202 while pending, 200 when done (success or error).
+ * Used by MCP tools to confirm Figma plugin execution.
+ */
+router.get('/:commandId/result', async (req: AuthRequest, res) => {
+  const { commandId } = req.params;
+  const result = getCommandResult(commandId);
+
+  if (!result) {
+    // Still pending (or expired / unknown)
+    return res.status(202).json({ status: 'pending', commandId });
+  }
+
+  return res.status(200).json({
+    status: result.success ? 'success' : 'error',
+    commandId,
+    message: result.message,
+    data: result.data,
+    resolvedAt: result.resolvedAt,
+  });
 });
 
 export default router;
