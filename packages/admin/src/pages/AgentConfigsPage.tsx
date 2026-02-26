@@ -1,9 +1,9 @@
 import { useEffect, useState } from 'react';
 import { toast } from 'sonner';
 import {
-  getAgentConfigs, getWorkspaces, getWorkspaceAgentConfigs, saveAgentConfig,
+  getAgentConfigs, getUsers, getUserWorkspaces, getWorkspaceAgentConfigs, saveAgentConfig,
   getGlobalAgentConfig, saveGlobalAgentConfig,
-  AgentConfigRow, AdminWorkspaceRow
+  AgentConfigRow, AdminUserRow, UserWorkspaceRow
 } from '@/lib/admin-api';
 
 const AGENT_TYPES = ['design-system', 'uiux'];
@@ -312,8 +312,11 @@ Respond in the same language the user writes in.`,
 
 export default function AgentConfigsPage() {
   const [allConfigs, setAllConfigs] = useState<AgentConfigRow[]>([]);
-  const [workspaces, setWorkspaces] = useState<AdminWorkspaceRow[]>([]);
+  const [users, setUsers] = useState<AdminUserRow[]>([]);
+  const [expandedUsers, setExpandedUsers] = useState<Record<string, UserWorkspaceRow[]>>({});
+  const [loadingUserWs, setLoadingUserWs] = useState<Record<string, boolean>>({});
   const [selectedWorkspaceId, setSelectedWorkspaceId] = useState<string>('');
+  const [selectedWorkspaceName, setSelectedWorkspaceName] = useState<string>('');
   const [selectedAgentType, setSelectedAgentType] = useState<string>(AGENT_TYPES[0]);
   const [form, setForm] = useState<Partial<AgentConfigRow>>(DEFAULT_FORM);
   const [loadingForm, setLoadingForm] = useState(false);
@@ -325,17 +328,39 @@ export default function AgentConfigsPage() {
   const loadAll = async () => {
     setLoadingAll(true);
     try {
-      const [wsRes, cfgRes] = await Promise.all([
-        getWorkspaces(1, 100, ''),
+      const [usersRes, cfgRes] = await Promise.all([
+        getUsers(1, 100, ''),
         getAgentConfigs(),
       ]);
-      setWorkspaces(wsRes.workspaces);
+      setUsers(usersRes.users);
       setAllConfigs(cfgRes.configs);
     } catch (e: any) {
       toast.error(e.message);
     } finally {
       setLoadingAll(false);
     }
+  };
+
+  const toggleUser = async (userId: string) => {
+    if (expandedUsers[userId]) {
+      // collapse
+      setExpandedUsers(v => { const n = { ...v }; delete n[userId]; return n; });
+      return;
+    }
+    setLoadingUserWs(v => ({ ...v, [userId]: true }));
+    try {
+      const res = await getUserWorkspaces(userId);
+      setExpandedUsers(v => ({ ...v, [userId]: res.workspaces }));
+    } catch {
+      toast.error('Failed to load workspaces');
+    } finally {
+      setLoadingUserWs(v => ({ ...v, [userId]: false }));
+    }
+  };
+
+  const selectWorkspace = (wsId: string, wsName: string) => {
+    setSelectedWorkspaceId(wsId);
+    setSelectedWorkspaceName(wsName);
   };
 
   useEffect(() => { loadAll(); }, []);
@@ -386,9 +411,7 @@ export default function AgentConfigsPage() {
 
   const globalConfigs = allConfigs.filter(c => c.workspace_id === null);
   const workspaceConfigs = allConfigs.filter(c => c.workspace_id !== null);
-  const selectedWsName = isGlobal
-    ? 'Global Default'
-    : workspaces.find(w => w.id === selectedWorkspaceId)?.name || '';
+  const selectedWsName = isGlobal ? 'Global Default' : selectedWorkspaceName;
 
   return (
     <div className="p-8">
@@ -431,33 +454,66 @@ export default function AgentConfigsPage() {
               )}
             </button>
 
-            {/* Workspace list */}
-            <div className="space-y-1 max-h-64 overflow-y-auto">
-              {workspaces.map(ws => {
-                const wsConfigCount = workspaceConfigs.filter(c => c.workspace_id === ws.id).length;
+            {/* Users with workspaces */}
+            <div className="space-y-1 max-h-96 overflow-y-auto">
+              {users.map(user => {
+                const isExpanded = !!expandedUsers[user.id];
+                const isLoading = !!loadingUserWs[user.id];
+                const userWs = expandedUsers[user.id] || [];
                 return (
-                  <button
-                    key={ws.id}
-                    onClick={() => setSelectedWorkspaceId(ws.id)}
-                    className={`w-full flex items-center gap-2.5 px-3 py-2 rounded-lg border transition-colors text-left ${
-                      selectedWorkspaceId === ws.id
-                        ? 'border-gray-900 bg-gray-50'
-                        : 'border-transparent hover:border-gray-200 hover:bg-gray-50'
-                    }`}
-                  >
-                    <div
-                      className="w-6 h-6 rounded-md flex items-center justify-center text-xs font-bold text-white flex-shrink-0"
-                      style={{ backgroundColor: ws.color || '#6366f1' }}
+                  <div key={user.id}>
+                    {/* User row */}
+                    <button
+                      onClick={() => toggleUser(user.id)}
+                      className="w-full flex items-center gap-2.5 px-3 py-2 rounded-lg border border-transparent hover:border-gray-200 hover:bg-gray-50 transition-colors text-left"
                     >
-                      {ws.icon || ws.name.charAt(0).toUpperCase()}
-                    </div>
-                    <p className="text-sm text-gray-700 flex-1 min-w-0 truncate">{ws.name}</p>
-                    {wsConfigCount > 0 && (
-                      <span className="text-xs bg-blue-100 text-blue-600 px-1.5 py-0.5 rounded-full font-medium flex-shrink-0">
-                        {wsConfigCount}
+                      <div className="w-6 h-6 rounded-full bg-gray-200 flex items-center justify-center text-xs font-bold text-gray-600 flex-shrink-0">
+                        {user.name.charAt(0).toUpperCase()}
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <p className="text-xs font-medium text-gray-800 truncate">{user.name}</p>
+                        <p className="text-xs text-gray-400 truncate">{user.owned_workspaces} workspace{user.owned_workspaces !== 1 ? 's' : ''}</p>
+                      </div>
+                      <span className={`text-gray-400 text-xs flex-shrink-0 transition-transform ${isExpanded ? 'rotate-90' : ''}`}>
+                        {isLoading ? '…' : '›'}
                       </span>
+                    </button>
+
+                    {/* Workspaces under user */}
+                    {isExpanded && (
+                      <div className="ml-4 mt-0.5 space-y-0.5 border-l border-gray-100 pl-2">
+                        {userWs.length === 0 ? (
+                          <p className="text-xs text-gray-400 px-2 py-1.5">No workspaces</p>
+                        ) : userWs.map(ws => {
+                          const wsConfigCount = workspaceConfigs.filter(c => c.workspace_id === ws.id).length;
+                          return (
+                            <button
+                              key={ws.id}
+                              onClick={() => selectWorkspace(ws.id, ws.name)}
+                              className={`w-full flex items-center gap-2 px-2 py-1.5 rounded-lg border transition-colors text-left ${
+                                selectedWorkspaceId === ws.id
+                                  ? 'border-gray-900 bg-gray-50'
+                                  : 'border-transparent hover:border-gray-200 hover:bg-gray-50'
+                              }`}
+                            >
+                              <div
+                                className="w-5 h-5 rounded flex items-center justify-center text-xs font-bold text-white flex-shrink-0"
+                                style={{ backgroundColor: ws.color || '#6366f1' }}
+                              >
+                                {ws.icon || ws.name.charAt(0).toUpperCase()}
+                              </div>
+                              <p className="text-xs text-gray-700 flex-1 min-w-0 truncate">{ws.name}</p>
+                              {wsConfigCount > 0 && (
+                                <span className="text-xs bg-blue-100 text-blue-600 px-1.5 py-0.5 rounded-full font-medium flex-shrink-0">
+                                  {wsConfigCount}
+                                </span>
+                              )}
+                            </button>
+                          );
+                        })}
+                      </div>
                     )}
-                  </button>
+                  </div>
                 );
               })}
             </div>
@@ -500,6 +556,10 @@ export default function AgentConfigsPage() {
                 <div className="flex justify-between text-sm">
                   <span className="text-gray-500">Workspaces covered</span>
                   <span className="font-medium text-gray-900">{new Set(workspaceConfigs.map(c => c.workspace_id)).size}</span>
+                </div>
+                <div className="flex justify-between text-sm">
+                  <span className="text-gray-500">Total users</span>
+                  <span className="font-medium text-gray-900">{users.length}</span>
                 </div>
               </div>
             )}
