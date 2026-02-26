@@ -105,6 +105,75 @@ function findVariable(nameOrPath: string): Variable | null {
   return byParts || null;
 }
 
+// ─── Value-based color matching ──────────────────────────────────────────────
+
+function hexToRgbRaw(hex: string): { r: number; g: number; b: number } | null {
+  const h = hex.replace('#', '');
+  if (h.length !== 6) return null;
+  return {
+    r: parseInt(h.slice(0, 2), 16),
+    g: parseInt(h.slice(2, 4), 16),
+    b: parseInt(h.slice(4, 6), 16),
+  };
+}
+
+function colorDistance(a: { r: number; g: number; b: number }, b: RGB): number {
+  // b is Figma RGB (0-1), a is raw (0-255)
+  const dr = a.r / 255 - b.r;
+  const dg = a.g / 255 - b.g;
+  const db = a.b / 255 - b.b;
+  return Math.sqrt(dr * dr + dg * dg + db * db);
+}
+
+/** Find the closest existing COLOR variable to a given hex. Returns null if nothing is close enough. */
+function findClosestColorVariable(hex: string, threshold = 0.08): Variable | null {
+  const target = hexToRgbRaw(hex);
+  if (!target) return null;
+
+  const colorVars = figma.variables.getLocalVariables().filter(v => v.resolvedType === 'COLOR');
+  if (colorVars.length === 0) return null;
+
+  let best: Variable | null = null;
+  let bestDist = Infinity;
+
+  for (const v of colorVars) {
+    const collection = figma.variables.getVariableCollectionById(v.variableCollectionId);
+    if (!collection) continue;
+    const val = v.valuesByMode[collection.defaultModeId];
+    if (!val || typeof val !== 'object' || !('r' in val)) continue;
+    const dist = colorDistance(target, val as RGB);
+    if (dist < bestDist) {
+      bestDist = dist;
+      best = v;
+    }
+  }
+
+  return bestDist <= threshold ? best : null;
+}
+
+/** Find the closest existing FLOAT variable to a given number. Returns null if nothing is close enough. */
+function findClosestFloatVariable(value: number, threshold = 2): Variable | null {
+  const floatVars = figma.variables.getLocalVariables().filter(v => v.resolvedType === 'FLOAT');
+  if (floatVars.length === 0) return null;
+
+  let best: Variable | null = null;
+  let bestDist = Infinity;
+
+  for (const v of floatVars) {
+    const collection = figma.variables.getVariableCollectionById(v.variableCollectionId);
+    if (!collection) continue;
+    const val = v.valuesByMode[collection.defaultModeId];
+    if (typeof val !== 'number') continue;
+    const dist = Math.abs(val - value);
+    if (dist < bestDist) {
+      bestDist = dist;
+      best = v;
+    }
+  }
+
+  return bestDist <= threshold ? best : null;
+}
+
 function inferCollectionForVariable(name: string): string {
   const lower = name.toLowerCase();
   if (lower.startsWith('color/component') || lower.startsWith('components/') || lower.includes('/component/')) {
@@ -125,9 +194,11 @@ function getOrCreateCollection(collectionName: string): { collection: VariableCo
 }
 
 function resolveOrCreateVariable(spec: TokenSpec): Variable {
+  // 1. Name-based lookup (exact → suffix → partial)
   const found = findVariable(spec.name);
   if (found) return found;
 
+  // 2. Name-based fallback lookup
   if (spec.fallbacks) {
     for (const fb of spec.fallbacks) {
       const fbVar = findVariable(fb);
@@ -135,6 +206,25 @@ function resolveOrCreateVariable(spec: TokenSpec): Variable {
     }
   }
 
+  // 3. Value-based lookup — find an existing variable with a similar value
+  //    rather than creating a new token with a duplicated value
+  if (spec.createWithValue !== undefined) {
+    if (spec.type === 'COLOR' && typeof spec.createWithValue === 'string') {
+      const closest = findClosestColorVariable(spec.createWithValue);
+      if (closest) {
+        console.log(`♻️  Reusing "${closest.name}" for "${spec.name}" (similar color)`);
+        return closest;
+      }
+    } else if (spec.type === 'FLOAT' && typeof spec.createWithValue === 'number') {
+      const closest = findClosestFloatVariable(spec.createWithValue);
+      if (closest) {
+        console.log(`♻️  Reusing "${closest.name}" for "${spec.name}" (similar value)`);
+        return closest;
+      }
+    }
+  }
+
+  // 4. Nothing found or similar enough — create a new token
   const collectionName = spec.createInCollection || inferCollectionForVariable(spec.name);
   const { collection, defaultModeId } = getOrCreateCollection(collectionName);
   const newVar = figma.variables.createVariable(spec.name, collection, spec.type);
