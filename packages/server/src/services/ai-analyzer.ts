@@ -112,7 +112,8 @@ export class AIAnalyzer {
       return textContent.text;
     } else if (this.provider === 'openai' && this.openai) {
       const completion = await this.openai.chat.completions.create({
-        model: 'gpt-4-turbo-preview',
+        model: 'gpt-4o',
+        max_tokens: 4096,
         messages: [
           { role: 'system', content: systemPrompt },
           ...history.map(m => ({ role: m.role as 'user' | 'assistant', content: m.content }))
@@ -239,7 +240,8 @@ Return ONLY the JSON object, no markdown, no explanation.`;
     }
 
     const completion = await this.openai.chat.completions.create({
-      model: 'gpt-4-turbo-preview',
+      model: 'gpt-4o',
+      max_tokens: 4096,
       messages: [{
         role: 'user',
         content: prompt
