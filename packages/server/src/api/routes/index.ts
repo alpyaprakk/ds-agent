@@ -7,6 +7,7 @@ import conflictsRouter from './conflicts';
 import syncRouter from './sync';
 import notificationsRouter from './notifications';
 import chatRouter from './chat';
+import commandsRouter from './commands';
 import agentConfigsRouter from './agent-configs';
 import adminRouter from './admin';
 import { getConnectedPluginsStatus } from '../../websocket/handlers';
@@ -43,6 +44,7 @@ router.use('/conflicts', conflictsRouter);
 router.use('/sync', syncRouter);
 router.use('/notifications', notificationsRouter);
 router.use('/chat', chatRouter);
+router.use('/commands', commandsRouter);
 router.use('/agent-configs', agentConfigsRouter);
 router.use('/admin', adminRouter);
 

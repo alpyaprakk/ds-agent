@@ -1,0 +1,13 @@
+{
+  "mcpServers": {
+    "tokenhaus": {
+      "command": "node",
+      "args": ["/absolute/path/to/ds-agent/packages/mcp/dist/index.js"],
+      "env": {
+        "TOKENHAUS_SERVER_URL": "https://ds-agent.alpy.io",
+        "TOKENHAUS_EMAIL": "your@email.com",
+        "TOKENHAUS_PASSWORD": "yourpassword"
+      }
+    }
+  }
+}
