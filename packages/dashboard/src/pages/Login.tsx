@@ -30,8 +30,8 @@ export function Login() {
       <div className="w-full max-w-md space-y-6">
         {/* Logo */}
         <div className="flex flex-col items-center gap-3">
-          <img src="/logo.svg" alt="DS Agent" className="h-12 w-12 dark:invert" />
-          <h1 className="text-2xl font-semibold tracking-tight">DS Agent</h1>
+          <img src="/logo.svg" alt="Tokenhaus" className="h-12 w-12 dark:invert" />
+          <h1 className="text-2xl font-semibold tracking-tight">Tokenhaus</h1>
           <p className="text-sm text-muted-foreground">Design System Manager</p>
         </div>
 

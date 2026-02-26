@@ -20,7 +20,7 @@ export function AdminLayout() {
       {/* Sidebar */}
       <aside className="w-56 bg-white border-r border-gray-200 flex flex-col">
         <div className="px-5 py-4 border-b border-gray-200">
-          <p className="text-xs font-semibold text-gray-400 uppercase tracking-wider">DS Agent</p>
+          <p className="text-xs font-semibold text-gray-400 uppercase tracking-wider">Tokenhaus</p>
           <p className="text-sm font-bold text-gray-900 mt-0.5">Admin</p>
         </div>
 

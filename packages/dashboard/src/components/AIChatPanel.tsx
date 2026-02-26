@@ -186,7 +186,7 @@ export function AIChatPanel({ isOpen, onClose, workspaceId: workspaceIdProp, ini
       if (response.command && response.commandStatus === 'sent') {
         content += '\n\n⚙️ *Command sent to Figma plugin — executing...*';
       } else if (response.command && response.commandStatus === 'no_plugin') {
-        content += '\n\n⚠️ *Plugin not connected. Open the DS Agent plugin in Figma to execute this command.*';
+        content += '\n\n⚠️ *Plugin not connected. Open the Tokenhaus plugin in Figma to execute this command.*';
       }
 
       const assistantMessage: Message = {

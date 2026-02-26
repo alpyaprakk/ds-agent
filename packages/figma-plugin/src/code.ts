@@ -1,5 +1,5 @@
 // Figma Plugin Code (Backend)
-console.log('DS Agent Plugin Loaded');
+console.log('Tokenhaus Plugin Loaded');
 
 figma.showUI(__html__, { width: 400, height: 600 });
 

@@ -25,7 +25,7 @@ function RequireAuth({ children }: { children: React.ReactNode }) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-background">
         <div className="flex flex-col items-center gap-3">
-          <img src="/logo.svg" alt="DS Agent" className="h-10 w-10 dark:invert animate-pulse" />
+          <img src="/logo.svg" alt="Tokenhaus" className="h-10 w-10 dark:invert animate-pulse" />
           <p className="text-sm text-muted-foreground">Loading...</p>
         </div>
       </div>

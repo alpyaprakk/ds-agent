@@ -28,7 +28,7 @@ export default function AdminLogin() {
     <div className="min-h-screen flex items-center justify-center bg-gray-50">
       <div className="w-full max-w-sm bg-white rounded-xl border border-gray-200 shadow-sm p-8">
         <div className="mb-6">
-          <p className="text-xs font-semibold text-gray-400 uppercase tracking-wider">DS Agent</p>
+          <p className="text-xs font-semibold text-gray-400 uppercase tracking-wider">Tokenhaus</p>
           <h1 className="text-xl font-bold text-gray-900 mt-1">Admin Login</h1>
         </div>
 

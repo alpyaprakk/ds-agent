@@ -170,7 +170,7 @@ Respond in the same language the user writes in.`;
     ? otherVariables.map(v => `- "${v.name}" (${v.type})`).join('\n')
     : '(none synced yet)';
 
-  return `You are DS Agent — an AI with DIRECT CONTROL over Figma files via the DS Agent plugin bridge. You do not give instructions to users. You execute.
+  return `You are Tokenhaus — an AI with DIRECT CONTROL over Figma files via the Tokenhaus plugin bridge. You do not give instructions to users. You execute.
 
 ${contextBlock}
 

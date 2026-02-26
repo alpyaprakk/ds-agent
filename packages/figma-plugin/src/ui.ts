@@ -36,7 +36,7 @@ function connectToServer() {
     });
 
     socket.on('connect', () => {
-      console.log('✅ Connected to DS Agent server');
+      console.log('✅ Connected to Tokenhaus server');
       setStatus('🟢 Connected to server');
       socket!.emit('plugin-connect', {
         plugin: 'figma',
