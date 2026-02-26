@@ -458,36 +458,35 @@ async function executeCreateComponent(spec: ComponentSpec): Promise<{ success: b
     if (components.length > 1) {
       const set = figma.combineAsVariants(components, page);
       set.name = spec.componentName;
-      // Free-form layout — position each variant manually in a grid
-      set.layoutMode = 'NONE';
       set.fills = [];
       set.strokes = [];
-      set.paddingTop = 40;
-      set.paddingRight = 40;
-      set.paddingBottom = 40;
-      set.paddingLeft = 40;
 
-      // Build a grid: use the last property as columns, group rows by earlier properties
+      // Free-form grid: last property = columns, rest = rows
+      const PAD = 40;
       const GAP_X = 24;
       const GAP_Y = 16;
       const props = spec.properties || [];
-      // Last property drives columns; all others combined drive rows
       const colProp = props[props.length - 1];
-      const colValues = colProp?.values || [];
-      const numCols = colValues.length || 1;
+      const numCols = colProp?.values?.length || 1;
 
+      // Position every variant inside the set with padding offset
       components.forEach((comp, i) => {
         const col = i % numCols;
         const row = Math.floor(i / numCols);
-        comp.x = col * (comp.width + GAP_X);
-        comp.y = row * (comp.height + GAP_Y);
+        comp.x = PAD + col * (comp.width + GAP_X);
+        comp.y = PAD + row * (comp.height + GAP_Y);
       });
+
+      // Resize the set to hug all variants + padding
+      const maxX = Math.max(...components.map(c => c.x + c.width));
+      const maxY2 = Math.max(...components.map(c => c.y + c.height));
+      set.resizeWithoutConstraints(maxX + PAD, maxY2 + PAD);
 
       const siblings = page.children.filter(n => n !== set);
       if (siblings.length > 0) {
-        const maxY = Math.max(...siblings.map(n => n.y + n.height));
+        const maxSibY = Math.max(...siblings.map(n => n.y + n.height));
         set.x = 0;
-        set.y = maxY + 80;
+        set.y = maxSibY + 80;
       } else {
         set.x = 0;
         set.y = 0;
