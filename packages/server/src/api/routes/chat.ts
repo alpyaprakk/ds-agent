@@ -250,9 +250,26 @@ ${varList(otherFloatVars, '(none)')}
 
 ## PLUGIN CAPABILITIES
 
-- **create_component**: Creates a Figma component set with variants, auto layout, and token bindings.
+- **create_component**: Creates a production-quality Figma component set. The plugin handles ALL visual styling internally (fills, strokes, radius, padding, text color) per variant — you only provide the component name, dimensions, variants, and properties.
 - **set_variable_value**: Changes the value of an existing variable (COLOR hex string, FLOAT number, STRING).
 - **rename_variable**: Renames an existing variable by its current name.
+
+### HOW create_component WORKS (IMPORTANT)
+
+The plugin automatically:
+- Creates a nested structure: ComponentNode → Background Frame → Label Text
+- Applies per-variant fills, strokes, text colors from the token system
+- Binds radius/md (8px) to all corners
+- Adjusts height per Size variant: Small=32, Medium=40, Large=48
+- Applies correct padding per size: Small=6/12, Medium=8/16, Large=12/20
+- Creates all necessary component tokens in "Component Tokens" collection if not found
+- Uses existing variables from the live reference above when available
+
+**You do NOT need to specify fills, cornerRadius, padding, or tokenBindings.**
+Just provide: pageName, componentName, description, width, variants, properties.
+
+Built-in style support: **Button** (Primary/Secondary/Ghost/Destructive × Default/Hover/Pressed/Disabled), **Input** (Default/Focus/Error/Disabled), **Badge** (Default/Primary/Success/Warning/Destructive), **Card**.
+For any other component name, the plugin uses sensible defaults.
 
 ---
 
@@ -272,33 +289,7 @@ After the block, write 1–2 sentences confirming what was done.
 
 ---
 
-## tokenBindings — HOW TO BIND VARIABLES TO COMPONENTS
-
-Every \`create_component\` MUST use \`tokenBindings\` instead of legacy \`fills\`/\`cornerRadius\`.
-
-Each binding:
-- \`property\`: Figma property to bind
-  - \`"fill"\` → background color (COLOR variable)
-  - \`"stroke"\` → border color (COLOR variable)
-  - \`"cornerRadius"\` → all 4 corner radii (FLOAT variable)
-  - \`"paddingTop"\` / \`"paddingRight"\` / \`"paddingBottom"\` / \`"paddingLeft"\` → padding (FLOAT)
-  - \`"itemSpacing"\` → gap between children (FLOAT)
-- \`token\`:
-  - \`name\`: preferred variable — always start with Layer 1 component token
-  - \`fallbacks\`: ordered list — Layer 2 semantic → Layer 3 primitive
-  - \`type\`: \`"COLOR"\` or \`"FLOAT"\`
-  - \`createWithValue\`: hex string for COLOR, number for FLOAT — used when plugin must create the variable
-
-TOKEN LOOKUP LOGIC (plugin does this automatically):
-1. Search all variables for exact name match
-2. Search by suffix: \`"radius/md"\` matches \`"Spacing & Radius/radius/md"\`
-3. Search by partial: all path segments present in any order
-4. Try each fallback with the same logic
-5. If nothing found → CREATE the variable at \`name\` with \`createWithValue\`
-
----
-
-## EXAMPLE: Button component with full tokenBindings
+## EXAMPLE: Button component
 
 \`\`\`json
 EXECUTE:
@@ -308,55 +299,24 @@ EXECUTE:
     "pageName": "Components",
     "componentName": "Button",
     "description": "Action button with size, type, and state variants",
-    "width": 120,
-    "height": 40,
-    "layoutMode": "HORIZONTAL",
-    "padding": { "top": 8, "right": 16, "bottom": 8, "left": 16 },
-    "itemSpacing": 8,
-    "tokenBindings": [
-      {
-        "property": "fill",
-        "token": {
-          "name": "color/component/Button/bg/primary-default",
-          "fallbacks": ["color/brand/primary", "color/neutral/900"],
-          "type": "COLOR",
-          "createWithValue": "#2563EB"
-        }
-      },
-      {
-        "property": "cornerRadius",
-        "token": {
-          "name": "radius/md",
-          "fallbacks": ["radius/8"],
-          "type": "FLOAT",
-          "createWithValue": 8
-        }
-      },
-      {
-        "property": "paddingTop",
-        "token": { "name": "spacing/2", "fallbacks": ["spacing/8"], "type": "FLOAT", "createWithValue": 8 }
-      },
-      {
-        "property": "paddingRight",
-        "token": { "name": "spacing/4", "fallbacks": ["spacing/16"], "type": "FLOAT", "createWithValue": 16 }
-      },
-      {
-        "property": "paddingBottom",
-        "token": { "name": "spacing/2", "fallbacks": ["spacing/8"], "type": "FLOAT", "createWithValue": 8 }
-      },
-      {
-        "property": "paddingLeft",
-        "token": { "name": "spacing/4", "fallbacks": ["spacing/16"], "type": "FLOAT", "createWithValue": 16 }
-      }
-    ],
+    "width": 160,
     "variants": [
       { "properties": { "Size": "Large",  "Type": "Primary",     "State": "Default"  } },
       { "properties": { "Size": "Large",  "Type": "Primary",     "State": "Hover"    } },
+      { "properties": { "Size": "Large",  "Type": "Primary",     "State": "Pressed"  } },
       { "properties": { "Size": "Large",  "Type": "Primary",     "State": "Disabled" } },
       { "properties": { "Size": "Large",  "Type": "Secondary",   "State": "Default"  } },
+      { "properties": { "Size": "Large",  "Type": "Secondary",   "State": "Hover"    } },
+      { "properties": { "Size": "Large",  "Type": "Secondary",   "State": "Disabled" } },
       { "properties": { "Size": "Large",  "Type": "Ghost",       "State": "Default"  } },
+      { "properties": { "Size": "Large",  "Type": "Ghost",       "State": "Hover"    } },
+      { "properties": { "Size": "Large",  "Type": "Destructive", "State": "Default"  } },
+      { "properties": { "Size": "Large",  "Type": "Destructive", "State": "Disabled" } },
       { "properties": { "Size": "Medium", "Type": "Primary",     "State": "Default"  } },
-      { "properties": { "Size": "Small",  "Type": "Primary",     "State": "Default"  } }
+      { "properties": { "Size": "Medium", "Type": "Secondary",   "State": "Default"  } },
+      { "properties": { "Size": "Medium", "Type": "Ghost",       "State": "Default"  } },
+      { "properties": { "Size": "Small",  "Type": "Primary",     "State": "Default"  } },
+      { "properties": { "Size": "Small",  "Type": "Secondary",   "State": "Default"  } }
     ],
     "properties": [
       { "name": "Size",  "type": "VARIANT", "values": ["Large", "Medium", "Small"] },
@@ -369,7 +329,7 @@ EXECUTE:
 
 ---
 
-## EXAMPLE: Input component with tokenBindings
+## EXAMPLE: Input component
 
 \`\`\`json
 EXECUTE:
@@ -379,49 +339,49 @@ EXECUTE:
     "pageName": "Components",
     "componentName": "Input",
     "description": "Text input with state and size variants",
-    "width": 240,
-    "height": 40,
-    "layoutMode": "HORIZONTAL",
-    "padding": { "top": 8, "right": 12, "bottom": 8, "left": 12 },
-    "itemSpacing": 8,
-    "tokenBindings": [
-      {
-        "property": "fill",
-        "token": {
-          "name": "color/component/Input/bg/default",
-          "fallbacks": ["color/bg/default", "color/neutral/0"],
-          "type": "COLOR",
-          "createWithValue": "#FFFFFF"
-        }
-      },
-      {
-        "property": "stroke",
-        "token": {
-          "name": "color/component/Input/border/default",
-          "fallbacks": ["color/border/default", "color/neutral/300"],
-          "type": "COLOR",
-          "createWithValue": "#D4D4D8"
-        }
-      },
-      {
-        "property": "cornerRadius",
-        "token": {
-          "name": "radius/md",
-          "fallbacks": ["radius/8"],
-          "type": "FLOAT",
-          "createWithValue": 8
-        }
-      }
-    ],
+    "width": 280,
     "variants": [
-      { "properties": { "State": "Default",  "Size": "Medium" } },
-      { "properties": { "State": "Focus",    "Size": "Medium" } },
-      { "properties": { "State": "Error",    "Size": "Medium" } },
-      { "properties": { "State": "Disabled", "Size": "Medium" } }
+      { "properties": { "Size": "Large",  "State": "Default"  } },
+      { "properties": { "Size": "Large",  "State": "Focus"    } },
+      { "properties": { "Size": "Large",  "State": "Error"    } },
+      { "properties": { "Size": "Large",  "State": "Disabled" } },
+      { "properties": { "Size": "Medium", "State": "Default"  } },
+      { "properties": { "Size": "Medium", "State": "Focus"    } },
+      { "properties": { "Size": "Medium", "State": "Error"    } },
+      { "properties": { "Size": "Medium", "State": "Disabled" } },
+      { "properties": { "Size": "Small",  "State": "Default"  } },
+      { "properties": { "Size": "Small",  "State": "Focus"    } }
     ],
     "properties": [
       { "name": "State", "type": "VARIANT", "values": ["Default", "Focus", "Error", "Disabled"] },
-      { "name": "Size",  "type": "VARIANT", "values": ["Small", "Medium", "Large"] }
+      { "name": "Size",  "type": "VARIANT", "values": ["Large", "Medium", "Small"] }
+    ]
+  }
+}
+\`\`\`
+
+---
+
+## EXAMPLE: Badge component
+
+\`\`\`json
+EXECUTE:
+{
+  "type": "create_component",
+  "spec": {
+    "pageName": "Components",
+    "componentName": "Badge",
+    "description": "Status badge with semantic color variants",
+    "width": 80,
+    "variants": [
+      { "properties": { "Type": "Default"     } },
+      { "properties": { "Type": "Primary"     } },
+      { "properties": { "Type": "Success"     } },
+      { "properties": { "Type": "Warning"     } },
+      { "properties": { "Type": "Destructive" } }
+    ],
+    "properties": [
+      { "name": "Type", "type": "VARIANT", "values": ["Default", "Primary", "Success", "Warning", "Destructive"] }
     ]
   }
 }
