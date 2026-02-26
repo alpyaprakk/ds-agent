@@ -212,25 +212,10 @@ function resolveOrCreateVariable(spec: TokenSpec): Variable {
     }
   }
 
-  // 3. Value-based lookup — find an existing variable with a similar value
-  //    rather than creating a new token with a duplicated value
-  if (spec.createWithValue !== undefined) {
-    if (spec.type === 'COLOR' && typeof spec.createWithValue === 'string') {
-      const closest = findClosestColorVariable(spec.createWithValue);
-      if (closest) {
-        console.log(`♻️  Reusing "${closest.name}" for "${spec.name}" (similar color)`);
-        return closest;
-      }
-    } else if (spec.type === 'FLOAT' && typeof spec.createWithValue === 'number') {
-      const closest = findClosestFloatVariable(spec.createWithValue);
-      if (closest) {
-        console.log(`♻️  Reusing "${closest.name}" for "${spec.name}" (similar value)`);
-        return closest;
-      }
-    }
-  }
-
-  // 4. Nothing found — create a new component token in "Components" collection
+  // 3. Nothing found by name — create a new token
+  //    (value-based reuse is intentionally NOT done here: component tokens must have
+  //     their own identity so they can be individually aliased to the right semantic token.
+  //     Reusing e.g. color/semantic/error for input-bg would give wrong color.)
   const collectionName = spec.createInCollection || inferCollectionForVariable(spec.name);
   const { collection, defaultModeId } = getOrCreateCollection(collectionName);
   const newVar = figma.variables.createVariable(spec.name, collection, spec.type);
@@ -249,26 +234,7 @@ function resolveOrCreateVariable(spec: TokenSpec): Variable {
     }
   }
 
-  // If no alias found but createWithValue given, try value-based match → alias that
-  if (!aliased && spec.createWithValue !== undefined) {
-    if (spec.type === 'COLOR' && typeof spec.createWithValue === 'string') {
-      const closest = findClosestColorVariable(spec.createWithValue);
-      if (closest) {
-        newVar.setValueForMode(defaultModeId, figma.variables.createVariableAlias(closest));
-        console.log(`🔗 Aliased "${spec.name}" → "${closest.name}" (value match)`);
-        aliased = true;
-      }
-    } else if (spec.type === 'FLOAT' && typeof spec.createWithValue === 'number') {
-      const closest = findClosestFloatVariable(spec.createWithValue);
-      if (closest) {
-        newVar.setValueForMode(defaultModeId, figma.variables.createVariableAlias(closest));
-        console.log(`🔗 Aliased "${spec.name}" → "${closest.name}" (value match)`);
-        aliased = true;
-      }
-    }
-  }
-
-  // Last resort: set raw value
+  // If no alias found: set raw value (safer than guessing a wrong alias)
   if (!aliased && spec.createWithValue !== undefined) {
     if (spec.type === 'COLOR' && typeof spec.createWithValue === 'string') {
       const hex = spec.createWithValue.replace('#', '');
@@ -630,12 +596,18 @@ async function executeCreateComponent(spec: ComponentSpec): Promise<{ success: b
     }
 
     if (components.length > 1) {
+      // Capture existing content bounds BEFORE combining (combineAsVariants moves nodes)
+      const existingNodes = page.children.filter(n => !components.includes(n as ComponentNode));
+      const placeY = existingNodes.length > 0
+        ? Math.max(...existingNodes.map(n => n.y + n.height)) + 80
+        : 0;
+
       const set = figma.combineAsVariants(components, page);
       set.name = spec.componentName;
       set.fills = [];
       set.strokes = [];
 
-      // Free-form grid: last property = columns, rest = rows
+      // Free-form grid: last property = columns, earlier properties = rows
       const PAD = 40;
       const GAP_X = 24;
       const GAP_Y = 16;
@@ -651,20 +623,14 @@ async function executeCreateComponent(spec: ComponentSpec): Promise<{ success: b
         comp.y = PAD + row * (comp.height + GAP_Y);
       });
 
-      // Resize the set to hug all variants + padding
+      // Resize the set to exactly hug all variants + padding
       const maxX = Math.max(...components.map(c => c.x + c.width));
       const maxY2 = Math.max(...components.map(c => c.y + c.height));
       set.resizeWithoutConstraints(maxX + PAD, maxY2 + PAD);
 
-      const siblings = page.children.filter(n => n !== set);
-      if (siblings.length > 0) {
-        const maxSibY = Math.max(...siblings.map(n => n.y + n.height));
-        set.x = 0;
-        set.y = maxSibY + 80;
-      } else {
-        set.x = 0;
-        set.y = 0;
-      }
+      // Place below existing content
+      set.x = 0;
+      set.y = placeY;
     } else if (components.length === 1) {
       components[0].name = spec.componentName;
       const siblings = page.children.filter(n => n !== components[0]);

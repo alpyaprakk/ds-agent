@@ -501,11 +501,11 @@ Font size (FLOAT): font-size/xs→12, font-size/sm→14, font-size/md→16, font
 
 Use descriptive page names to keep the Figma file organized:
 - \`Foundation\` — color, spacing, radius, typography tokens showcase (no component sets here)
-- \`Components/Buttons\` — Button, IconButton, FAB
-- \`Components/Forms\` — Input, Textarea, Select, Checkbox, Radio, Toggle
-- \`Components/Data Display\` — Card, Badge, Avatar, Table, List, Stat
-- \`Components/Feedback\` — Alert, Toast, Modal, Tooltip, Progress, Skeleton
-- \`Components/Navigation\` — Navbar, Sidebar, Tabs, Breadcrumb, Pagination
+- \`Buttons\` — Button, IconButton, FAB
+- \`Forms\` — Input, Textarea, Select, Checkbox, Radio, Toggle
+- \`Data Display\` — Card, Badge, Avatar, Table, List, Stat
+- \`Feedback\` — Alert, Toast, Modal, Tooltip, Progress, Skeleton
+- \`Navigation\` — Navbar, Sidebar, Tabs, Breadcrumb, Pagination
 
 When the user specifies a page name, always use it exactly. When not specified, use the closest category above.
 

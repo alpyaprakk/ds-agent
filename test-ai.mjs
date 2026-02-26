@@ -218,42 +218,42 @@ async function phase2() {
   section('PHASE 2 — Core Components');
 
   await chat(
-    `"Components/Buttons" sayfasında Button componenti oluştur.
+    `"Buttons" sayfasında Button componenti oluştur.
 Özellikler: Size (Small, Medium, Large), Type (Primary, Secondary, Ghost, Destructive, Link), State (Default, Hover, Pressed, Disabled, Loading).
 Mevcut token sistemini inceleyerek tokenMappings'i doldur.`,
-    '2.1 — Button (Components/Buttons page)',
-    { expectExecute: true, expectAgent: 'design-system', expectPage: 'Components/Buttons' }
+    '2.1 — Button (Buttons page)',
+    { expectExecute: true, expectAgent: 'design-system', expectPage: 'Buttons' }
   );
 
   await chat(
-    `"Components/Forms" sayfasında Input componenti oluştur.
+    `"Forms" sayfasında Input componenti oluştur.
 Özellikler: Size (Small, Medium, Large), State (Default, Focus, Filled, Error, Disabled).
 Label, placeholder, helper text katmanları olsun. tokenMappings ekle.`,
-    '2.2 — Input (Components/Forms page)',
-    { expectExecute: true, expectAgent: 'design-system', expectPage: 'Components/Forms' }
+    '2.2 — Input (Forms page)',
+    { expectExecute: true, expectAgent: 'design-system', expectPage: 'Forms' }
   );
 
   await chat(
-    `"Components/Forms" sayfasında Checkbox componenti oluştur.
+    `"Forms" sayfasında Checkbox componenti oluştur.
 Özellikler: State (Unchecked, Checked, Indeterminate, Disabled).`,
-    '2.3 — Checkbox (Components/Forms page)',
-    { expectExecute: true, expectAgent: 'design-system', expectPage: 'Components/Forms' }
+    '2.3 — Checkbox (Forms page)',
+    { expectExecute: true, expectAgent: 'design-system', expectPage: 'Forms' }
   );
 
   await chat(
-    `"Components/Data Display" sayfasında Badge componenti oluştur.
+    `"Data Display" sayfasında Badge componenti oluştur.
 Type: Default, Primary, Success, Warning, Destructive, Info.
 Size: Small, Medium. tokenMappings ekle.`,
-    '2.4 — Badge (Components/Data Display page)',
-    { expectExecute: true, expectAgent: 'design-system', expectPage: 'Components/Data Display' }
+    '2.4 — Badge (Data Display page)',
+    { expectExecute: true, expectAgent: 'design-system', expectPage: 'Data Display' }
   );
 
   await chat(
-    `"Components/Data Display" sayfasında Avatar componenti oluştur.
+    `"Data Display" sayfasında Avatar componenti oluştur.
 Size: XSmall (24), Small (32), Medium (40), Large (48), XLarge (64).
 Type: Image, Initials, Icon.`,
-    '2.5 — Avatar (Components/Data Display page)',
-    { expectExecute: true, expectAgent: 'design-system', expectPage: 'Components/Data Display' }
+    '2.5 — Avatar (Data Display page)',
+    { expectExecute: true, expectAgent: 'design-system', expectPage: 'Data Display' }
   );
 }
 
@@ -263,34 +263,34 @@ async function phase3() {
   section('PHASE 3 — Compound & Feedback Components');
 
   await chat(
-    `"Components/Feedback" sayfasında Alert componenti oluştur.
+    `"Feedback" sayfasında Alert componenti oluştur.
 Type: Info, Success, Warning, Destructive. Her birinde icon alanı, title ve description olsun.
 tokenMappings ekle.`,
-    '3.1 — Alert (Components/Feedback page)',
-    { expectExecute: true, expectAgent: 'design-system', expectPage: 'Components/Feedback' }
+    '3.1 — Alert (Feedback page)',
+    { expectExecute: true, expectAgent: 'design-system', expectPage: 'Feedback' }
   );
 
   await chat(
-    `"Components/Feedback" sayfasında Toast/Snackbar componenti oluştur.
+    `"Feedback" sayfasında Toast/Snackbar componenti oluştur.
 Type: Default, Success, Warning, Error.
 Position variant ekle: içerik hizalaması soldan.`,
-    '3.2 — Toast (Components/Feedback page)',
-    { expectExecute: true, expectAgent: 'design-system', expectPage: 'Components/Feedback' }
+    '3.2 — Toast (Feedback page)',
+    { expectExecute: true, expectAgent: 'design-system', expectPage: 'Feedback' }
   );
 
   await chat(
-    `"Components/Navigation" sayfasında Tab componenti oluştur.
+    `"Navigation" sayfasında Tab componenti oluştur.
 State: Default, Active, Disabled. Size: Small, Medium, Large.`,
-    '3.3 — Tab (Components/Navigation page)',
-    { expectExecute: true, expectAgent: 'design-system', expectPage: 'Components/Navigation' }
+    '3.3 — Tab (Navigation page)',
+    { expectExecute: true, expectAgent: 'design-system', expectPage: 'Navigation' }
   );
 
   await chat(
-    `"Components/Data Display" sayfasında Card componenti oluştur.
+    `"Data Display" sayfasında Card componenti oluştur.
 Type: Default, Outlined, Elevated, Interactive.
 Her varyant için bg, border, shadow state'lerini mevcut tokenlarla eşleştir.`,
-    '3.4 — Card (Components/Data Display page)',
-    { expectExecute: true, expectAgent: 'design-system', expectPage: 'Components/Data Display' }
+    '3.4 — Card (Data Display page)',
+    { expectExecute: true, expectAgent: 'design-system', expectPage: 'Data Display' }
   );
 }
 
@@ -330,11 +330,11 @@ function summary() {
   console.log(`\n  ${C.dim}Conversation turns: ${history.filter(m => m.role === 'user').length}${C.reset}`);
   console.log(`\n  ${C.bold}Check Figma for pages:${C.reset}`);
   console.log(`  ${C.dim}  • Foundation (tokens)${C.reset}`);
-  console.log(`  ${C.dim}  • Components/Buttons${C.reset}`);
-  console.log(`  ${C.dim}  • Components/Forms${C.reset}`);
-  console.log(`  ${C.dim}  • Components/Data Display${C.reset}`);
-  console.log(`  ${C.dim}  • Components/Feedback${C.reset}`);
-  console.log(`  ${C.dim}  • Components/Navigation${C.reset}`);
+  console.log(`  ${C.dim}  • Buttons${C.reset}`);
+  console.log(`  ${C.dim}  • Forms${C.reset}`);
+  console.log(`  ${C.dim}  • Data Display${C.reset}`);
+  console.log(`  ${C.dim}  • Feedback${C.reset}`);
+  console.log(`  ${C.dim}  • Navigation${C.reset}`);
   console.log('');
 
   if (failCount > 0) process.exit(1);
