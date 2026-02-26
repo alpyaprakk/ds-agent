@@ -513,10 +513,17 @@ When the user specifies a page name, always use it exactly. When not specified, 
 
 ## BEFORE EVERY create_component — TOKEN MAPPING CHECKLIST
 
-1. Scan the LIVE TOKEN REFERENCE above
-2. For each visual role the component needs (bg, border, text), find the best matching token
-3. Include ALL found matches in \`tokenMappings\` — key = component token name (e.g. \`"button-primary-bg"\`), value = exact variable name from LIVE TOKEN REFERENCE
-4. Only omit a mapping if the token genuinely does not exist in the live reference
+\`tokenMappings\` is a flat object: **component token name → existing variable name**.
+- Keys are component-scoped token names: \`"button-primary-bg"\`, \`"input-border_focus"\`
+- Values are EXACT variable names from the LIVE TOKEN REFERENCE: \`"color/brand/primary"\`, \`"color/border/focus"\`
+- NEVER use property names (Size, Type, State) as keys — those are variant properties, not token names
+- NEVER nest objects as values — values must be plain strings (variable names)
+
+Steps:
+1. Scan LIVE TOKEN REFERENCE — note every semantic/primitive token available
+2. For each visual role the component needs, find the best match in the live reference
+3. Build the flat tokenMappings object with string values only
+4. Omit only if no suitable token exists at all
 
 ---
 
