@@ -38,6 +38,13 @@ export class AgentConfigRepository {
     await query(`
       ALTER TABLE agent_configs ALTER COLUMN workspace_id DROP NOT NULL
     `).catch(() => {});
+    // Fix NULL uniqueness: PostgreSQL treats NULLs as distinct in UNIQUE constraints.
+    // Add a partial unique index so only one global (workspace_id IS NULL) record per agent_type exists.
+    await query(`
+      CREATE UNIQUE INDEX IF NOT EXISTS agent_configs_global_unique
+      ON agent_configs (agent_type)
+      WHERE workspace_id IS NULL
+    `).catch(() => {});
   }
 
   static async findByWorkspace(workspaceId: string): Promise<AgentConfig[]> {
@@ -48,11 +55,13 @@ export class AgentConfigRepository {
     return result.rows;
   }
 
-  // Returns workspace-specific config, falls back to global default
+  // Returns workspace-specific config, falls back to global default. Skips inactive configs.
   static async findOne(workspaceId: string, agentType: string): Promise<AgentConfig | null> {
     const result = await query(
       `SELECT * FROM agent_configs
-       WHERE agent_type = $2 AND (workspace_id = $1 OR workspace_id IS NULL)
+       WHERE agent_type = $2
+         AND (workspace_id = $1 OR workspace_id IS NULL)
+         AND is_active = true
        ORDER BY workspace_id NULLS LAST
        LIMIT 1`,
       [workspaceId, agentType]
