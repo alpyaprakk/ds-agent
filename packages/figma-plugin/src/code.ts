@@ -77,11 +77,14 @@ function applyVariableOp(op: { action: string; variableId?: string; variableName
 type VariableType = 'COLOR' | 'FLOAT' | 'STRING' | 'BOOLEAN';
 
 interface TokenSpec {
-  name: string;
-  fallbacks?: string[];
+  name: string;            // component token name, e.g. "button-primary-bg"
+  fallbacks?: string[];    // fallback name lookups
   type: VariableType;
   createInCollection?: string;
-  createWithValue?: string | number;
+  createWithValue?: string | number;  // hex or number — used only if no alias can be resolved
+  aliasFor?: string[];     // ordered list of semantic/primitive token names to alias to
+                           // e.g. ['color/brand/primary', 'color/brand/500']
+                           // Plugin will alias to the first one found; falls back to createWithValue
 }
 
 function findVariable(nameOrPath: string): Variable | null {
@@ -176,9 +179,12 @@ function findClosestFloatVariable(value: number, threshold = 2): Variable | null
 
 function inferCollectionForVariable(name: string): string {
   const lower = name.toLowerCase();
-  if (lower.startsWith('color/component') || lower.startsWith('components/') || lower.includes('/component/')) {
-    return 'Component Tokens';
-  }
+  // New flat component token names like "button-primary-bg"
+  const componentPrefixes = ['button-', 'input-', 'badge-', 'card-', 'modal-', 'drawer-',
+    'tooltip-', 'toast-', 'alert-', 'checkbox-', 'radio-', 'toggle-', 'select-', 'tab-'];
+  if (componentPrefixes.some(p => lower.startsWith(p))) return 'Components';
+  // Legacy path-style component tokens
+  if (lower.startsWith('color/component') || lower.includes('/component/')) return 'Components';
   if (lower.startsWith('spacing/') || lower.startsWith('radius/') || lower.startsWith('font-size/') || lower.startsWith('font-weight/')) {
     return 'Spacing & Radius';
   }
@@ -224,12 +230,46 @@ function resolveOrCreateVariable(spec: TokenSpec): Variable {
     }
   }
 
-  // 4. Nothing found or similar enough — create a new token
+  // 4. Nothing found — create a new component token in "Components" collection
   const collectionName = spec.createInCollection || inferCollectionForVariable(spec.name);
   const { collection, defaultModeId } = getOrCreateCollection(collectionName);
   const newVar = figma.variables.createVariable(spec.name, collection, spec.type);
 
-  if (spec.createWithValue !== undefined) {
+  // Try to alias to a semantic/primitive token first (preferred over raw hex)
+  let aliased = false;
+  if (spec.aliasFor && spec.aliasFor.length > 0) {
+    for (const aliasName of spec.aliasFor) {
+      const aliasTarget = findVariable(aliasName);
+      if (aliasTarget) {
+        newVar.setValueForMode(defaultModeId, figma.variables.createVariableAlias(aliasTarget));
+        console.log(`🔗 Aliased "${spec.name}" → "${aliasTarget.name}"`);
+        aliased = true;
+        break;
+      }
+    }
+  }
+
+  // If no alias found but createWithValue given, try value-based match → alias that
+  if (!aliased && spec.createWithValue !== undefined) {
+    if (spec.type === 'COLOR' && typeof spec.createWithValue === 'string') {
+      const closest = findClosestColorVariable(spec.createWithValue);
+      if (closest) {
+        newVar.setValueForMode(defaultModeId, figma.variables.createVariableAlias(closest));
+        console.log(`🔗 Aliased "${spec.name}" → "${closest.name}" (value match)`);
+        aliased = true;
+      }
+    } else if (spec.type === 'FLOAT' && typeof spec.createWithValue === 'number') {
+      const closest = findClosestFloatVariable(spec.createWithValue);
+      if (closest) {
+        newVar.setValueForMode(defaultModeId, figma.variables.createVariableAlias(closest));
+        console.log(`🔗 Aliased "${spec.name}" → "${closest.name}" (value match)`);
+        aliased = true;
+      }
+    }
+  }
+
+  // Last resort: set raw value
+  if (!aliased && spec.createWithValue !== undefined) {
     if (spec.type === 'COLOR' && typeof spec.createWithValue === 'string') {
       const hex = spec.createWithValue.replace('#', '');
       const r = parseInt(hex.slice(0, 2), 16) / 255;
@@ -310,47 +350,68 @@ function resolveVariantStyle(componentName: string, props: Record<string, string
   const isFocus    = state === 'Focus';
   const isError    = state === 'Error';
 
+  // Helper: build a component token spec with alias chain
+  // name format: "{component}-{variant}-{role}" or "{component}-{variant}-{role}_{state}"
+  const cn = componentName.toLowerCase();
+  const stSuffix = (state !== 'Default') ? `_${state.toLowerCase()}` : '';
+
+  function ct(role: string, aliasFor: string[], fallbackHex: string): TokenSpec {
+    return {
+      name: `${cn}-${role}`,
+      type: 'COLOR',
+      createInCollection: 'Components',
+      aliasFor,
+      createWithValue: fallbackHex,
+    };
+  }
+
   // ── BUTTON ────────────────────────────────────────────────────────────
   if (componentName === 'Button') {
     const base: VariantStyle = { ...sizeStyle, fontStyle: 'Medium' };
 
     if (type === 'Primary') {
-      const bgHex = isDisabled ? '#94A3B8' : isPressed ? '#1D4ED8' : isHover ? '#3B82F6' : '#2563EB';
+      const bgAlias = isDisabled ? ['color/text/disabled', 'color/neutral/400']
+                    : isPressed  ? ['color/brand/secondary', 'color/brand/primary']
+                    : isHover    ? ['color/brand/primary']
+                    :              ['color/brand/primary'];
       return {
         ...base,
-        bgToken:   { name: `color/component/Button/bg/primary-${state.toLowerCase()}`,   fallbacks: ['color/brand/primary'],    type: 'COLOR', createWithValue: bgHex },
-        textToken: { name: 'color/component/Button/text/on-primary',                      fallbacks: ['color/text/inverse'],     type: 'COLOR', createWithValue: '#FFFFFF' },
+        bgToken:   ct(`primary-bg${stSuffix}`,      bgAlias,                                    isDisabled ? '#94A3B8' : '#2563EB'),
+        textToken: ct(`primary-text`,               ['color/text/inverse', 'color/neutral/0'],   '#FFFFFF'),
       };
     }
     if (type === 'Secondary') {
-      const strokeHex = isDisabled ? '#CBD5E1' : '#2563EB';
-      const textHex   = isDisabled ? '#94A3B8' : '#2563EB';
+      const borderAlias = isDisabled ? ['color/border/default'] : ['color/brand/primary', 'color/border/focus'];
+      const textAlias   = isDisabled ? ['color/text/disabled']  : ['color/brand/primary', 'color/text/primary'];
       return {
         ...base,
         bgToken: (isHover || isPressed)
-          ? { name: 'color/component/Button/bg/secondary-hover', fallbacks: ['color/bg/subtle'], type: 'COLOR', createWithValue: '#EFF6FF' }
+          ? ct(`secondary-bg_hover`, ['color/bg/subtle'], '#EFF6FF')
           : undefined,
-        strokeToken: { name: `color/component/Button/border/secondary-${state.toLowerCase()}`, fallbacks: ['color/brand/primary', 'color/border/default'], type: 'COLOR', createWithValue: strokeHex },
+        strokeToken: ct(`secondary-border${stSuffix}`, borderAlias, isDisabled ? '#CBD5E1' : '#2563EB'),
         strokeWeight: 1.5,
-        textToken:   { name: `color/component/Button/text/secondary-${state.toLowerCase()}`,   fallbacks: ['color/brand/primary', 'color/text/primary'],  type: 'COLOR', createWithValue: textHex },
+        textToken:   ct(`secondary-text${stSuffix}`,   textAlias,   isDisabled ? '#94A3B8' : '#2563EB'),
       };
     }
     if (type === 'Ghost') {
-      const textHex = isDisabled ? '#94A3B8' : '#2563EB';
+      const textAlias = isDisabled ? ['color/text/disabled'] : ['color/brand/primary', 'color/text/primary'];
       return {
         ...base,
         bgToken: (isHover || isPressed)
-          ? { name: 'color/component/Button/bg/ghost-hover', fallbacks: ['color/bg/subtle'], type: 'COLOR', createWithValue: '#F1F5F9' }
+          ? ct(`ghost-bg_hover`, ['color/bg/subtle'], '#F1F5F9')
           : undefined,
-        textToken: { name: `color/component/Button/text/ghost-${state.toLowerCase()}`, fallbacks: ['color/brand/primary', 'color/text/primary'], type: 'COLOR', createWithValue: textHex },
+        textToken: ct(`ghost-text${stSuffix}`, textAlias, isDisabled ? '#94A3B8' : '#2563EB'),
       };
     }
     if (type === 'Destructive') {
-      const bgHex = isDisabled ? '#FCA5A5' : isPressed ? '#B91C1C' : isHover ? '#EF4444' : '#DC2626';
+      const bgAlias = isDisabled ? ['color/text/disabled']
+                    : isPressed  ? ['color/semantic/error']
+                    : isHover    ? ['color/semantic/error']
+                    :              ['color/semantic/error'];
       return {
         ...base,
-        bgToken:   { name: `color/component/Button/bg/destructive-${state.toLowerCase()}`, fallbacks: ['color/semantic/error'],  type: 'COLOR', createWithValue: bgHex },
-        textToken: { name: 'color/component/Button/text/on-destructive',                   fallbacks: ['color/text/inverse'],    type: 'COLOR', createWithValue: '#FFFFFF' },
+        bgToken:   ct(`destructive-bg${stSuffix}`, bgAlias,                                  isDisabled ? '#FCA5A5' : '#DC2626'),
+        textToken: ct(`destructive-text`,           ['color/text/inverse', 'color/neutral/0'], '#FFFFFF'),
       };
     }
   }
@@ -358,34 +419,34 @@ function resolveVariantStyle(componentName: string, props: Record<string, string
   // ── INPUT ─────────────────────────────────────────────────────────────
   if (componentName === 'Input') {
     const base: VariantStyle = { ...sizeStyle, fontStyle: 'Regular' };
-    const bgHex     = isDisabled ? '#F8FAFC' : '#FFFFFF';
-    const strokeHex = isError    ? '#EF4444'
-                    : isFocus    ? '#2563EB'
-                    : isDisabled ? '#E2E8F0'
-                    : '#D1D5DB';
+    const bgAlias     = isDisabled ? ['color/bg/subtle', 'color/neutral/100'] : ['color/bg/default', 'color/neutral/0'];
+    const borderAlias = isError    ? ['color/semantic/error']
+                      : isFocus    ? ['color/border/focus', 'color/brand/primary']
+                      : isDisabled ? ['color/border/default']
+                      :              ['color/border/default'];
     return {
       ...base,
-      bgToken:     { name: `color/component/Input/bg/${state.toLowerCase()}`,     fallbacks: ['color/bg/default',     'color/neutral/0'],   type: 'COLOR', createWithValue: bgHex },
-      strokeToken: { name: `color/component/Input/border/${state.toLowerCase()}`, fallbacks: ['color/border/default', 'color/neutral/300'], type: 'COLOR', createWithValue: strokeHex },
+      bgToken:     ct(`bg${stSuffix}`,     bgAlias,     isDisabled ? '#F8FAFC' : '#FFFFFF'),
+      strokeToken: ct(`border${stSuffix}`, borderAlias, isError ? '#EF4444' : isFocus ? '#2563EB' : '#D1D5DB'),
       strokeWeight: isFocus ? 2 : 1,
-      textToken:   { name: 'color/component/Input/text/placeholder',              fallbacks: ['color/text/secondary', 'color/neutral/400'], type: 'COLOR', createWithValue: '#9CA3AF' },
+      textToken:   ct(`placeholder`,       ['color/text/tertiary', 'color/text/secondary'], '#9CA3AF'),
     };
   }
 
   // ── BADGE ─────────────────────────────────────────────────────────────
   if (componentName === 'Badge') {
-    const colorMap: Record<string, { bg: string; text: string }> = {
-      'Default':     { bg: '#F1F5F9', text: '#475569' },
-      'Primary':     { bg: '#DBEAFE', text: '#1D4ED8' },
-      'Success':     { bg: '#DCFCE7', text: '#15803D' },
-      'Warning':     { bg: '#FEF9C3', text: '#A16207' },
-      'Destructive': { bg: '#FEE2E2', text: '#B91C1C' },
+    const badgeMap: Record<string, { bgAlias: string[]; textAlias: string[]; bgHex: string; textHex: string }> = {
+      'Default':     { bgAlias: ['color/bg/subtle'],           textAlias: ['color/text/secondary'],        bgHex: '#F1F5F9', textHex: '#475569' },
+      'Primary':     { bgAlias: ['color/brand/primary'],       textAlias: ['color/text/inverse'],          bgHex: '#DBEAFE', textHex: '#1D4ED8' },
+      'Success':     { bgAlias: ['color/semantic/success'],    textAlias: ['color/text/inverse'],          bgHex: '#DCFCE7', textHex: '#15803D' },
+      'Warning':     { bgAlias: ['color/semantic/warning'],    textAlias: ['color/text/primary'],          bgHex: '#FEF9C3', textHex: '#A16207' },
+      'Destructive': { bgAlias: ['color/semantic/error'],      textAlias: ['color/text/inverse'],          bgHex: '#FEE2E2', textHex: '#B91C1C' },
     };
-    const colors = colorMap[type] || colorMap['Default'];
+    const bm = badgeMap[type] || badgeMap['Default'];
     return {
       height: 24, paddingH: 10, paddingV: 2, fontSize: 12, fontStyle: 'Medium',
-      bgToken:   { name: `color/component/Badge/bg/${type.toLowerCase()}`,   fallbacks: ['color/bg/subtle'],    type: 'COLOR', createWithValue: colors.bg },
-      textToken: { name: `color/component/Badge/text/${type.toLowerCase()}`, fallbacks: ['color/text/primary'], type: 'COLOR', createWithValue: colors.text },
+      bgToken:   ct(`${type.toLowerCase()}-bg`,   bm.bgAlias,   bm.bgHex),
+      textToken: ct(`${type.toLowerCase()}-text`, bm.textAlias, bm.textHex),
     };
   }
 
@@ -393,8 +454,8 @@ function resolveVariantStyle(componentName: string, props: Record<string, string
   if (componentName === 'Card') {
     return {
       height: 200, paddingH: 24, paddingV: 24, fontSize: 14, fontStyle: 'Regular',
-      bgToken:     { name: 'color/component/Card/bg/default',     fallbacks: ['color/bg/default',    'color/neutral/0'],   type: 'COLOR', createWithValue: '#FFFFFF' },
-      strokeToken: { name: 'color/component/Card/border/default', fallbacks: ['color/border/default', 'color/neutral/200'], type: 'COLOR', createWithValue: '#E2E8F0' },
+      bgToken:     ct(`bg`,     ['color/bg/default'],    '#FFFFFF'),
+      strokeToken: ct(`border`, ['color/border/default'], '#E2E8F0'),
       strokeWeight: 1,
     };
   }
@@ -402,8 +463,8 @@ function resolveVariantStyle(componentName: string, props: Record<string, string
   // ── Fallback (generic component) ──────────────────────────────────────
   return {
     ...sizeStyle,
-    bgToken:   { name: `color/component/${componentName}/bg/default`,   fallbacks: ['color/bg/default'],    type: 'COLOR', createWithValue: '#FFFFFF' },
-    textToken: { name: `color/component/${componentName}/text/default`, fallbacks: ['color/text/primary'], type: 'COLOR', createWithValue: '#18181B' },
+    bgToken:   ct(`bg`,   ['color/bg/default'],    '#FFFFFF'),
+    textToken: ct(`text`, ['color/text/primary'],  '#18181B'),
   };
 }
 
