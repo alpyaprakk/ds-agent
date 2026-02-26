@@ -43,6 +43,9 @@ export const getUsers = (page = 1, limit = 20, search = '') =>
 export const getUserDetail = (id: string) =>
   request<{ user: AdminUserDetail }>(`/users/${id}`);
 
+export const getUserWorkspaces = (id: string) =>
+  request<{ workspaces: UserWorkspaceRow[] }>(`/users/${id}/workspaces`);
+
 export const suspendUser = (id: string) =>
   request<{ success: boolean }>(`/users/${id}/suspend`, { method: 'POST' });
 
@@ -79,6 +82,15 @@ export const updatePlan = (id: string, data: Partial<Plan>) =>
 // Agent Configs
 export const getAgentConfigs = () => request<{ configs: AgentConfigRow[] }>('/agent-configs');
 
+export const getGlobalAgentConfig = (agentType: string) =>
+  request<{ config: AgentConfigRow | null }>(`/agent-configs/global/${agentType}`);
+
+export const saveGlobalAgentConfig = (agentType: string, data: object) =>
+  request<{ config: AgentConfigRow }>(`/agent-configs/global/${agentType}`, {
+    method: 'PUT',
+    body: JSON.stringify(data),
+  });
+
 // Per-workspace agent config (uses regular /api/agent-configs endpoint)
 export async function getWorkspaceAgentConfigs(workspaceId: string) {
   const token = getToken();
@@ -110,6 +122,11 @@ export interface AdminUserRow {
 export interface AdminUserDetail extends AdminUserRow {
   plan_status: string; valid_until: string | null; ai_messages_this_month: number;
 }
+export interface UserWorkspaceRow {
+  id: string; name: string; icon: string; color: string;
+  role: string; health_score: number;
+  member_count: number; component_count: number; variable_count: number;
+}
 export interface AdminWorkspaceRow {
   id: string; name: string; icon: string; color: string;
   owner_email: string; owner_name: string; member_count: number;
@@ -123,7 +140,7 @@ export interface Plan {
   price_monthly_usd: number; is_active: boolean;
 }
 export interface AgentConfigRow {
-  id: string; workspace_id: string; workspace_name: string;
+  id: string; workspace_id: string | null; workspace_name: string;
   agent_type: string; name: string; identity: string; tone: string;
   system_prompt: string; capabilities: string[]; context_rules: string; is_active: boolean;
 }

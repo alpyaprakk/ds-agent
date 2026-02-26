@@ -131,12 +131,30 @@ export class AdminRepository {
     );
   }
 
+  static async getUserWorkspaces(userId: string) {
+    const result = await query(
+      `SELECT w.id, w.name, w.icon, w.color, w.health_score, wm.role,
+              COUNT(DISTINCT wm2.user_id) as member_count,
+              COUNT(DISTINCT c.id) as component_count,
+              COUNT(DISTINCT v.id) as variable_count
+       FROM workspaces w
+       JOIN workspace_members wm ON wm.workspace_id = w.id AND wm.user_id = $1
+       LEFT JOIN workspace_members wm2 ON wm2.workspace_id = w.id
+       LEFT JOIN components c ON c.workspace_id = w.id
+       LEFT JOIN variables v ON v.workspace_id = w.id
+       GROUP BY w.id, wm.role
+       ORDER BY wm.role = 'owner' DESC, w.name`,
+      [userId]
+    );
+    return result.rows;
+  }
+
   static async getAllAgentConfigs() {
     const result = await query(
-      `SELECT ac.*, w.name as workspace_name
+      `SELECT ac.*, COALESCE(w.name, 'Global Default') as workspace_name
        FROM agent_configs ac
-       JOIN workspaces w ON w.id = ac.workspace_id
-       ORDER BY w.name, ac.agent_type`
+       LEFT JOIN workspaces w ON w.id = ac.workspace_id
+       ORDER BY ac.workspace_id NULLS FIRST, w.name, ac.agent_type`
     );
     return result.rows;
   }

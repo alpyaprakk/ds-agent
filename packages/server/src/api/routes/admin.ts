@@ -2,6 +2,7 @@ import { Router } from 'express';
 import { adminMiddleware } from '../../middleware/admin-auth';
 import { AdminRepository } from '../../db/repositories/admin.repository';
 import { PlanRepository } from '../../db/repositories/plan.repository';
+import { AgentConfigRepository } from '../../db/repositories/agent-config.repository';
 import adminAuthRouter from './admin-auth';
 
 const router = Router();
@@ -46,6 +47,17 @@ router.get('/users/:id', async (req, res) => {
   } catch (error) {
     console.error('Admin user detail error:', error);
     return res.status(500).json({ error: 'Failed to fetch user' });
+  }
+});
+
+// GET /api/admin/users/:id/workspaces
+router.get('/users/:id/workspaces', async (req, res) => {
+  try {
+    const workspaces = await AdminRepository.getUserWorkspaces(req.params.id);
+    return res.json({ workspaces });
+  } catch (error) {
+    console.error('Admin user workspaces error:', error);
+    return res.status(500).json({ error: 'Failed to fetch user workspaces' });
   }
 });
 
@@ -152,6 +164,28 @@ router.get('/agent-configs', async (_req, res) => {
   } catch (error) {
     console.error('Admin agent-configs error:', error);
     return res.status(500).json({ error: 'Failed to fetch agent configs' });
+  }
+});
+
+// GET /api/admin/agent-configs/global/:agentType
+router.get('/agent-configs/global/:agentType', async (req, res) => {
+  try {
+    const config = await AgentConfigRepository.findGlobal(req.params.agentType);
+    return res.json({ config: config || null });
+  } catch (error) {
+    console.error('Admin global agent-config GET error:', error);
+    return res.status(500).json({ error: 'Failed to fetch global config' });
+  }
+});
+
+// PUT /api/admin/agent-configs/global/:agentType
+router.put('/agent-configs/global/:agentType', async (req, res) => {
+  try {
+    const config = await AgentConfigRepository.upsertGlobal(req.params.agentType, req.body);
+    return res.json({ config });
+  } catch (error) {
+    console.error('Admin global agent-config PUT error:', error);
+    return res.status(500).json({ error: 'Failed to save global config' });
   }
 });
 
