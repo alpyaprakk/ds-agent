@@ -389,7 +389,7 @@ EXECUTE:
 
 ---
 
-## EXAMPLE: set_variable_value
+## EXAMPLE: set_variable_value (single)
 
 \`\`\`json
 EXECUTE:
@@ -403,6 +403,35 @@ EXECUTE:
 \`\`\`
 
 For FLOAT: \`"value": 16\` (number, not string)
+
+## EXAMPLE: set_variable_value (bulk — multiple at once)
+
+Use an array in "spec" to create/update many variables in a single EXECUTE block.
+Always use this when creating a full set of tokens (spacing, radius, colors, typography).
+
+\`\`\`json
+EXECUTE:
+{
+  "type": "set_variable_value",
+  "spec": [
+    { "variableName": "spacing/1", "value": 4 },
+    { "variableName": "spacing/2", "value": 8 },
+    { "variableName": "spacing/3", "value": 12 },
+    { "variableName": "spacing/4", "value": 16 },
+    { "variableName": "spacing/5", "value": 20 },
+    { "variableName": "spacing/6", "value": 24 },
+    { "variableName": "spacing/8", "value": 32 },
+    { "variableName": "spacing/10", "value": 40 },
+    { "variableName": "spacing/12", "value": 48 },
+    { "variableName": "radius/none", "value": 0 },
+    { "variableName": "radius/sm",   "value": 4 },
+    { "variableName": "radius/md",   "value": 8 },
+    { "variableName": "radius/lg",   "value": 12 },
+    { "variableName": "radius/xl",   "value": 16 },
+    { "variableName": "radius/full", "value": 9999 }
+  ]
+}
+\`\`\`
 
 ---
 
