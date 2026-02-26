@@ -489,6 +489,26 @@ interface ComponentSpec {
   layoutMode?: 'HORIZONTAL' | 'VERTICAL' | 'NONE';
   itemSpacing?: number;
   tokenBindings?: TokenBinding[];
+  /** AI-supplied mapping: component token name → existing variable name to alias to.
+   *  e.g. { "button-primary-bg": "color/brand/primary" }
+   *  Overrides the plugin's built-in aliasFor lists for matched token names. */
+  tokenMappings?: Record<string, string>;
+}
+
+/** Override aliasFor on a TokenSpec using the AI-supplied tokenMappings. */
+function applyTokenMappings(style: VariantStyle, mappings: Record<string, string>): VariantStyle {
+  function override(spec: TokenSpec | undefined): TokenSpec | undefined {
+    if (!spec) return undefined;
+    const mapped = mappings[spec.name];
+    if (mapped) return { ...spec, aliasFor: [mapped, ...(spec.aliasFor || [])] };
+    return spec;
+  }
+  return {
+    ...style,
+    bgToken:     override(style.bgToken),
+    strokeToken: override(style.strokeToken),
+    textToken:   override(style.textToken),
+  };
 }
 
 async function buildComponentNode(
@@ -496,7 +516,10 @@ async function buildComponentNode(
   variantProps: Record<string, string>
 ): Promise<ComponentNode> {
   const componentName = spec.componentName;
-  const style = resolveVariantStyle(componentName, variantProps);
+  let style = resolveVariantStyle(componentName, variantProps);
+  if (spec.tokenMappings && Object.keys(spec.tokenMappings).length > 0) {
+    style = applyTokenMappings(style, spec.tokenMappings);
+  }
 
   const w = spec.width || 120;
   const h = style.height || spec.height || 40;

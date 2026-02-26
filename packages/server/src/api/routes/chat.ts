@@ -176,7 +176,6 @@ Respond in the same language the user writes in.`;
 
   const radiusVars = floatVars.filter(v => v.name.includes('radius'));
   const spacingVars = floatVars.filter(v => v.name.includes('spacing'));
-  const otherFloatVars = floatVars.filter(v => !radiusVars.includes(v) && !spacingVars.includes(v));
 
   function varList(vars: typeof colorVars, fallback: string) {
     return vars.length > 0 ? vars.map(v => `  - "${v.name}"`).join('\n') : `  ${fallback}`;
@@ -188,63 +187,66 @@ ${contextBlock}
 
 ---
 
-## TOKEN LAYER HIERARCHY (CRITICAL — always follow this order)
+## TOKEN LAYER HIERARCHY
 
-Every component property MUST reference a variable via tokenBindings. Never use raw hex or raw numbers.
-The plugin resolves variables in this order: exact name → suffix match → fallbacks → auto-create.
+Three layers, always resolve top-down:
 
-### Layer 1 — Component Tokens (most specific, scoped to one component)
-Collection: "Component Tokens"
-Pattern: \`color/component/{ComponentName}/{role}/{type}-{state}\`
-Examples:
-  - \`color/component/Button/bg/primary-default\`
-  - \`color/component/Button/bg/primary-hover\`
-  - \`color/component/Button/bg/secondary-default\`
-  - \`color/component/Button/border/secondary-default\`
-  - \`color/component/Input/bg/default\`
-  - \`color/component/Input/border/default\`
-  - \`color/component/Input/border/focus\`
-  - \`color/component/Input/border/error\`
+**Layer 1 — Component Tokens** (collection: "Components")
+Flat kebab format: \`{component}-{variant}-{role}\` or \`{component}-{variant}-{role}_{state}\`
+Examples: \`button-primary-bg\`, \`button-primary-bg_hover\`, \`input-border-focus\`, \`badge-success-text\`
 
-### Layer 2 — Semantic Tokens (global intent, not component-specific)
-Collection: "Primitives" or "Color modes"
+**Layer 2 — Semantic Tokens** (collection: "Primitives")
 Pattern: \`color/{role}/{variant}\`
-Examples:
-  - \`color/bg/default\`, \`color/bg/subtle\`, \`color/bg/inverse\`
-  - \`color/text/primary\`, \`color/text/secondary\`, \`color/text/disabled\`
-  - \`color/border/default\`, \`color/border/strong\`, \`color/border/focus\`
-  - \`color/semantic/success\`, \`color/semantic/error\`, \`color/semantic/warning\`
-  - \`color/brand/primary\`, \`color/brand/secondary\`
+Examples: \`color/brand/primary\`, \`color/bg/default\`, \`color/text/inverse\`, \`color/border/focus\`, \`color/semantic/error\`
 
-### Layer 3 — Primitive Tokens (raw scale, fallback only)
-Collection: "Primitives"
+**Layer 3 — Primitive Tokens** (collection: "Primitives")
 Pattern: \`color/neutral/{0-900}\`, \`color/brand/{shade}\`
 
-### Spacing & Radius (FLOAT, collection: "Spacing & Radius")
-  - \`spacing/1\`→4, \`spacing/2\`→8, \`spacing/3\`→12, \`spacing/4\`→16, \`spacing/5\`→20, \`spacing/6\`→24, \`spacing/8\`→32
-  - \`radius/none\`→0, \`radius/sm\`→4, \`radius/md\`→8, \`radius/lg\`→12, \`radius/xl\`→16, \`radius/full\`→9999
+**Spacing & Radius** (collection: "Spacing & Radius")
+\`spacing/1\`→4 … \`spacing/12\`→48, \`radius/none\`→0 … \`radius/full\`→9999
 
 ---
 
-## LIVE VARIABLE REFERENCE (synced from Figma)
+## LIVE TOKEN REFERENCE (synced from your Figma file)
 
-### Layer 1 — Component Tokens:
-${varList(componentColorVars, '(none yet — plugin will create on demand)')}
+### Component Tokens (Layer 1):
+${varList(componentColorVars, '(none yet)')}
 
-### Layer 2 — Semantic Color Tokens:
-${varList(semanticColorVars, '(none yet — use fallbacks to Layer 3 or createWithValue)')}
+### Semantic Color Tokens (Layer 2):
+${varList(semanticColorVars, '(none yet)')}
 
-### Layer 3 — Primitive Color Tokens:
-${varList(primitiveColorVars, '(none yet — use createWithValue)')}
+### Primitive Color Tokens (Layer 3):
+${varList(primitiveColorVars, '(none yet)')}
 
-### Radius (FLOAT):
-${varList(radiusVars, '(none yet — use createWithValue)')}
+### Radius:
+${varList(radiusVars, '(none yet)')}
 
-### Spacing (FLOAT):
-${varList(spacingVars, '(none yet — use createWithValue)')}
+### Spacing:
+${varList(spacingVars, '(none yet)')}
 
-### Other FLOAT:
-${varList(otherFloatVars, '(none)')}
+---
+
+## TOKEN MAPPING RULES (CRITICAL — read before every create_component)
+
+Before building a component, scan the LIVE TOKEN REFERENCE above and map each visual role to the most appropriate existing token. Use this logic:
+
+| Component role         | Look for semantic token             | Fallback to primitive      |
+|------------------------|--------------------------------------|----------------------------|
+| Primary fill / bg      | color/brand/primary                  | color/neutral/900          |
+| Primary fill hover     | color/brand/secondary                | color/neutral/700          |
+| Destructive fill       | color/semantic/error                 | color/neutral/900          |
+| Disabled fill          | color/text/disabled, color/bg/subtle | color/neutral/200          |
+| Text on dark bg        | color/text/inverse                   | color/neutral/0            |
+| Text on light bg       | color/text/primary                   | color/neutral/900          |
+| Disabled text          | color/text/disabled                  | color/neutral/400          |
+| Input background       | color/bg/default                     | color/neutral/0            |
+| Input disabled bg      | color/bg/subtle                      | color/neutral/100          |
+| Default border         | color/border/default                 | color/neutral/300          |
+| Focus border           | color/border/focus, color/brand/primary | color/neutral/900       |
+| Error border           | color/semantic/error                 | —                          |
+| Placeholder text       | color/text/tertiary, color/text/secondary | color/neutral/400     |
+
+Include a \`tokenMappings\` object in your create_component spec. Each key is a component token name (e.g. \`"button-primary-bg"\`) and each value is the existing variable name to alias it to (MUST exist in LIVE TOKEN REFERENCE). Only include mappings for tokens that exist in the live reference. Omit tokens that don't exist — the plugin will create them with sensible defaults.
 
 ---
 
@@ -290,6 +292,7 @@ After the block, write 1–2 sentences confirming what was done.
 ---
 
 ## EXAMPLE: Button component
+(assumes color/brand/primary, color/text/inverse, color/semantic/error etc. exist in live reference)
 
 \`\`\`json
 EXECUTE:
@@ -322,7 +325,22 @@ EXECUTE:
       { "name": "Size",  "type": "VARIANT", "values": ["Large", "Medium", "Small"] },
       { "name": "Type",  "type": "VARIANT", "values": ["Primary", "Secondary", "Ghost", "Destructive"] },
       { "name": "State", "type": "VARIANT", "values": ["Default", "Hover", "Pressed", "Disabled"] }
-    ]
+    ],
+    "tokenMappings": {
+      "button-primary-bg":           "color/brand/primary",
+      "button-primary-bg_hover":     "color/brand/secondary",
+      "button-primary-bg_pressed":   "color/brand/secondary",
+      "button-primary-bg_disabled":  "color/text/disabled",
+      "button-primary-text":         "color/text/inverse",
+      "button-secondary-border":     "color/brand/primary",
+      "button-secondary-text":       "color/brand/primary",
+      "button-secondary-bg_hover":   "color/bg/subtle",
+      "button-ghost-text":           "color/brand/primary",
+      "button-ghost-bg_hover":       "color/bg/subtle",
+      "button-destructive-bg":       "color/semantic/error",
+      "button-destructive-bg_disabled": "color/text/disabled",
+      "button-destructive-text":     "color/text/inverse"
+    }
   }
 }
 \`\`\`
@@ -355,7 +373,16 @@ EXECUTE:
     "properties": [
       { "name": "State", "type": "VARIANT", "values": ["Default", "Focus", "Error", "Disabled"] },
       { "name": "Size",  "type": "VARIANT", "values": ["Large", "Medium", "Small"] }
-    ]
+    ],
+    "tokenMappings": {
+      "input-bg":           "color/bg/default",
+      "input-bg_disabled":  "color/bg/subtle",
+      "input-border":       "color/border/default",
+      "input-border_focus": "color/border/focus",
+      "input-border_error": "color/semantic/error",
+      "input-border_disabled": "color/border/default",
+      "input-placeholder":  "color/text/tertiary"
+    }
   }
 }
 \`\`\`
