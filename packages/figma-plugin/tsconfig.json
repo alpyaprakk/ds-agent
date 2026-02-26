@@ -9,7 +9,7 @@
     "esModuleInterop": true,
     "skipLibCheck": true,
     "forceConsistentCasingInFileNames": true,
-    "typeRoots": ["./node_modules/@types", "./node_modules/@figma"]
+    "typeRoots": ["./node_modules/@types", "../../node_modules/@types", "../../node_modules/@figma"]
   },
   "include": ["src/**/*"],
   "exclude": ["node_modules", "dist"]

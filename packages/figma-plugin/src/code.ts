@@ -72,7 +72,147 @@ function applyVariableOp(op: { action: string; variableId?: string; variableName
   return { success: false, error: `Unknown variable action: ${op.action}` };
 }
 
+// ─── Token Resolution & Creation ─────────────────────────────────────────────
+//
+// TOKEN HIERARCHY (lookup order):
+//   1. Semantic component tokens  — "Color modes/Component colors/Components/Button/bg"
+//   2. Semantic global tokens     — "Color modes/Semantic/bg/default"
+//   3. Primitive tokens           — "Color modes/Primitives/neutral/100"
+//
+// If none found → create in the appropriate collection/group automatically.
+
+type VariableType = 'COLOR' | 'FLOAT' | 'STRING' | 'BOOLEAN';
+
+interface TokenSpec {
+  /** Preferred variable name (exact or partial match) */
+  name: string;
+  /** Fallback names to try in order before creating */
+  fallbacks?: string[];
+  /** Variable type — used when creating a new variable */
+  type: VariableType;
+  /** Collection name to create in if not found */
+  createInCollection?: string;
+  /** Initial value when creating (hex string for COLOR, number for FLOAT) */
+  createWithValue?: string | number;
+}
+
+/**
+ * Find a variable by exact name, then by suffix match (e.g. "Button/bg" matches
+ * "Color modes/Component colors/Components/Button/bg"), then by fallbacks.
+ */
+function findVariable(nameOrPath: string): Variable | null {
+  const all = figma.variables.getLocalVariables();
+
+  // 1. Exact match
+  const exact = all.find(v => v.name === nameOrPath);
+  if (exact) return exact;
+
+  // 2. Suffix match — variable path ends with the requested segment
+  const suffix = nameOrPath.replace(/^\/+/, '');
+  const bySuffix = all.find(v => v.name.endsWith('/' + suffix) || v.name === suffix);
+  if (bySuffix) return bySuffix;
+
+  // 3. Partial match — any segment of the name contains all parts
+  const parts = suffix.toLowerCase().split('/');
+  const byParts = all.find(v => {
+    const lower = v.name.toLowerCase();
+    return parts.every(p => lower.includes(p));
+  });
+  return byParts || null;
+}
+
+/**
+ * Infer which collection a new variable should go into based on its name path.
+ *
+ * Naming conventions:
+ *   color/brand/*, color/neutral/*, color/semantic/*, color/bg/*, color/text/*, color/border/* → "Primitives"
+ *   spacing/*, radius/*, font-size/*                                                            → "Spacing & Radius"
+ *   color/component/*, components/*                                                            → "Component Tokens"
+ */
+function inferCollectionForVariable(name: string): string {
+  const lower = name.toLowerCase();
+  if (lower.startsWith('color/component') || lower.startsWith('components/') || lower.includes('/component/')) {
+    return 'Component Tokens';
+  }
+  if (lower.startsWith('spacing/') || lower.startsWith('radius/') || lower.startsWith('font-size/') || lower.startsWith('font-weight/')) {
+    return 'Spacing & Radius';
+  }
+  // Default: Primitives for color tokens
+  return 'Primitives';
+}
+
+/**
+ * Find or create a variable collection by name.
+ * Returns { collection, defaultModeId }.
+ */
+function getOrCreateCollection(collectionName: string): { collection: VariableCollection; defaultModeId: string } {
+  const existing = figma.variables.getLocalVariableCollections().find(c => c.name === collectionName);
+  if (existing) return { collection: existing, defaultModeId: existing.defaultModeId };
+
+  const created = figma.variables.createVariableCollection(collectionName);
+  figma.notify(`📦 Created collection: ${collectionName}`);
+  return { collection: created, defaultModeId: created.defaultModeId };
+}
+
+/**
+ * Resolve a TokenSpec to an actual Figma Variable.
+ * Lookup order: exact name → suffix match → fallbacks → create new.
+ */
+function resolveOrCreateVariable(spec: TokenSpec): Variable {
+  // Try primary name
+  const found = findVariable(spec.name);
+  if (found) return found;
+
+  // Try fallbacks
+  if (spec.fallbacks) {
+    for (const fb of spec.fallbacks) {
+      const fbVar = findVariable(fb);
+      if (fbVar) return fbVar;
+    }
+  }
+
+  // Create new variable in the appropriate collection
+  const collectionName = spec.createInCollection || inferCollectionForVariable(spec.name);
+  const { collection, defaultModeId } = getOrCreateCollection(collectionName);
+
+  const newVar = figma.variables.createVariable(spec.name, collection, spec.type);
+
+  // Set initial value
+  if (spec.createWithValue !== undefined) {
+    if (spec.type === 'COLOR' && typeof spec.createWithValue === 'string') {
+      const hex = spec.createWithValue.replace('#', '');
+      const r = parseInt(hex.slice(0, 2), 16) / 255;
+      const g = parseInt(hex.slice(2, 4), 16) / 255;
+      const b = parseInt(hex.slice(4, 6), 16) / 255;
+      newVar.setValueForMode(defaultModeId, { r, g, b, a: 1 });
+    } else if (spec.type === 'FLOAT' && typeof spec.createWithValue === 'number') {
+      newVar.setValueForMode(defaultModeId, spec.createWithValue);
+    }
+  }
+
+  figma.notify(`✨ Created token: ${spec.name}`);
+  return newVar;
+}
+
 // ─── AI Execute Commands ──────────────────────────────────────────────────────
+
+/**
+ * Token binding spec for a single component property.
+ *
+ * property: which Figma component property to bind
+ *   - "fill"           → component fill color
+ *   - "stroke"         → component stroke color
+ *   - "cornerRadius"   → all corner radii (FLOAT)
+ *   - "paddingTop/Right/Bottom/Left" → individual paddings (FLOAT)
+ *   - "itemSpacing"    → gap between children (FLOAT)
+ *   - "width" / "height" → size (FLOAT)
+ *
+ * token: TokenSpec — resolved or created automatically
+ */
+interface TokenBinding {
+  property: 'fill' | 'stroke' | 'cornerRadius' | 'paddingTop' | 'paddingRight' | 'paddingBottom' | 'paddingLeft' | 'itemSpacing' | 'width' | 'height';
+  token: TokenSpec;
+}
 
 interface ComponentSpec {
   pageName: string;
@@ -82,16 +222,28 @@ interface ComponentSpec {
   height?: number;
   variants?: Array<{ properties: Record<string, string> }>;
   properties?: Array<{ name: string; type: 'VARIANT' | 'BOOLEAN' | 'TEXT' | 'INSTANCE_SWAP'; values?: string[] }>;
+  /** Legacy fill spec — used when tokenBindings is absent */
   fills?: Array<{ variableName?: string; hex?: string }>;
-  cornerRadius?: number | string; // variable name or number
+  /** Legacy corner radius — used when tokenBindings is absent */
+  cornerRadius?: number | string;
   padding?: { top: number; right: number; bottom: number; left: number };
   layoutMode?: 'HORIZONTAL' | 'VERTICAL' | 'NONE';
   itemSpacing?: number;
+  /**
+   * Token bindings — preferred over legacy fills/cornerRadius.
+   * AI should populate this with the correct semantic/primitive tokens.
+   *
+   * Example:
+   * [
+   *   { property: "fill",         token: { name: "color/component/button/bg/primary", fallbacks: ["color/brand/primary"], type: "COLOR", createWithValue: "#2563EB" } },
+   *   { property: "cornerRadius", token: { name: "radius/md",                         fallbacks: ["radius/8"],            type: "FLOAT", createWithValue: 8 } }
+   * ]
+   */
+  tokenBindings?: TokenBinding[];
 }
 
 function resolveVariable(name: string): Variable | null {
-  const vars = figma.variables.getLocalVariables();
-  return vars.find(v => v.name === name) || null;
+  return findVariable(name);
 }
 
 function applyFillFromSpec(node: RectangleNode | FrameNode | ComponentNode, spec: { variableName?: string; hex?: string }) {
@@ -109,6 +261,66 @@ function applyFillFromSpec(node: RectangleNode | FrameNode | ComponentNode, spec
     const g = parseInt(spec.hex.slice(3, 5), 16) / 255;
     const b = parseInt(spec.hex.slice(5, 7), 16) / 255;
     node.fills = [{ type: 'SOLID', color: { r, g, b } }];
+  }
+}
+
+/**
+ * Apply tokenBindings to a component node.
+ * For each binding: resolves or creates the variable, then binds it.
+ */
+function applyTokenBindings(comp: ComponentNode, bindings: TokenBinding[]) {
+  for (const binding of bindings) {
+    try {
+      const variable = resolveOrCreateVariable(binding.token);
+
+      switch (binding.property) {
+        case 'fill': {
+          if (variable.resolvedType === 'COLOR') {
+            const fill: SolidPaint = { type: 'SOLID', color: { r: 1, g: 1, b: 1 } };
+            const bound = figma.variables.setBoundVariableForPaint(fill, 'color', variable);
+            comp.fills = [bound];
+          }
+          break;
+        }
+        case 'stroke': {
+          if (variable.resolvedType === 'COLOR') {
+            const stroke: SolidPaint = { type: 'SOLID', color: { r: 0, g: 0, b: 0 } };
+            const bound = figma.variables.setBoundVariableForPaint(stroke, 'color', variable);
+            comp.strokes = [bound];
+          }
+          break;
+        }
+        case 'cornerRadius':
+          comp.setBoundVariable('topLeftRadius', variable);
+          comp.setBoundVariable('topRightRadius', variable);
+          comp.setBoundVariable('bottomLeftRadius', variable);
+          comp.setBoundVariable('bottomRightRadius', variable);
+          break;
+        case 'paddingTop':
+          comp.setBoundVariable('paddingTop', variable);
+          break;
+        case 'paddingRight':
+          comp.setBoundVariable('paddingRight', variable);
+          break;
+        case 'paddingBottom':
+          comp.setBoundVariable('paddingBottom', variable);
+          break;
+        case 'paddingLeft':
+          comp.setBoundVariable('paddingLeft', variable);
+          break;
+        case 'itemSpacing':
+          comp.setBoundVariable('itemSpacing', variable);
+          break;
+        case 'width':
+          comp.setBoundVariable('width', variable);
+          break;
+        case 'height':
+          comp.setBoundVariable('height', variable);
+          break;
+      }
+    } catch (err) {
+      console.error(`Token binding failed for ${binding.property} → ${binding.token.name}:`, err);
+    }
   }
 }
 
@@ -149,16 +361,24 @@ async function executeCreateComponent(spec: ComponentSpec): Promise<{ success: b
         if (spec.itemSpacing) comp.itemSpacing = spec.itemSpacing;
       }
 
-      // Fill
-      if (spec.fills && spec.fills.length > 0) applyFillFromSpec(comp, spec.fills[0]);
-
-      // Corner radius
-      if (spec.cornerRadius !== undefined) {
-        if (typeof spec.cornerRadius === 'string') {
-          const v = resolveVariable(spec.cornerRadius);
-          if (v) comp.setBoundVariable('topLeftRadius', v);
-        } else {
-          comp.cornerRadius = spec.cornerRadius;
+      // Token bindings (preferred) — apply before legacy fills
+      if (spec.tokenBindings && spec.tokenBindings.length > 0) {
+        applyTokenBindings(comp, spec.tokenBindings);
+      } else {
+        // Legacy fill/cornerRadius fallback
+        if (spec.fills && spec.fills.length > 0) applyFillFromSpec(comp, spec.fills[0]);
+        if (spec.cornerRadius !== undefined) {
+          if (typeof spec.cornerRadius === 'string') {
+            const v = resolveVariable(spec.cornerRadius);
+            if (v) {
+              comp.setBoundVariable('topLeftRadius', v);
+              comp.setBoundVariable('topRightRadius', v);
+              comp.setBoundVariable('bottomLeftRadius', v);
+              comp.setBoundVariable('bottomRightRadius', v);
+            }
+          } else {
+            comp.cornerRadius = spec.cornerRadius;
+          }
         }
       }
 
@@ -185,14 +405,33 @@ async function executeCreateComponent(spec: ComponentSpec): Promise<{ success: b
       const set = figma.combineAsVariants(components, page);
       set.name = spec.componentName;
 
-      // Arrange variants in a grid
+      // Arrange variants in a grid inside the set
       const cols = Math.ceil(Math.sqrt(components.length));
       components.forEach((comp, i) => {
         comp.x = (i % cols) * (w + 20);
         comp.y = Math.floor(i / cols) * (h + 20);
       });
+
+      // Place the component set below existing content on the page
+      const siblings = page.children.filter(n => n !== set);
+      if (siblings.length > 0) {
+        const maxY = Math.max(...siblings.map(n => n.y + n.height));
+        set.x = 0;
+        set.y = maxY + 80;
+      } else {
+        set.x = 0;
+        set.y = 0;
+      }
     } else if (components.length === 1) {
       components[0].name = spec.componentName;
+
+      // Place below existing content
+      const siblings = page.children.filter(n => n !== components[0]);
+      if (siblings.length > 0) {
+        const maxY = Math.max(...siblings.map(n => n.y + n.height));
+        components[0].x = 0;
+        components[0].y = maxY + 80;
+      }
     }
 
     figma.notify(`✅ Created: ${spec.componentName} (${components.length} variants)`);
@@ -216,14 +455,22 @@ async function executeCreateComponent(spec: ComponentSpec): Promise<{ success: b
       }
     }
 
-    if (spec.fills && spec.fills.length > 0) applyFillFromSpec(comp, spec.fills[0]);
-
-    if (spec.cornerRadius !== undefined) {
-      if (typeof spec.cornerRadius === 'string') {
-        const v = resolveVariable(spec.cornerRadius);
-        if (v) comp.setBoundVariable('topLeftRadius', v);
-      } else {
-        comp.cornerRadius = spec.cornerRadius;
+    if (spec.tokenBindings && spec.tokenBindings.length > 0) {
+      applyTokenBindings(comp, spec.tokenBindings);
+    } else {
+      if (spec.fills && spec.fills.length > 0) applyFillFromSpec(comp, spec.fills[0]);
+      if (spec.cornerRadius !== undefined) {
+        if (typeof spec.cornerRadius === 'string') {
+          const v = resolveVariable(spec.cornerRadius);
+          if (v) {
+            comp.setBoundVariable('topLeftRadius', v);
+            comp.setBoundVariable('topRightRadius', v);
+            comp.setBoundVariable('bottomLeftRadius', v);
+            comp.setBoundVariable('bottomRightRadius', v);
+          }
+        } else {
+          comp.cornerRadius = spec.cornerRadius;
+        }
       }
     }
 
@@ -234,6 +481,14 @@ async function executeCreateComponent(spec: ComponentSpec): Promise<{ success: b
     label.x = (w - label.width) / 2;
     label.y = (h - label.height) / 2;
     comp.appendChild(label);
+
+    // Place below existing content
+    const siblings = page.children.filter(n => n !== comp);
+    if (siblings.length > 0) {
+      const maxY = Math.max(...siblings.map(n => n.y + n.height));
+      comp.x = 0;
+      comp.y = maxY + 80;
+    }
 
     page.appendChild(comp);
     figma.notify(`✅ Created: ${spec.componentName}`);
@@ -249,12 +504,12 @@ async function executeCommand(command: any): Promise<{ success: boolean; message
 
       case 'rename_variable': {
         const result = applyVariableOp({ action: 'rename', variableName: command.variableName, newName: command.newName });
-        return result;
+        return { success: result.success, message: result.message || result.error || 'Unknown error' };
       }
 
       case 'set_variable_value': {
         const result = applyVariableOp({ action: 'set-value', variableName: command.variableName, newValue: command.value, modeId: command.modeId });
-        return result;
+        return { success: result.success, message: result.message || result.error || 'Unknown error' };
       }
 
       case 'sync':
