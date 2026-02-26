@@ -78,18 +78,17 @@ export class AgentConfigRepository {
   }
 
   static async upsertGlobal(agentType: string, data: Partial<AgentConfig>): Promise<AgentConfig> {
-    const result = await query(
-      `INSERT INTO agent_configs (workspace_id, agent_type, name, identity, tone, system_prompt, capabilities, context_rules, is_active)
-       VALUES (NULL, $1, $2, $3, $4, $5, $6, $7, $8)
-       ON CONFLICT (workspace_id, agent_type) DO UPDATE SET
-         name = EXCLUDED.name,
-         identity = EXCLUDED.identity,
-         tone = EXCLUDED.tone,
-         system_prompt = EXCLUDED.system_prompt,
-         capabilities = EXCLUDED.capabilities,
-         context_rules = EXCLUDED.context_rules,
-         is_active = EXCLUDED.is_active,
-         updated_at = NOW()
+    // Use UPDATE first, then INSERT if no rows updated.
+    // ON CONFLICT (workspace_id, agent_type) does not work reliably for NULL workspace_id
+    // because PostgreSQL treats NULLs as distinct in standard unique constraints.
+    // The partial index (agent_configs_global_unique) handles uniqueness at DB level,
+    // but ON CONFLICT ON CONSTRAINT requires the index to be created before this runs.
+    // Safest approach: try UPDATE, if nothing updated do INSERT.
+    const updateResult = await query(
+      `UPDATE agent_configs SET
+         name = $2, identity = $3, tone = $4, system_prompt = $5,
+         capabilities = $6, context_rules = $7, is_active = $8, updated_at = NOW()
+       WHERE workspace_id IS NULL AND agent_type = $1
        RETURNING *`,
       [
         agentType,
@@ -102,7 +101,28 @@ export class AgentConfigRepository {
         data.is_active !== false
       ]
     );
-    return result.rows[0];
+
+    if (updateResult.rows.length > 0) {
+      return updateResult.rows[0];
+    }
+
+    // No existing row — insert
+    const insertResult = await query(
+      `INSERT INTO agent_configs (workspace_id, agent_type, name, identity, tone, system_prompt, capabilities, context_rules, is_active)
+       VALUES (NULL, $1, $2, $3, $4, $5, $6, $7, $8)
+       RETURNING *`,
+      [
+        agentType,
+        data.name || '',
+        data.identity || '',
+        data.tone || 'concise',
+        data.system_prompt || '',
+        JSON.stringify(data.capabilities || []),
+        data.context_rules || '',
+        data.is_active !== false
+      ]
+    );
+    return insertResult.rows[0];
   }
 
   static async upsert(workspaceId: string, agentType: string, data: Partial<AgentConfig>): Promise<AgentConfig> {
