@@ -99,8 +99,8 @@ export class AIAnalyzer {
   async chat(systemPrompt: string, history: ChatMessage[]): Promise<string> {
     if (this.provider === 'anthropic' && this.anthropic) {
       const message = await this.anthropic.messages.create({
-        model: 'claude-3-5-sonnet-20241022',
-        max_tokens: 2048,
+        model: 'claude-opus-4-6',
+        max_tokens: 4096,
         temperature: 0.7,
         system: systemPrompt,
         messages: history.map(m => ({ role: m.role, content: m.content }))
@@ -112,7 +112,7 @@ export class AIAnalyzer {
       return textContent.text;
     } else if (this.provider === 'openai' && this.openai) {
       const completion = await this.openai.chat.completions.create({
-        model: 'gpt-4o',
+        model: 'o3',
         max_tokens: 4096,
         messages: [
           { role: 'system', content: systemPrompt },
