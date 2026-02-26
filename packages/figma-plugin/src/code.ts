@@ -477,105 +477,354 @@ function applyTokenMappings(style: VariantStyle, mappings: Record<string, string
   };
 }
 
+// ─── Component builder helpers ───────────────────────────────────────────────
+
+async function loadFonts() {
+  await figma.loadFontAsync({ family: 'Inter', style: 'Regular' });
+  await figma.loadFontAsync({ family: 'Inter', style: 'Medium' });
+  await figma.loadFontAsync({ family: 'Inter', style: 'Semi Bold' });
+}
+
+function makeText(
+  chars: string,
+  opts: { fontSize?: number; fontStyle?: string; color?: string; tokenSpec?: TokenSpec }
+): TextNode {
+  const t = figma.createText();
+  t.fontName = { family: 'Inter', style: opts.fontStyle || 'Regular' };
+  t.fontSize = opts.fontSize || 14;
+  t.characters = chars;
+  t.textAutoResize = 'WIDTH_AND_HEIGHT';
+  if (opts.tokenSpec) {
+    const v = resolveOrCreateVariable(opts.tokenSpec);
+    t.fills = [boundColorPaint(v)];
+  } else {
+    t.fills = [solidPaint(opts.color || '#18181B')];
+  }
+  return t;
+}
+
+function applyRadiusValue(node: FrameNode | ComponentNode, r: number) {
+  node.cornerRadius = r;
+}
+
+function applyFill(node: FrameNode | ComponentNode | RectangleNode, style: VariantStyle) {
+  if (style.bgToken) {
+    const v = resolveOrCreateVariable(style.bgToken);
+    node.fills = [boundColorPaint(v)];
+  } else if (style.bgHex) {
+    node.fills = [solidPaint(style.bgHex)];
+  } else {
+    node.fills = [];
+  }
+}
+
+function applyStroke(node: FrameNode | ComponentNode, style: VariantStyle) {
+  if (style.strokeToken) {
+    const v = resolveOrCreateVariable(style.strokeToken);
+    node.strokes = [boundColorPaint(v)];
+    node.strokeWeight = style.strokeWeight ?? 1;
+    node.strokeAlign = 'INSIDE';
+  } else if (style.strokeHex) {
+    node.strokes = [solidPaint(style.strokeHex)];
+    node.strokeWeight = style.strokeWeight ?? 1;
+    node.strokeAlign = 'INSIDE';
+  } else {
+    node.strokes = [];
+  }
+}
+
+// ─── Button builder (shadcn-accurate) ────────────────────────────────────────
+// Structure: Component (hug×hug) → no fill
+//   └── bg Frame (hug×hug, horizontal AL, padding) → fill + stroke + radius
+//       └── Label text (hug)
+
+async function buildButton(spec: ComponentSpec, variantProps: Record<string, string>): Promise<ComponentNode> {
+  let style = resolveVariantStyle('Button', variantProps);
+  if (spec.tokenMappings) style = applyTokenMappings(style, spec.tokenMappings);
+
+  const type  = variantProps['Type']  || 'Primary';
+  const state = variantProps['State'] || 'Default';
+  const isDisabled = state === 'Disabled';
+  const isLink = type === 'Link';
+
+  const comp = figma.createComponent();
+  comp.name = Object.entries(variantProps).map(([k, v]) => `${k}=${v}`).join(', ');
+  comp.fills = [];
+  comp.layoutMode = 'HORIZONTAL';
+  comp.primaryAxisSizingMode = 'AUTO';
+  comp.counterAxisSizingMode = 'AUTO';
+  comp.primaryAxisAlignItems = 'CENTER';
+  comp.counterAxisAlignItems = 'CENTER';
+
+  if (isLink) {
+    // Link: no background, just underlined text
+    const label = makeText('Button', {
+      fontSize: style.fontSize || 14,
+      fontStyle: 'Medium',
+      tokenSpec: style.textToken,
+      color: '#2563EB',
+    });
+    if (isDisabled) label.opacity = 0.5;
+    comp.appendChild(label);
+    return comp;
+  }
+
+  const bg = figma.createFrame();
+  bg.name = 'Background';
+  bg.layoutMode = 'HORIZONTAL';
+  bg.primaryAxisSizingMode = 'AUTO';
+  bg.counterAxisSizingMode = 'AUTO';
+  bg.primaryAxisAlignItems = 'CENTER';
+  bg.counterAxisAlignItems = 'CENTER';
+  bg.layoutGrow = 0;
+  bg.paddingLeft   = style.paddingH ?? 16;
+  bg.paddingRight  = style.paddingH ?? 16;
+  bg.paddingTop    = style.paddingV ?? 8;
+  bg.paddingBottom = style.paddingV ?? 8;
+  bg.itemSpacing = 6;
+
+  applyFill(bg, style);
+  applyStroke(bg, style);
+  applyRadiusValue(bg, 6);
+
+  if (isDisabled) bg.opacity = 0.5;
+
+  const label = makeText('Button', {
+    fontSize: style.fontSize || 14,
+    fontStyle: 'Medium',
+    tokenSpec: style.textToken,
+    color: '#FFFFFF',
+  });
+  bg.appendChild(label);
+  comp.appendChild(bg);
+  return comp;
+}
+
+// ─── Input builder (shadcn-accurate) ─────────────────────────────────────────
+// Structure: Component (vertical, hug)
+//   ├── Label text (optional, above)
+//   ├── InputField Frame (horizontal, fixed W × hug H)
+//   │   └── Placeholder text
+//   └── HelperText text (optional, below)
+
+async function buildInput(spec: ComponentSpec, variantProps: Record<string, string>): Promise<ComponentNode> {
+  let style = resolveVariantStyle('Input', variantProps);
+  if (spec.tokenMappings) style = applyTokenMappings(style, spec.tokenMappings);
+
+  const state = variantProps['State'] || 'Default';
+  const isDisabled = state === 'Disabled';
+  const isError    = state === 'Error';
+  const isFilled   = state === 'Filled';
+
+  const fieldW = spec.width || 240;
+
+  const comp = figma.createComponent();
+  comp.name = Object.entries(variantProps).map(([k, v]) => `${k}=${v}`).join(', ');
+  comp.fills = [];
+  comp.layoutMode = 'VERTICAL';
+  comp.primaryAxisSizingMode = 'AUTO';
+  comp.counterAxisSizingMode = 'AUTO';
+  comp.primaryAxisAlignItems = 'MIN';
+  comp.counterAxisAlignItems = 'MIN';
+  comp.itemSpacing = 4;
+
+  // Label above the field
+  const labelText = makeText('Label', {
+    fontSize: 14,
+    fontStyle: 'Medium',
+    color: '#111827',
+  });
+  comp.appendChild(labelText);
+
+  // Input field frame
+  const field = figma.createFrame();
+  field.name = 'InputField';
+  field.resize(fieldW, style.height || 40);
+  field.layoutMode = 'HORIZONTAL';
+  field.primaryAxisSizingMode = 'FIXED';
+  field.counterAxisSizingMode = 'FIXED';
+  field.primaryAxisAlignItems = 'CENTER';
+  field.counterAxisAlignItems = 'CENTER';
+  field.paddingLeft  = style.paddingH ?? 12;
+  field.paddingRight = style.paddingH ?? 12;
+  field.paddingTop    = style.paddingV ?? 8;
+  field.paddingBottom = style.paddingV ?? 8;
+  field.clipsContent = true;
+
+  applyFill(field, style);
+  applyStroke(field, style);
+  applyRadiusValue(field, 6);
+
+  if (isDisabled) field.opacity = 0.5;
+
+  const placeholder = makeText(isFilled ? 'Value' : 'Placeholder text', {
+    fontSize: style.fontSize || 14,
+    fontStyle: 'Regular',
+    color: isFilled ? '#111827' : '#9CA3AF',
+  });
+  placeholder.layoutGrow = 1;
+  placeholder.textAutoResize = 'HEIGHT';
+  placeholder.resize(fieldW - (style.paddingH ?? 12) * 2, placeholder.height);
+  field.appendChild(placeholder);
+
+  comp.appendChild(field);
+
+  // Helper / error text below
+  const helperColor = isError ? '#EF4444' : '#6B7280';
+  const helperChars = isError ? 'This field is required' : 'Helper text';
+  const helper = makeText(helperChars, {
+    fontSize: 12,
+    fontStyle: 'Regular',
+    color: helperColor,
+  });
+  comp.appendChild(helper);
+
+  return comp;
+}
+
+// ─── Checkbox builder (shadcn-accurate) ──────────────────────────────────────
+// Structure: Component (horizontal, hug)
+//   ├── Box Frame (16×16, no layout)
+//   │   └── [if Checked] Checkmark rectangle (10×10, centered)
+//   │   └── [if Indeterminate] Dash rectangle (10×2, centered)
+//   └── Label text
+
+async function buildCheckbox(_spec: ComponentSpec, variantProps: Record<string, string>): Promise<ComponentNode> {
+  const state = variantProps['State'] || 'Unchecked';
+  const isChecked       = state === 'Checked';
+  const isIndeterminate = state === 'Indeterminate';
+  const isDisabled      = state === 'Disabled';
+
+  const comp = figma.createComponent();
+  comp.name = Object.entries(variantProps).map(([k, v]) => `${k}=${v}`).join(', ');
+  comp.fills = [];
+  comp.layoutMode = 'HORIZONTAL';
+  comp.primaryAxisSizingMode = 'AUTO';
+  comp.counterAxisSizingMode = 'AUTO';
+  comp.primaryAxisAlignItems = 'CENTER';
+  comp.counterAxisAlignItems = 'CENTER';
+  comp.itemSpacing = 8;
+
+  if (isDisabled) comp.opacity = 0.5;
+
+  // Checkbox box
+  const box = figma.createFrame();
+  box.name = 'Box';
+  box.resize(16, 16);
+  box.layoutMode = 'NONE';
+  box.cornerRadius = 3;
+
+  if (isChecked || isIndeterminate) {
+    box.fills = [solidPaint('#2563EB')];
+    box.strokes = [solidPaint('#2563EB')];
+  } else {
+    box.fills = [solidPaint('#FFFFFF')];
+    box.strokes = [solidPaint('#D1D5DB')];
+  }
+  box.strokeWeight = 1.5;
+  box.strokeAlign = 'INSIDE';
+
+  if (isChecked) {
+    // Checkmark: two rectangles forming a tick
+    const check = figma.createRectangle();
+    check.resize(10, 2);
+    check.x = 3;
+    check.y = 7;
+    check.fills = [solidPaint('#FFFFFF')];
+    check.rotation = -45;
+    box.appendChild(check);
+    const check2 = figma.createRectangle();
+    check2.resize(6, 2);
+    check2.x = 7;
+    check2.y = 4;
+    check2.fills = [solidPaint('#FFFFFF')];
+    check2.rotation = 45;
+    box.appendChild(check2);
+  } else if (isIndeterminate) {
+    const dash = figma.createRectangle();
+    dash.resize(8, 2);
+    dash.x = 4;
+    dash.y = 7;
+    dash.fills = [solidPaint('#FFFFFF')];
+    box.appendChild(dash);
+  }
+
+  comp.appendChild(box);
+
+  // Label
+  const label = makeText('Label', {
+    fontSize: 14,
+    fontStyle: 'Regular',
+    color: '#111827',
+  });
+  comp.appendChild(label);
+
+  return comp;
+}
+
+// ─── Generic component builder (fallback) ────────────────────────────────────
+
+async function buildGenericComponent(spec: ComponentSpec, variantProps: Record<string, string>): Promise<ComponentNode> {
+  let style = resolveVariantStyle(spec.componentName, variantProps);
+  if (spec.tokenMappings) style = applyTokenMappings(style, spec.tokenMappings);
+
+  const w = spec.width || 120;
+
+  const comp = figma.createComponent();
+  comp.name = Object.keys(variantProps).length > 0
+    ? Object.entries(variantProps).map(([k, v]) => `${k}=${v}`).join(', ')
+    : spec.componentName;
+  if (spec.description) comp.description = spec.description;
+
+  comp.fills = [];
+  comp.layoutMode = 'HORIZONTAL';
+  comp.primaryAxisSizingMode = 'AUTO';
+  comp.counterAxisSizingMode = 'AUTO';
+  comp.primaryAxisAlignItems = 'CENTER';
+  comp.counterAxisAlignItems = 'CENTER';
+
+  const bg = figma.createFrame();
+  bg.name = 'Background';
+  bg.layoutMode = 'HORIZONTAL';
+  bg.primaryAxisSizingMode = 'FIXED';
+  bg.counterAxisSizingMode = 'AUTO';
+  bg.primaryAxisAlignItems = 'CENTER';
+  bg.counterAxisAlignItems = 'CENTER';
+  bg.resize(w, style.height || 40);
+  bg.paddingLeft   = style.paddingH ?? 16;
+  bg.paddingRight  = style.paddingH ?? 16;
+  bg.paddingTop    = style.paddingV ?? 8;
+  bg.paddingBottom = style.paddingV ?? 8;
+  bg.itemSpacing   = 6;
+
+  applyFill(bg, style);
+  applyStroke(bg, style);
+  applyRadiusValue(bg, 6);
+
+  const label = makeText(spec.componentName, {
+    fontSize: style.fontSize || 14,
+    fontStyle: style.fontStyle || 'Medium',
+    tokenSpec: style.textToken,
+    color: '#18181B',
+  });
+  label.layoutGrow = 0;
+  bg.appendChild(label);
+  comp.appendChild(bg);
+  return comp;
+}
+
 async function buildComponentNode(
   spec: ComponentSpec,
   variantProps: Record<string, string>
 ): Promise<ComponentNode> {
-  const componentName = spec.componentName;
-  let style = resolveVariantStyle(componentName, variantProps);
-  if (spec.tokenMappings && Object.keys(spec.tokenMappings).length > 0) {
-    style = applyTokenMappings(style, spec.tokenMappings);
+  await loadFonts();
+
+  switch (spec.componentName) {
+    case 'Button':   return buildButton(spec, variantProps);
+    case 'Input':    return buildInput(spec, variantProps);
+    case 'Checkbox': return buildCheckbox(spec, variantProps);
+    default:         return buildGenericComponent(spec, variantProps);
   }
-
-  const w = spec.width || 120;
-  const h = style.height || spec.height || 40;
-
-  const comp = figma.createComponent();
-  comp.resize(w, h);
-  comp.name = Object.keys(variantProps).length > 0
-    ? Object.entries(variantProps).map(([k, v]) => `${k}=${v}`).join(', ')
-    : componentName;
-  if (spec.description) comp.description = spec.description;
-
-  // Outer component: auto layout, clips content, no own fill
-  comp.clipsContent = true;
-  comp.fills = [];
-  comp.layoutMode = 'HORIZONTAL';
-  comp.primaryAxisSizingMode = 'FIXED';
-  comp.counterAxisSizingMode = 'FIXED';
-  comp.primaryAxisAlignItems = 'CENTER';
-  comp.counterAxisAlignItems = 'CENTER';
-
-  // Inner background frame
-  const bg = figma.createFrame();
-  bg.name = 'Background';
-  bg.resize(w, h);
-  bg.layoutMode = 'HORIZONTAL';
-  bg.primaryAxisSizingMode = 'FIXED';
-  bg.counterAxisSizingMode = 'FIXED';
-  bg.primaryAxisAlignItems = 'CENTER';
-  bg.counterAxisAlignItems = 'CENTER';
-  bg.layoutGrow = 1;
-
-  const pH = style.paddingH ?? 16;
-  const pV = style.paddingV ?? 8;
-  bg.paddingLeft   = pH;
-  bg.paddingRight  = pH;
-  bg.paddingTop    = pV;
-  bg.paddingBottom = pV;
-  bg.itemSpacing   = 6;
-
-  // Fill
-  if (style.bgToken) {
-    const v = resolveOrCreateVariable(style.bgToken);
-    bg.fills = [boundColorPaint(v)];
-  } else {
-    bg.fills = [];
-  }
-
-  // Stroke
-  if (style.strokeToken) {
-    const v = resolveOrCreateVariable(style.strokeToken);
-    bg.strokes = [boundColorPaint(v)];
-    bg.strokeWeight = style.strokeWeight ?? 1;
-    bg.strokeAlign = 'INSIDE';
-  } else {
-    bg.strokes = [];
-  }
-
-  // Corner radius — always resolve radius/md
-  const radiusVar = resolveOrCreateVariable({
-    name: 'radius/md',
-    fallbacks: ['radius/8'],
-    type: 'FLOAT',
-    createWithValue: 8,
-    createInCollection: 'Spacing & Radius',
-  });
-  applyRadius(bg, radiusVar);
-
-  // Label text
-  const fontStyle = style.fontStyle || 'Medium';
-  await figma.loadFontAsync({ family: 'Inter', style: fontStyle });
-  const label = figma.createText();
-  label.name = 'Label';
-  label.fontName = { family: 'Inter', style: fontStyle };
-  label.fontSize = style.fontSize || 14;
-  label.characters = componentName;
-  label.textAutoResize = 'WIDTH_AND_HEIGHT';
-
-  if (style.textToken) {
-    const v = resolveOrCreateVariable(style.textToken);
-    label.fills = [boundColorPaint(v)];
-  } else {
-    label.fills = [solidPaint('#18181B')];
-  }
-
-  label.layoutAlign = 'INHERIT';
-  label.layoutGrow  = 0;
-  bg.appendChild(label);
-  comp.appendChild(bg);
-
-  return comp;
 }
 
 async function executeCreateComponent(spec: ComponentSpec): Promise<{ success: boolean; message: string }> {
