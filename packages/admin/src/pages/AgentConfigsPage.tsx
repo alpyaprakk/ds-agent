@@ -467,8 +467,10 @@ export default function AgentConfigsPage() {
                       onClick={() => toggleUser(user.id)}
                       className="w-full flex items-center gap-2.5 px-3 py-2 rounded-lg border border-transparent hover:border-gray-200 hover:bg-gray-50 transition-colors text-left"
                     >
-                      <div className="w-6 h-6 rounded-full bg-gray-200 flex items-center justify-center text-xs font-bold text-gray-600 flex-shrink-0">
-                        {user.name.charAt(0).toUpperCase()}
+                      <div className="w-6 h-6 rounded-full bg-gray-200 flex items-center justify-center text-xs font-bold text-gray-600 flex-shrink-0 overflow-hidden">
+                        {user.avatar
+                          ? <img src={user.avatar} alt="" className="w-full h-full object-cover" />
+                          : user.name.charAt(0).toUpperCase()}
                       </div>
                       <div className="flex-1 min-w-0">
                         <p className="text-xs font-medium text-gray-800 truncate">{user.name}</p>
