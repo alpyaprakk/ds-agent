@@ -207,9 +207,24 @@ async function buildSystemPrompt(agentType: 'uiux' | 'design-system', context: W
   const contextBlock = buildContextBlock(context);
   const dbConfig = await AgentConfigRepository.findOne(workspaceId, agentType).catch(() => null);
 
-  // If a custom system_prompt is stored, use it with context injected
+  // If a custom system_prompt is stored, inject all placeholders
   if (dbConfig?.system_prompt) {
-    let prompt = dbConfig.system_prompt.replace('{{CONTEXT}}', contextBlock);
+    const colorVariables = context.variables.filter(v => v.type === 'COLOR');
+    const otherVariables = context.variables.filter(v => v.type !== 'COLOR');
+
+    const colorVarsBlock = colorVariables.length > 0
+      ? colorVariables.map(v => `- "${v.name}"`).join('\n')
+      : '(none synced yet — use hex for fills)';
+
+    const otherVarsBlock = otherVariables.length > 0
+      ? otherVariables.map(v => `- "${v.name}" (${v.type})`).join('\n')
+      : '(none synced yet)';
+
+    let prompt = dbConfig.system_prompt
+      .replace('{{CONTEXT}}', contextBlock)
+      .replace('{{COLOR_VARIABLES}}', colorVarsBlock)
+      .replace('{{OTHER_VARIABLES}}', otherVarsBlock);
+
     if (dbConfig.context_rules) {
       prompt += `\n\n## Additional Rules\n${dbConfig.context_rules}`;
     }
