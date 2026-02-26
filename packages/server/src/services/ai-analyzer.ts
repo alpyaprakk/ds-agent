@@ -112,8 +112,9 @@ export class AIAnalyzer {
       return textContent.text;
     } else if (this.provider === 'openai' && this.openai) {
       const completion = await this.openai.chat.completions.create({
-        model: 'o3',
-        max_completion_tokens: 16000,
+        model: 'gpt-4o',
+        max_tokens: 16000,
+        temperature: 0.7,
         messages: [
           { role: 'system', content: systemPrompt },
           ...history.map(m => ({ role: m.role as 'user' | 'assistant', content: m.content }))
