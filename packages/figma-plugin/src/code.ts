@@ -503,8 +503,42 @@ function makeText(
   return t;
 }
 
-function applyRadiusValue(node: FrameNode | ComponentNode, r: number) {
-  node.cornerRadius = r;
+/** Resolve a radius token by name and bind all four corners. Falls back to hardcoded value if not found. */
+function applyRadiusToken(node: FrameNode | ComponentNode, tokenName: string, fallbackValue: number) {
+  const v = findVariable(tokenName);
+  if (v) {
+    applyRadius(node, v);
+  } else {
+    // Create the token so future changes propagate
+    const created = resolveOrCreateVariable({
+      name: tokenName,
+      type: 'FLOAT',
+      createInCollection: 'Spacing & Radius',
+      createWithValue: fallbackValue,
+    });
+    applyRadius(node, created);
+  }
+}
+
+/** Bind a padding property to a spacing token. Falls back to hardcoded value if not found. */
+function applyPaddingToken(
+  node: FrameNode | ComponentNode,
+  property: 'paddingLeft' | 'paddingRight' | 'paddingTop' | 'paddingBottom',
+  tokenName: string,
+  fallbackValue: number
+) {
+  const v = findVariable(tokenName);
+  if (v) {
+    node.setBoundVariable(property, v);
+  } else {
+    const created = resolveOrCreateVariable({
+      name: tokenName,
+      type: 'FLOAT',
+      createInCollection: 'Spacing & Radius',
+      createWithValue: fallbackValue,
+    });
+    node.setBoundVariable(property, created);
+  }
 }
 
 function applyFill(node: FrameNode | ComponentNode | RectangleNode, style: VariantStyle) {
@@ -577,15 +611,28 @@ async function buildButton(spec: ComponentSpec, variantProps: Record<string, str
   bg.primaryAxisAlignItems = 'CENTER';
   bg.counterAxisAlignItems = 'CENTER';
   bg.layoutGrow = 0;
-  bg.paddingLeft   = style.paddingH ?? 16;
-  bg.paddingRight  = style.paddingH ?? 16;
-  bg.paddingTop    = style.paddingV ?? 8;
-  bg.paddingBottom = style.paddingV ?? 8;
+  const sizeKey = variantProps['Size'] || 'Medium';
+  const hTokenMap: Record<string, [string, number]> = {
+    Small:  ['spacing/3', 12],
+    Medium: ['spacing/4', 16],
+    Large:  ['spacing/5', 20],
+  };
+  const vTokenMap: Record<string, [string, number]> = {
+    Small:  ['spacing/1-5', 6],
+    Medium: ['spacing/2', 8],
+    Large:  ['spacing/3', 12],
+  };
+  const [hTok, hFallback] = hTokenMap[sizeKey] || hTokenMap['Medium'];
+  const [vTok, vFallback] = vTokenMap[sizeKey] || vTokenMap['Medium'];
+  applyPaddingToken(bg, 'paddingLeft',   hTok, hFallback);
+  applyPaddingToken(bg, 'paddingRight',  hTok, hFallback);
+  applyPaddingToken(bg, 'paddingTop',    vTok, vFallback);
+  applyPaddingToken(bg, 'paddingBottom', vTok, vFallback);
   bg.itemSpacing = 6;
 
   applyFill(bg, style);
   applyStroke(bg, style);
-  applyRadiusValue(bg, 6);
+  applyRadiusToken(bg, 'radius/md', 6);
 
   if (isDisabled) bg.opacity = 0.5;
 
@@ -645,15 +692,15 @@ async function buildInput(spec: ComponentSpec, variantProps: Record<string, stri
   field.counterAxisSizingMode = 'FIXED';
   field.primaryAxisAlignItems = 'CENTER';
   field.counterAxisAlignItems = 'CENTER';
-  field.paddingLeft  = style.paddingH ?? 12;
-  field.paddingRight = style.paddingH ?? 12;
-  field.paddingTop    = style.paddingV ?? 8;
-  field.paddingBottom = style.paddingV ?? 8;
+  applyPaddingToken(field, 'paddingLeft',   'spacing/3', 12);
+  applyPaddingToken(field, 'paddingRight',  'spacing/3', 12);
+  applyPaddingToken(field, 'paddingTop',    'spacing/2', 8);
+  applyPaddingToken(field, 'paddingBottom', 'spacing/2', 8);
   field.clipsContent = true;
 
   applyFill(field, style);
   applyStroke(field, style);
-  applyRadiusValue(field, 6);
+  applyRadiusToken(field, 'radius/md', 6);
 
   if (isDisabled) field.opacity = 0.5;
 
@@ -712,7 +759,7 @@ async function buildCheckbox(_spec: ComponentSpec, variantProps: Record<string, 
   box.name = 'Box';
   box.resize(16, 16);
   box.layoutMode = 'NONE';
-  box.cornerRadius = 3;
+  applyRadiusToken(box, 'radius/sm', 3);
 
   if (isChecked || isIndeterminate) {
     box.fills = [solidPaint('#2563EB')];
@@ -791,15 +838,15 @@ async function buildGenericComponent(spec: ComponentSpec, variantProps: Record<s
   bg.primaryAxisAlignItems = 'CENTER';
   bg.counterAxisAlignItems = 'CENTER';
   bg.resize(w, style.height || 40);
-  bg.paddingLeft   = style.paddingH ?? 16;
-  bg.paddingRight  = style.paddingH ?? 16;
-  bg.paddingTop    = style.paddingV ?? 8;
-  bg.paddingBottom = style.paddingV ?? 8;
+  applyPaddingToken(bg, 'paddingLeft',   'spacing/4', 16);
+  applyPaddingToken(bg, 'paddingRight',  'spacing/4', 16);
+  applyPaddingToken(bg, 'paddingTop',    'spacing/2', 8);
+  applyPaddingToken(bg, 'paddingBottom', 'spacing/2', 8);
   bg.itemSpacing   = 6;
 
   applyFill(bg, style);
   applyStroke(bg, style);
-  applyRadiusValue(bg, 6);
+  applyRadiusToken(bg, 'radius/md', 6);
 
   const label = makeText(spec.componentName, {
     fontSize: style.fontSize || 14,
