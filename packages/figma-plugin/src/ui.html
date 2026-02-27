@@ -7,18 +7,18 @@
     * { margin: 0; padding: 0; box-sizing: border-box; }
 
     :root {
-      --bg: #0f1117;
-      --surface: #1a1d27;
-      --surface2: #22263a;
-      --border: #2a2e42;
-      --accent: #6366f1;
-      --accent-dim: rgba(99,102,241,0.15);
-      --green: #22c55e;
-      --green-dim: rgba(34,197,94,0.12);
-      --red: #ef4444;
-      --yellow: #f59e0b;
-      --text: #e2e8f0;
-      --muted: #64748b;
+      --bg: #0a0a0a;
+      --surface: #141414;
+      --surface2: #1e1e1e;
+      --border: #2a2a2a;
+      --accent: #d4d4d4;
+      --accent-dim: rgba(212,212,212,0.08);
+      --green: #4ade80;
+      --green-dim: rgba(74,222,128,0.10);
+      --red: #f87171;
+      --yellow: #fbbf24;
+      --text: #e5e5e5;
+      --muted: #737373;
       --radius: 8px;
     }
 
@@ -61,16 +61,8 @@
     }
 
     #logo {
-      width: 22px;
-      height: 22px;
-      background: var(--accent);
-      border-radius: 6px;
       display: flex;
       align-items: center;
-      justify-content: center;
-      font-size: 11px;
-      font-weight: 700;
-      color: white;
       flex-shrink: 0;
     }
 
@@ -78,6 +70,7 @@
       font-weight: 600;
       font-size: 13px;
       color: var(--text);
+      letter-spacing: -0.01em;
     }
 
     #header-right {
@@ -103,13 +96,13 @@
     #mcp-badge.connected {
       background: var(--green-dim);
       color: var(--green);
-      border: 1px solid rgba(34,197,94,0.25);
+      border: 1px solid rgba(74,222,128,0.2);
     }
 
     #mcp-badge.disconnected {
-      background: rgba(100,116,139,0.12);
+      background: rgba(115,115,115,0.10);
       color: var(--muted);
-      border: 1px solid rgba(100,116,139,0.2);
+      border: 1px solid rgba(115,115,115,0.18);
     }
 
     #mcp-badge .dot {
@@ -252,7 +245,7 @@
 
     .job-card.success { border-left: 3px solid var(--green); }
     .job-card.error   { border-left: 3px solid var(--red); }
-    .job-card.running { border-left: 3px solid var(--accent); }
+    .job-card.running { border-left: 3px solid #a3a3a3; }
     .job-card.pending { border-left: 3px solid var(--muted); }
 
     .job-top {
@@ -282,10 +275,10 @@
       flex-shrink: 0;
     }
 
-    .job-status-badge.pending  { background: rgba(100,116,139,0.15); color: var(--muted); }
-    .job-status-badge.running  { background: var(--accent-dim); color: var(--accent); }
+    .job-status-badge.pending  { background: rgba(115,115,115,0.12); color: var(--muted); }
+    .job-status-badge.running  { background: rgba(163,163,163,0.12); color: #a3a3a3; }
     .job-status-badge.success  { background: var(--green-dim); color: var(--green); }
-    .job-status-badge.error    { background: rgba(239,68,68,0.12); color: var(--red); }
+    .job-status-badge.error    { background: rgba(248,113,113,0.12); color: var(--red); }
 
     /* Progress bar */
     .job-progress {
@@ -298,7 +291,7 @@
     .job-progress-fill {
       height: 100%;
       border-radius: 2px;
-      background: var(--accent);
+      background: #a3a3a3;
       transition: width 0.4s ease;
     }
 
@@ -350,7 +343,7 @@
       flex: 1;
       background: var(--surface);
       border: 1px solid var(--border);
-      border-radius: 6px;
+      border-radius: 4px;
       padding: 8px 10px;
       display: flex;
       flex-direction: column;
@@ -377,8 +370,19 @@
   <!-- Header (always visible) -->
   <div id="header">
     <div id="header-left">
-      <div id="logo">T</div>
-      <span id="app-name">Tokenhaus</span>
+      <div id="logo">
+        <!-- Tokenhaus logo mark: token grid + haus roof -->
+        <svg width="84" height="20" viewBox="0 0 84 20" fill="none" xmlns="http://www.w3.org/2000/svg">
+          <!-- Icon: 2x2 token grid with roof line -->
+          <rect x="0" y="8" width="5" height="5" rx="1" fill="#e5e5e5"/>
+          <rect x="7" y="8" width="5" height="5" rx="1" fill="#e5e5e5"/>
+          <rect x="0" y="15" width="5" height="5" rx="1" fill="#737373"/>
+          <rect x="7" y="15" width="5" height="5" rx="1" fill="#737373"/>
+          <polyline points="0,7 6,2 12,7" stroke="#e5e5e5" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
+          <!-- Wordmark -->
+          <text x="18" y="15" font-family="-apple-system, BlinkMacSystemFont, 'Inter', sans-serif" font-size="12" font-weight="600" fill="#e5e5e5" letter-spacing="-0.2">tokenhaus</text>
+        </svg>
+      </div>
     </div>
     <div id="header-right">
       <div id="mcp-badge" class="disconnected">
