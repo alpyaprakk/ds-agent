@@ -9,6 +9,8 @@ interface Variable {
   type: string;
   collection_name: string | null;
   value: unknown;
+  is_alias: boolean;
+  alias_to: string | null;
 }
 
 interface Collection {
@@ -20,6 +22,43 @@ interface Component {
   name: string;
   type: string;
   description: string | null;
+}
+
+/** Convert raw Figma variable value (stored as JSON) to a human-readable primitive. */
+function resolveDisplayValue(v: Variable): unknown {
+  try {
+    const raw = typeof v.value === 'string' ? JSON.parse(v.value) : v.value;
+    // Figma stores { modeId: value } — take the first mode's value
+    const first = Object.values(raw as Record<string, unknown>)[0];
+    if (first === null || first === undefined) return null;
+
+    // COLOR: { r, g, b, a } → hex string
+    if (v.type === 'COLOR' && typeof first === 'object' && first !== null) {
+      const c = first as Record<string, number>;
+      if (typeof c.r === 'number') {
+        const h = (n: number) => Math.round(n * 255).toString(16).padStart(2, '0');
+        return `#${h(c.r)}${h(c.g)}${h(c.b)}`;
+      }
+    }
+
+    // FLOAT / STRING / BOOLEAN — return as-is
+    return first;
+  } catch {
+    return null;
+  }
+}
+
+/** Build alias chain: varName → aliasTo → aliasTo → ... (max 5 hops) */
+function buildAliasChain(name: string, aliasMap: Map<string, string>, max = 5): string[] {
+  const chain: string[] = [name];
+  let current = name;
+  for (let i = 0; i < max; i++) {
+    const next = aliasMap.get(current);
+    if (!next || chain.includes(next)) break;
+    chain.push(next);
+    current = next;
+  }
+  return chain;
 }
 
 export async function getDesignSystem(input: Input): Promise<string> {
@@ -41,6 +80,12 @@ export async function getDesignSystem(input: Input): Promise<string> {
   const { collections } = colsData;
   const { components } = compsData;
 
+  // Build alias map for chain resolution
+  const aliasMap = new Map<string, string>();
+  for (const v of variables) {
+    if (v.is_alias && v.alias_to) aliasMap.set(v.name, v.alias_to);
+  }
+
   // Group variables by collection
   const byCollection: Record<string, Variable[]> = {};
   for (const v of variables) {
@@ -58,7 +103,18 @@ export async function getDesignSystem(input: Input): Promise<string> {
     collections: Object.entries(byCollection).map(([name, vars]) => ({
       name,
       variableCount: vars.length,
-      variables: vars.map(v => ({ name: v.name, type: v.type })),
+      variables: vars.map(v => {
+        const entry: Record<string, unknown> = {
+          name: v.name,
+          type: v.type,
+          value: resolveDisplayValue(v),
+        };
+        if (v.is_alias && v.alias_to) {
+          entry.isAlias = true;
+          entry.aliasChain = buildAliasChain(v.name, aliasMap);
+        }
+        return entry;
+      }),
     })),
     components: components.map(c => ({
       name: c.name,

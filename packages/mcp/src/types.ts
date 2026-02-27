@@ -85,3 +85,58 @@ export const AnalyzeTokensInputSchema = z.object({
     .optional()
     .describe('Which checks to run'),
 });
+
+// ── rename_variable ────────────────────────────────────────────────────────────
+
+export const RenameVariableInputSchema = z.object({
+  workspaceId: z.string().describe('Workspace UUID'),
+  oldName: z.string().describe('Current variable name e.g. "color/brand/blue"'),
+  newName: z.string().describe('New variable name e.g. "color/brand/primary"'),
+});
+
+// ── delete_tokens ──────────────────────────────────────────────────────────────
+
+export const DeleteTokensInputSchema = z.object({
+  workspaceId: z.string().describe('Workspace UUID'),
+  variableNames: z.array(z.string()).min(1).describe('Variable names to delete e.g. ["color/old/token", "spacing/legacy"]'),
+});
+
+// ── export_tokens ──────────────────────────────────────────────────────────────
+
+export const ExportTokensInputSchema = z.object({
+  workspaceId: z.string().describe('Workspace UUID'),
+  format: z.enum(['css', 'json', 'tailwind', 'js']).describe(
+    'Export format: "css" → CSS custom properties, "json" → Design Tokens Community Group format, "tailwind" → tailwind.config.js, "js" → ES module export'
+  ),
+  collections: z.array(z.string()).optional().describe(
+    'Filter by collection names e.g. ["Primitives", "Semantic"]. If omitted, all collections are exported.'
+  ),
+});
+
+// ── list_pages ─────────────────────────────────────────────────────────────────
+
+export const ListPagesInputSchema = z.object({
+  workspaceId: z.string().describe('Workspace UUID'),
+});
+
+// ── create_page ────────────────────────────────────────────────────────────────
+
+export const CreatePageInputSchema = z.object({
+  workspaceId: z.string().describe('Workspace UUID'),
+  pageName: z.string().describe('Name for the new Figma page e.g. "Buttons", "Forms", "Icons"'),
+});
+
+// ── update_component ───────────────────────────────────────────────────────────
+
+export const UpdateComponentInputSchema = z.object({
+  workspaceId: z.string().describe('Workspace UUID'),
+  componentName: z.string().describe('Name of the existing component set to update'),
+  pageName: z.string().optional().describe('Page where the component lives (helps locate it)'),
+  description: z.string().optional().describe('New description for the component'),
+  tokenMappings: z.record(z.string(), z.string()).optional().describe(
+    'Update token bindings: { "button-primary-bg": "color/brand/updated" }'
+  ),
+  addVariants: z.array(z.object({
+    properties: z.record(z.string(), z.string()),
+  })).optional().describe('New variant combinations to add to the existing component set'),
+});

@@ -1016,6 +1016,131 @@ async function executeCommand(command: any): Promise<{ success: boolean; message
         await runFullSync();
         return { success: true, message: 'Sync triggered' };
 
+      case 'delete_variables': {
+        const names: string[] = Array.isArray(command.spec?.variableNames)
+          ? command.spec.variableNames
+          : [];
+        const deleted: string[] = [];
+        const notFound: string[] = [];
+
+        for (const name of names) {
+          const v = figma.variables.getLocalVariables().find(x => x.name === name);
+          if (v) {
+            v.remove();
+            deleted.push(name);
+          } else {
+            notFound.push(name);
+          }
+        }
+
+        const msg = `Deleted ${deleted.length} variable(s)${notFound.length > 0 ? `, ${notFound.length} not found` : ''}`;
+        console.log(`✅ ${msg}`);
+        return { success: true, message: msg };
+      }
+
+      case 'list_pages': {
+        const pages = figma.root.children.map(p => ({
+          id: p.id,
+          name: p.name,
+          nodeCount: p.children.length,
+        }));
+        return {
+          success: true,
+          message: `Found ${pages.length} page(s)`,
+          data: { pages },
+        };
+      }
+
+      case 'create_page': {
+        const pageName = command.spec?.pageName;
+        if (!pageName) return { success: false, message: 'pageName is required' };
+
+        // Check if already exists
+        const existing = figma.root.children.find(p => p.name === pageName);
+        if (existing) {
+          return { success: true, message: `Page "${pageName}" already exists`, data: { id: existing.id, name: existing.name } };
+        }
+
+        const newPage = figma.createPage();
+        newPage.name = pageName;
+        return { success: true, message: `Created page "${pageName}"`, data: { id: newPage.id, name: newPage.name } };
+      }
+
+      case 'update_component': {
+        const spec = command.spec;
+        if (!spec?.componentName) return { success: false, message: 'componentName is required' };
+
+        // Find the component set by name
+        const allNodes = figma.root.findAll(n =>
+          n.type === 'COMPONENT_SET' && n.name === spec.componentName
+        ) as ComponentSetNode[];
+
+        if (allNodes.length === 0) {
+          return { success: false, message: `Component set "${spec.componentName}" not found` };
+        }
+
+        const compSet = allNodes[0];
+        let changes = 0;
+
+        // Update description
+        if (spec.description !== undefined) {
+          compSet.description = spec.description;
+          changes++;
+        }
+
+        // Update token bindings on all children
+        if (spec.tokenMappings && typeof spec.tokenMappings === 'object') {
+          const children = compSet.children as ComponentNode[];
+          for (const child of children) {
+            for (const [tokenName, varName] of Object.entries(spec.tokenMappings as Record<string, string>)) {
+              const variable = findVariable(varName) || findVariable(tokenName);
+              if (!variable) continue;
+
+              // Apply radius/padding bindings that are bindable via setBoundVariable
+              if (tokenName.includes('radius')) {
+                try {
+                  child.setBoundVariable('topLeftRadius', variable);
+                  child.setBoundVariable('topRightRadius', variable);
+                  child.setBoundVariable('bottomLeftRadius', variable);
+                  child.setBoundVariable('bottomRightRadius', variable);
+                  changes++;
+                } catch { /* ignore */ }
+              } else if (tokenName.includes('padding') || tokenName.includes('spacing')) {
+                try {
+                  child.setBoundVariable('paddingLeft', variable);
+                  child.setBoundVariable('paddingRight', variable);
+                  child.setBoundVariable('paddingTop', variable);
+                  child.setBoundVariable('paddingBottom', variable);
+                  changes++;
+                } catch { /* ignore */ }
+              }
+            }
+          }
+        }
+
+        // Add new variants if requested
+        if (Array.isArray(spec.addVariants) && spec.addVariants.length > 0) {
+          const newComponents: ComponentNode[] = [];
+          for (const variantSpec of spec.addVariants) {
+            const comp = figma.createComponent();
+            comp.name = Object.entries(variantSpec.properties)
+              .map(([k, v]) => `${k}=${v}`)
+              .join(', ');
+            comp.resize(compSet.width / Math.max(compSet.children.length, 1), 40);
+            newComponents.push(comp);
+          }
+
+          if (newComponents.length > 0) {
+            for (const comp of newComponents) {
+              compSet.appendChild(comp);
+            }
+            changes += newComponents.length;
+          }
+        }
+
+        return { success: true, message: `Updated "${spec.componentName}" (${changes} change(s))` };
+      }
+
       default:
         return { success: false, message: `Unknown command type: ${command.type}` };
     }
