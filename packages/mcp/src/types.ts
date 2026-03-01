@@ -106,11 +106,16 @@ const LayerSpecSchemaBase = z.object({
   ),
 });
 
-// Lazy recursive type for children
-type LayerSpecInput = z.input<typeof LayerSpecSchemaBase> & { children?: LayerSpecInput[] };
-const LayerSpecSchema: z.ZodType<LayerSpecInput> = LayerSpecSchemaBase.extend({
-  children: z.lazy(() => LayerSpecSchema.array()).optional().describe('Nested child layers'),
+// Flatten to 3 levels deep so zod-to-json-schema can render children without recursive $ref
+// (z.lazy() collapses to `any` in JSON Schema, hiding the nested layer structure from the AI)
+const LayerSpecL3 = LayerSpecSchemaBase; // leaf — no children
+const LayerSpecL2 = LayerSpecSchemaBase.extend({
+  children: z.array(LayerSpecL3).optional().describe('Nested child layers (depth 3)'),
 });
+const LayerSpecSchema = LayerSpecSchemaBase.extend({
+  children: z.array(LayerSpecL2).optional().describe('Nested child layers'),
+});
+type LayerSpecInput = z.input<typeof LayerSpecSchema>;
 
 export const CreateComponentInputSchema = z.object({
   workspaceId: z.string().describe('Workspace UUID'),
