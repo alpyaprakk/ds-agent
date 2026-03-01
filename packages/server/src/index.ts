@@ -109,6 +109,7 @@ async function runMigrations() {
     '011_add_superadmin.sql',
     '012_add_plans.sql',
     '013_add_usage_tracking.sql',
+    '014_add_plugin_sessions.sql',
   ];
 
   for (const file of migrationFiles) {

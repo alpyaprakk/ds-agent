@@ -9,6 +9,7 @@ import { Components } from './pages/Components';
 import { Settings } from './pages/Settings';
 import { Login } from './pages/Login';
 import { Register } from './pages/Register';
+import { PluginAuth } from './pages/PluginAuth';
 import { useWorkspaceStore } from './store/workspace-store';
 import { useAuthStore } from './store/auth-store';
 import { useNotificationStore } from './store/notification-store';
@@ -234,6 +235,7 @@ function AppContent() {
       {/* Public routes */}
       <Route path="/login" element={<PublicRoute><Login /></PublicRoute>} />
       <Route path="/register" element={<PublicRoute><Register /></PublicRoute>} />
+      <Route path="/plugin-auth" element={<PluginAuth />} />
 
       {/* Protected routes */}
       <Route path="/*" element={

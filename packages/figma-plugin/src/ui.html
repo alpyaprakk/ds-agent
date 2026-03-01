@@ -336,57 +336,43 @@
 
     /* ── Auth screen ────────────────────────────────────── */
     #auth-screen {
-      padding: 16px 12px;
+      padding: 28px 20px 24px;
       display: flex;
       flex-direction: column;
-      gap: 12px;
+      align-items: center;
+      gap: 10px;
     }
 
-    #auth-screen .auth-title {
-      font-size: 13px;
+    .auth-logo {
+      margin-bottom: 4px;
+    }
+
+    .auth-title {
+      font-size: 14px;
       font-weight: 600;
       color: var(--text);
+      text-align: center;
     }
 
-    #auth-screen .auth-subtitle {
+    .auth-subtitle {
       font-size: 11px;
       color: var(--muted);
-      margin-top: -6px;
+      text-align: center;
+      margin-bottom: 4px;
     }
 
-    .auth-field {
-      display: flex;
-      flex-direction: column;
-      gap: 4px;
-    }
-
-    .auth-field label {
-      font-size: 10px;
-      font-weight: 600;
-      text-transform: uppercase;
-      letter-spacing: 0.05em;
+    #auth-status {
+      font-size: 11px;
       color: var(--muted);
-    }
-
-    .auth-field input {
-      background: var(--surface);
-      border: 1px solid var(--border);
-      border-radius: 6px;
-      padding: 8px 10px;
-      color: var(--text);
-      font-size: 12px;
-      font-family: inherit;
-      outline: none;
-      transition: border-color 0.2s;
-    }
-
-    .auth-field input:focus {
-      border-color: #525252;
+      text-align: center;
+      min-height: 14px;
+      line-height: 1.5;
     }
 
     #auth-error {
       font-size: 11px;
       color: var(--red);
+      text-align: center;
       min-height: 14px;
     }
 
@@ -395,88 +381,19 @@
       color: #0a0a0a;
       border: none;
       border-radius: 6px;
-      padding: 9px 12px;
+      padding: 9px 20px;
       font-size: 12px;
       font-weight: 600;
       font-family: inherit;
       cursor: pointer;
       transition: opacity 0.2s;
       width: 100%;
+      margin-top: 4px;
     }
 
     #auth-btn:hover { opacity: 0.85; }
     #auth-btn:disabled { opacity: 0.4; cursor: not-allowed; }
 
-    /* ── Workspace selector ─────────────────────────────── */
-    #workspace-screen {
-      padding: 16px 12px;
-      display: flex;
-      flex-direction: column;
-      gap: 10px;
-      display: none;
-    }
-
-    #workspace-screen .auth-title {
-      font-size: 13px;
-      font-weight: 600;
-      color: var(--text);
-    }
-
-    .workspace-list {
-      display: flex;
-      flex-direction: column;
-      gap: 6px;
-    }
-
-    .workspace-item {
-      background: var(--surface);
-      border: 1px solid var(--border);
-      border-radius: 6px;
-      padding: 10px 12px;
-      cursor: pointer;
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      transition: border-color 0.15s, background 0.15s;
-    }
-
-    .workspace-item:hover {
-      border-color: #525252;
-      background: var(--surface2);
-    }
-
-    .workspace-item.selected {
-      border-color: var(--green);
-      background: var(--green-dim);
-    }
-
-    .workspace-item .ws-name {
-      font-size: 12px;
-      font-weight: 500;
-      color: var(--text);
-    }
-
-    .workspace-item .ws-meta {
-      font-size: 10px;
-      color: var(--muted);
-    }
-
-    #ws-confirm-btn {
-      background: var(--text);
-      color: #0a0a0a;
-      border: none;
-      border-radius: 6px;
-      padding: 9px 12px;
-      font-size: 12px;
-      font-weight: 600;
-      font-family: inherit;
-      cursor: pointer;
-      width: 100%;
-      transition: opacity 0.2s;
-    }
-
-    #ws-confirm-btn:hover { opacity: 0.85; }
-    #ws-confirm-btn:disabled { opacity: 0.4; cursor: not-allowed; }
 
     /* ── User bar (shown when logged in) ────────────────── */
     #user-bar {
@@ -584,25 +501,16 @@
 
   <!-- Auth screen (shown when not logged in) -->
   <div id="auth-screen">
+    <div class="auth-logo">
+      <svg width="32" height="32" viewBox="0 0 32 32" fill="none" xmlns="http://www.w3.org/2000/svg">
+        <path d="M11.266 27.384C9.93899 26.8852 9.30425 25.3732 9.87752 24.0766L11.3818 20.6742C11.7795 19.7747 10.9836 18.8058 10.024 19.0213L6.38898 19.8378C4.99844 20.1501 3.63171 19.2278 3.40094 17.8215C3.17032 16.4159 4.16937 15.1058 5.58582 14.9562L9.27169 14.5671C10.2511 14.4637 10.6932 13.2875 10.0245 12.5645L7.50759 9.84375C6.54037 8.79818 6.65171 7.15436 7.75108 6.24877C8.8511 5.34263 10.4869 5.54901 11.3274 6.69998L13.5246 9.70872C14.1046 10.503 15.3417 10.2983 15.6349 9.35957L16.7444 5.80868C17.1672 4.45549 18.6406 3.73605 19.9677 4.23488C21.2925 4.73287 21.9278 6.24086 21.3587 7.5367L19.8596 10.9499C19.4639 11.8509 20.2612 12.819 21.2214 12.6034L24.8602 11.7861C26.25 11.4739 27.616 12.3957 27.8466 13.8013C28.0773 15.2071 27.0772 16.5172 25.6602 16.6652L21.9644 17.0513C20.983 17.1538 20.5399 18.3327 21.2107 19.0563L23.7371 21.7813C24.7057 22.826 24.5952 24.4705 23.4956 25.3763C22.3962 26.282 20.7613 26.0757 19.9212 24.9254L17.7218 21.9135C17.1414 21.1187 15.9038 21.3219 15.608 22.2605L14.4875 25.816C14.0621 27.1658 12.5908 27.882 11.266 27.384Z" fill="#e5e5e5"/>
+      </svg>
+    </div>
     <div class="auth-title">Sign in to Tokenhaus</div>
-    <div class="auth-subtitle">Connect to your design system workspace</div>
-    <div class="auth-field">
-      <label>Email</label>
-      <input type="email" id="auth-email" placeholder="you@example.com" autocomplete="off" />
-    </div>
-    <div class="auth-field">
-      <label>Password</label>
-      <input type="password" id="auth-password" placeholder="••••••••" />
-    </div>
+    <div class="auth-subtitle">Opens your browser to complete sign in</div>
+    <button id="auth-btn">Sign in with browser</button>
+    <div id="auth-status"></div>
     <div id="auth-error"></div>
-    <button id="auth-btn">Sign in</button>
-  </div>
-
-  <!-- Workspace selector (shown after login if multiple workspaces) -->
-  <div id="workspace-screen">
-    <div class="auth-title">Select Workspace</div>
-    <div class="workspace-list" id="workspace-list"></div>
-    <button id="ws-confirm-btn" disabled>Continue</button>
   </div>
 
   <!-- User bar (shown when logged in, above main content) -->

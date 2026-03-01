@@ -1666,4 +1666,8 @@ figma.ui.onmessage = async (msg) => {
   if (msg.type === 'clear-auth') {
     await figma.clientStorage.deleteAsync('auth');
   }
+
+  if (msg.type === 'open-external') {
+    figma.openExternal(msg.url);
+  }
 };

@@ -5,6 +5,7 @@ import { UserRepository } from '../../db/repositories/user-repository';
 import { authMiddleware, generateToken, AuthRequest } from '../../middleware/auth';
 import { NotificationService } from '../../services/notification.service';
 import { PlanRepository } from '../../db/repositories/plan.repository';
+import pool from '../../db/connection';
 
 // Store avatar in memory, convert to base64 data URL and save to DB
 const avatarUpload = multer({
@@ -339,6 +340,123 @@ router.post('/invitations/:token/reject', authMiddleware, async (req: AuthReques
   } catch (error) {
     console.error('Reject invitation error:', error);
     res.status(500).json({ error: 'Failed to reject invitation' });
+  }
+});
+
+// ==========================================
+// Plugin Browser Auth (polling flow)
+// ==========================================
+
+const DASHBOARD_URL = process.env.DASHBOARD_URL || 'https://ds-agent.alpy.io';
+
+// POST /api/auth/plugin-session/start (public)
+// Plugin calls this to start a browser-based auth session
+router.post('/plugin-session/start', async (req, res: Response) => {
+  try {
+    const { sessionId } = req.body;
+    if (!sessionId || typeof sessionId !== 'string') {
+      res.status(400).json({ error: 'sessionId required' });
+      return;
+    }
+
+    await pool.query(
+      `INSERT INTO plugin_sessions (session_id, status, expires_at)
+       VALUES ($1, 'pending', NOW() + INTERVAL '5 minutes')
+       ON CONFLICT (session_id) DO UPDATE SET status = 'pending', expires_at = NOW() + INTERVAL '5 minutes'`,
+      [sessionId]
+    );
+
+    const loginUrl = `${DASHBOARD_URL}/plugin-auth?session=${sessionId}`;
+    res.json({ sessionId, loginUrl });
+  } catch (error) {
+    console.error('Plugin session start error:', error);
+    res.status(500).json({ error: 'Failed to start plugin session' });
+  }
+});
+
+// POST /api/auth/plugin-session/complete (auth required)
+// Dashboard calls this after user logs in to mark session as completed
+router.post('/plugin-session/complete', authMiddleware, async (req: AuthRequest, res: Response) => {
+  try {
+    const { sessionId, workspaceId } = req.body;
+    if (!sessionId) {
+      res.status(400).json({ error: 'sessionId required' });
+      return;
+    }
+
+    // Check session exists and is not expired
+    const sessionResult = await pool.query(
+      `SELECT * FROM plugin_sessions WHERE session_id = $1 AND expires_at > NOW()`,
+      [sessionId]
+    );
+
+    if (sessionResult.rows.length === 0) {
+      res.status(410).json({ error: 'Session expired or not found' });
+      return;
+    }
+
+    // Generate a fresh token for the plugin
+    const token = generateToken({ id: req.user!.id, email: req.user!.email, name: req.user!.name });
+
+    await pool.query(
+      `UPDATE plugin_sessions SET status = 'completed', user_id = $1, jwt_token = $2, workspace_id = $3
+       WHERE session_id = $4`,
+      [req.user!.id, token, workspaceId || null, sessionId]
+    );
+
+    res.json({ success: true });
+  } catch (error) {
+    console.error('Plugin session complete error:', error);
+    res.status(500).json({ error: 'Failed to complete plugin session' });
+  }
+});
+
+// GET /api/auth/plugin-session/:sessionId/status (public)
+// Plugin polls this until status === 'completed'
+router.get('/plugin-session/:sessionId/status', async (req, res: Response) => {
+  try {
+    const { sessionId } = req.params;
+
+    const result = await pool.query(
+      `SELECT ps.status, ps.jwt_token, ps.workspace_id, ps.expires_at,
+              u.id as user_id, u.email, u.name, u.avatar
+       FROM plugin_sessions ps
+       LEFT JOIN users u ON u.id = ps.user_id
+       WHERE ps.session_id = $1`,
+      [sessionId]
+    );
+
+    if (result.rows.length === 0) {
+      res.status(404).json({ error: 'Session not found' });
+      return;
+    }
+
+    const session = result.rows[0];
+
+    // Check expiry
+    if (new Date(session.expires_at) < new Date() && session.status === 'pending') {
+      res.status(410).json({ error: 'Session expired' });
+      return;
+    }
+
+    if (session.status === 'completed') {
+      res.json({
+        status: 'completed',
+        token: session.jwt_token,
+        workspaceId: session.workspace_id,
+        user: {
+          id: session.user_id,
+          email: session.email,
+          name: session.name,
+          avatar: session.avatar,
+        },
+      });
+    } else {
+      res.json({ status: 'pending' });
+    }
+  } catch (error) {
+    console.error('Plugin session status error:', error);
+    res.status(500).json({ error: 'Failed to get session status' });
   }
 });
 

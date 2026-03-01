@@ -197,14 +197,12 @@ function toggleCollapse() {
 
 // ─── Screen management ────────────────────────────────────────────────────────
 
-function showScreen(screen: 'auth' | 'workspace' | 'main') {
+function showScreen(screen: 'auth' | 'main') {
   const authScreen = document.getElementById('auth-screen')!;
-  const wsScreen = document.getElementById('workspace-screen')!;
   const mainContent = document.getElementById('main-content')!;
   const userBar = document.getElementById('user-bar')!;
 
   authScreen.style.display = screen === 'auth' ? 'flex' : 'none';
-  wsScreen.style.display = screen === 'workspace' ? 'flex' : 'none';
   mainContent.style.display = screen === 'main' ? 'flex' : 'none';
   userBar.style.display = screen === 'main' ? 'flex' : 'none';
 
@@ -212,7 +210,7 @@ function showScreen(screen: 'auth' | 'workspace' | 'main') {
     const height = collapsed ? 48 : 420;
     parent.postMessage({ pluginMessage: { type: 'resize', width: 300, height } }, '*');
   } else {
-    parent.postMessage({ pluginMessage: { type: 'resize', width: 300, height: 360 } }, '*');
+    parent.postMessage({ pluginMessage: { type: 'resize', width: 300, height: 320 } }, '*');
   }
 }
 
@@ -226,109 +224,98 @@ function clearAuth() {
   parent.postMessage({ pluginMessage: { type: 'clear-auth' } }, '*');
 }
 
-// ─── Login flow ───────────────────────────────────────────────────────────────
+// ─── Login flow (browser polling) ────────────────────────────────────────────
+
+let pollInterval: ReturnType<typeof setInterval> | null = null;
+let pollTimeout: ReturnType<typeof setTimeout> | null = null;
+
+function stopPolling() {
+  if (pollInterval) { clearInterval(pollInterval); pollInterval = null; }
+  if (pollTimeout) { clearTimeout(pollTimeout); pollTimeout = null; }
+}
 
 async function handleLogin() {
-  const emailEl = document.getElementById('auth-email') as HTMLInputElement;
-  const passwordEl = document.getElementById('auth-password') as HTMLInputElement;
   const errorEl = document.getElementById('auth-error')!;
   const btn = document.getElementById('auth-btn') as HTMLButtonElement;
-
-  const email = emailEl.value.trim();
-  const password = passwordEl.value;
-
-  if (!email || !password) {
-    errorEl.textContent = 'Email and password required';
-    return;
-  }
+  const statusEl = document.getElementById('auth-status')!;
 
   btn.disabled = true;
-  btn.textContent = 'Signing in…';
+  btn.textContent = 'Opening browser…';
   errorEl.textContent = '';
+  statusEl.textContent = '';
 
   try {
-    const loginRes = await fetch(`${SERVER_URL}/api/auth/login`, {
+    const sessionId = crypto.randomUUID();
+
+    const startRes = await fetch(`${SERVER_URL}/api/auth/plugin-session/start`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ email, password }),
+      body: JSON.stringify({ sessionId }),
     });
 
-    if (!loginRes.ok) {
-      const err = await loginRes.json().catch(() => ({}));
-      throw new Error(err.error || 'Login failed');
-    }
+    if (!startRes.ok) throw new Error('Could not start login session');
+    const { loginUrl } = await startRes.json();
 
-    const { token, user } = await loginRes.json();
+    // Open browser
+    parent.postMessage({ pluginMessage: { type: 'open-external', url: loginUrl } }, '*');
 
-    // Fetch workspaces
-    const wsRes = await fetch(`${SERVER_URL}/api/workspaces`, {
-      headers: { Authorization: `Bearer ${token}` },
-    });
+    btn.textContent = 'Waiting for browser…';
+    statusEl.textContent = 'Complete sign in on the browser tab that just opened';
 
-    if (!wsRes.ok) throw new Error('Failed to load workspaces');
+    // Poll for completion every 2s
+    stopPolling();
+    pollInterval = setInterval(async () => {
+      try {
+        const statusRes = await fetch(`${SERVER_URL}/api/auth/plugin-session/${sessionId}/status`);
 
-    const wsData = await wsRes.json();
-    const workspaces: Array<{ id: string; name: string }> = wsData.workspaces ?? wsData;
+        if (statusRes.status === 410) {
+          stopPolling();
+          errorEl.textContent = 'Session expired. Try again.';
+          btn.disabled = false;
+          btn.textContent = 'Sign in with browser';
+          statusEl.textContent = '';
+          return;
+        }
 
-    if (workspaces.length === 0) {
-      throw new Error('No workspaces found. Create one in the dashboard.');
-    }
+        if (!statusRes.ok) return;
 
-    if (workspaces.length === 1) {
-      // Auto-select the only workspace
-      completeLogin(token, user, workspaces[0]);
-    } else {
-      // Show workspace selector
-      showWorkspaceSelector(token, user, workspaces);
-    }
+        const data = await statusRes.json();
+        if (data.status === 'completed') {
+          stopPolling();
+
+          // Try to get workspace name
+          let workspace = { id: data.workspaceId || '', name: 'My Workspace' };
+          if (data.workspaceId) {
+            try {
+              const wsRes = await fetch(`${SERVER_URL}/api/workspaces`, {
+                headers: { Authorization: `Bearer ${data.token}` },
+              });
+              const wsData = await wsRes.json();
+              const workspaces: Array<{ id: string; name: string }> = wsData.workspaces ?? wsData;
+              const found = workspaces.find(w => w.id === data.workspaceId);
+              if (found) workspace = found;
+            } catch { /* use default */ }
+          }
+
+          completeLogin(data.token, data.user, workspace);
+        }
+      } catch { /* network hiccup, keep polling */ }
+    }, 2000);
+
+    // Timeout after 5 minutes
+    pollTimeout = setTimeout(() => {
+      stopPolling();
+      errorEl.textContent = 'Login timed out. Please try again.';
+      btn.disabled = false;
+      btn.textContent = 'Sign in with browser';
+      statusEl.textContent = '';
+    }, 5 * 60 * 1000);
+
   } catch (err: any) {
     errorEl.textContent = err.message || 'Login failed';
-  } finally {
     btn.disabled = false;
-    btn.textContent = 'Sign In';
+    btn.textContent = 'Sign in with browser';
   }
-}
-
-function showWorkspaceSelector(token: string, user: any, workspaces: Array<{ id: string; name: string }>) {
-  const list = document.getElementById('workspace-list')!;
-  list.innerHTML = '';
-
-  workspaces.forEach(ws => {
-    const item = document.createElement('div');
-    item.className = 'workspace-item';
-    item.textContent = ws.name;
-    item.onclick = () => {
-      list.querySelectorAll('.workspace-item').forEach(el => el.classList.remove('selected'));
-      item.classList.add('selected');
-
-      // Store selection on confirm button and enable it
-      const confirmBtn = document.getElementById('ws-confirm-btn') as HTMLButtonElement;
-      confirmBtn.dataset.wsId = ws.id;
-      confirmBtn.dataset.wsName = ws.name;
-      confirmBtn.dataset.token = token;
-      confirmBtn.dataset.userId = user.id;
-      confirmBtn.dataset.userName = user.name || user.email;
-      confirmBtn.dataset.userEmail = user.email;
-      confirmBtn.disabled = false;
-    };
-    list.appendChild(item);
-  });
-
-  showScreen('workspace');
-}
-
-function handleWorkspaceConfirm() {
-  const btn = document.getElementById('ws-confirm-btn') as HTMLButtonElement;
-  const wsId = btn.dataset.wsId;
-  const wsName = btn.dataset.wsName;
-
-  if (!wsId || !wsName) return;
-
-  completeLogin(
-    btn.dataset.token!,
-    { id: btn.dataset.userId!, name: btn.dataset.userName!, email: btn.dataset.userEmail! },
-    { id: wsId, name: wsName }
-  );
 }
 
 function completeLogin(token: string, user: any, workspace: { id: string; name: string }) {
@@ -356,6 +343,7 @@ function updateUserBar() {
 }
 
 function handleLogout() {
+  stopPolling();
   if (socket?.connected) socket.disconnect();
   socket = null;
   if (heartbeatInterval) clearInterval(heartbeatInterval);
@@ -530,16 +518,10 @@ window.onmessage = (event: MessageEvent) => {
 document.addEventListener('DOMContentLoaded', () => {
   document.getElementById('toggle-btn')!.onclick = toggleCollapse;
   document.getElementById('auth-btn')!.onclick = handleLogin;
-  document.getElementById('ws-confirm-btn')!.onclick = handleWorkspaceConfirm;
   document.getElementById('logout-btn')!.onclick = handleLogout;
 
-  // Allow Enter key on password field
-  document.getElementById('auth-password')!.addEventListener('keydown', (e) => {
-    if (e.key === 'Enter') handleLogin();
-  });
-
   // Initial window size
-  parent.postMessage({ pluginMessage: { type: 'resize', width: 300, height: 360 } }, '*');
+  parent.postMessage({ pluginMessage: { type: 'resize', width: 300, height: 320 } }, '*');
 
   // Restore auth from clientStorage
   parent.postMessage({ pluginMessage: { type: 'get-auth' } }, '*');
