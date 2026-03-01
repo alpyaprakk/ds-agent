@@ -739,6 +739,14 @@ async function buildComponentNode(
 }
 
 async function executeCreateComponent(spec: ComponentSpec): Promise<{ success: boolean; message: string }> {
+  if (!spec.layers || spec.layers.length === 0) {
+    return {
+      success: false,
+      message: `❌ "layers" is required but was not provided for component "${spec.componentName}". ` +
+        `Call get_design_system first, then include a "layers" array describing the component anatomy. ` +
+        `Without layers, components render as blank rectangles.`,
+    };
+  }
   let page = figma.root.children.find(p => p.name === spec.pageName) as PageNode | undefined;
   if (!page) {
     page = figma.createPage();
