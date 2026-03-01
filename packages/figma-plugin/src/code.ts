@@ -278,231 +278,6 @@ function applyRadius(node: FrameNode | ComponentNode, variable: Variable) {
   node.setBoundVariable('bottomRightRadius', variable);
 }
 
-// ─── Per-variant style resolution ────────────────────────────────────────────
-//
-// Handles Button, Input, Badge, Card out of the box.
-// Fallback covers any generic component the AI creates.
-
-interface VariantStyle {
-  bgToken?: TokenSpec;
-  bgHex?: string;
-  strokeToken?: TokenSpec;
-  strokeHex?: string;
-  strokeWeight?: number;
-  textToken?: TokenSpec;
-  textHex?: string;
-  height?: number;
-  paddingH?: number;
-  paddingV?: number;
-  fontSize?: number;
-  fontStyle?: string;
-}
-
-// Normalize shadcn-style lowercase/short values to the internal Title Case used throughout
-function normalizeVariantProp(value: string): string {
-  const map: Record<string, string> = {
-    // Type / Variant
-    'default': 'Default', 'primary': 'Primary', 'secondary': 'Secondary',
-    'destructive': 'Destructive', 'outline': 'Outline', 'ghost': 'Ghost',
-    'link': 'Link', 'success': 'Success', 'warning': 'Warning',
-    // State
-    'hover': 'Hover', 'pressed': 'Pressed', 'focus': 'Focus', 'focused': 'Focus',
-    'disabled': 'Disabled', 'error': 'Error', 'filled': 'Filled',
-    'unchecked': 'Unchecked', 'checked': 'Checked', 'indeterminate': 'Indeterminate',
-    // Size — shadcn uses 'sm', 'default', 'lg', 'icon'
-    'sm': 'Small', 'md': 'Medium', 'lg': 'Large', 'icon': 'Icon',
-    // Title-case passthroughs (already correct)
-    'small': 'Small', 'medium': 'Medium', 'large': 'Large',
-  };
-  return map[value.toLowerCase()] ?? (value.charAt(0).toUpperCase() + value.slice(1));
-}
-
-function resolveVariantStyle(componentName: string, props: Record<string, string>): VariantStyle {
-  const rawType  = props['Type'] || props['Variant'] || 'Default';
-  const rawState = props['State'] || 'Default';
-  const rawSize  = props['Size'] || 'Medium';
-
-  const type  = normalizeVariantProp(rawType);
-  const state = normalizeVariantProp(rawState);
-  const size  = normalizeVariantProp(rawSize);
-
-  // shadcn 'default' size maps to 'Medium'
-  const sizeMap: Record<string, { height: number; paddingH: number; paddingV: number; fontSize: number }> = {
-    'Small':  { height: 32, paddingH: 12, paddingV: 6,  fontSize: 12 },
-    'Medium': { height: 40, paddingH: 16, paddingV: 8,  fontSize: 14 },
-    'Large':  { height: 48, paddingH: 20, paddingV: 12, fontSize: 16 },
-    'Icon':   { height: 40, paddingH: 0,  paddingV: 0,  fontSize: 14 },
-  };
-  const sizeStyle = sizeMap[size] || sizeMap['Medium'];
-
-  const isDisabled = state === 'Disabled';
-  const isHover    = state === 'Hover';
-  const isPressed  = state === 'Pressed';
-  const isFocus    = state === 'Focus';
-  const isError    = state === 'Error';
-
-  // Helper: build a component token spec with alias chain
-  // name format: "{component}-{variant}-{role}" or "{component}-{variant}-{role}_{state}"
-  const cn = componentName.toLowerCase();
-  const stSuffix = (state !== 'Default') ? `_${state.toLowerCase()}` : '';
-
-  function ct(role: string, aliasFor: string[], fallbackHex: string): TokenSpec {
-    return {
-      name: `${cn}-${role}`,
-      type: 'COLOR',
-      createInCollection: 'Components',
-      aliasFor,
-      createWithValue: fallbackHex,
-    };
-  }
-
-  // ── BUTTON ────────────────────────────────────────────────────────────
-  if (componentName === 'Button') {
-    const base: VariantStyle = { ...sizeStyle, fontStyle: 'Medium' };
-
-    if (type === 'Primary') {
-      const bgAlias = isDisabled ? ['color/text/disabled', 'color/neutral/400']
-                    : isPressed  ? ['color/brand/secondary', 'color/brand/primary']
-                    : isHover    ? ['color/brand/primary']
-                    :              ['color/brand/primary'];
-      return {
-        ...base,
-        bgToken:   ct(`primary-bg${stSuffix}`,      bgAlias,                                    isDisabled ? '#94A3B8' : '#2563EB'),
-        textToken: ct(`primary-text`,               ['color/text/inverse', 'color/neutral/0'],   '#FFFFFF'),
-      };
-    }
-    if (type === 'Secondary') {
-      const borderAlias = isDisabled ? ['color/border/default'] : ['color/brand/primary', 'color/border/focus'];
-      const textAlias   = isDisabled ? ['color/text/disabled']  : ['color/brand/primary', 'color/text/primary'];
-      return {
-        ...base,
-        bgToken: (isHover || isPressed)
-          ? ct(`secondary-bg_hover`, ['color/bg/subtle'], '#EFF6FF')
-          : undefined,
-        strokeToken: ct(`secondary-border${stSuffix}`, borderAlias, isDisabled ? '#CBD5E1' : '#2563EB'),
-        strokeWeight: 1.5,
-        textToken:   ct(`secondary-text${stSuffix}`,   textAlias,   isDisabled ? '#94A3B8' : '#2563EB'),
-      };
-    }
-    if (type === 'Ghost') {
-      const textAlias = isDisabled ? ['color/text/disabled'] : ['color/brand/primary', 'color/text/primary'];
-      return {
-        ...base,
-        bgToken: (isHover || isPressed)
-          ? ct(`ghost-bg_hover`, ['color/bg/subtle'], '#F1F5F9')
-          : undefined,
-        textToken: ct(`ghost-text${stSuffix}`, textAlias, isDisabled ? '#94A3B8' : '#2563EB'),
-      };
-    }
-    if (type === 'Destructive') {
-      const bgAlias = isDisabled ? ['color/text/disabled']
-                    : isPressed  ? ['color/semantic/error']
-                    : isHover    ? ['color/semantic/error']
-                    :              ['color/semantic/error'];
-      return {
-        ...base,
-        bgToken:   ct(`destructive-bg${stSuffix}`, bgAlias,                                  isDisabled ? '#FCA5A5' : '#DC2626'),
-        textToken: ct(`destructive-text`,           ['color/text/inverse', 'color/neutral/0'], '#FFFFFF'),
-      };
-    }
-  }
-
-  // ── INPUT ─────────────────────────────────────────────────────────────
-  if (componentName === 'Input') {
-    const base: VariantStyle = { ...sizeStyle, fontStyle: 'Regular' };
-    const bgAlias     = isDisabled ? ['color/bg/subtle', 'color/neutral/100'] : ['color/bg/default', 'color/neutral/0'];
-    const borderAlias = isError    ? ['color/semantic/error']
-                      : isFocus    ? ['color/border/focus', 'color/brand/primary']
-                      : isDisabled ? ['color/border/default']
-                      :              ['color/border/default'];
-    return {
-      ...base,
-      bgToken:     ct(`bg${stSuffix}`,     bgAlias,     isDisabled ? '#F8FAFC' : '#FFFFFF'),
-      strokeToken: ct(`border${stSuffix}`, borderAlias, isError ? '#EF4444' : isFocus ? '#2563EB' : '#D1D5DB'),
-      strokeWeight: isFocus ? 2 : 1,
-      textToken:   ct(`placeholder`,       ['color/text/tertiary', 'color/text/secondary'], '#9CA3AF'),
-    };
-  }
-
-  // ── BADGE ─────────────────────────────────────────────────────────────
-  if (componentName === 'Badge') {
-    const badgeMap: Record<string, { bgAlias: string[]; textAlias: string[]; bgHex: string; textHex: string }> = {
-      'Default':     { bgAlias: ['color/bg/subtle'],           textAlias: ['color/text/secondary'],        bgHex: '#F1F5F9', textHex: '#475569' },
-      'Primary':     { bgAlias: ['color/brand/primary'],       textAlias: ['color/text/inverse'],          bgHex: '#DBEAFE', textHex: '#1D4ED8' },
-      'Success':     { bgAlias: ['color/semantic/success'],    textAlias: ['color/text/inverse'],          bgHex: '#DCFCE7', textHex: '#15803D' },
-      'Warning':     { bgAlias: ['color/semantic/warning'],    textAlias: ['color/text/primary'],          bgHex: '#FEF9C3', textHex: '#A16207' },
-      'Destructive': { bgAlias: ['color/semantic/error'],      textAlias: ['color/text/inverse'],          bgHex: '#FEE2E2', textHex: '#B91C1C' },
-    };
-    const bm = badgeMap[type] || badgeMap['Default'];
-    return {
-      height: 24, paddingH: 10, paddingV: 2, fontSize: 12, fontStyle: 'Medium',
-      bgToken:   ct(`${type.toLowerCase()}-bg`,   bm.bgAlias,   bm.bgHex),
-      textToken: ct(`${type.toLowerCase()}-text`, bm.textAlias, bm.textHex),
-    };
-  }
-
-  // ── CARD ──────────────────────────────────────────────────────────────
-  if (componentName === 'Card') {
-    return {
-      height: 200, paddingH: 24, paddingV: 24, fontSize: 14, fontStyle: 'Regular',
-      bgToken:     ct(`bg`,     ['color/bg/default'],    '#FFFFFF'),
-      strokeToken: ct(`border`, ['color/border/default'], '#E2E8F0'),
-      strokeWeight: 1,
-    };
-  }
-
-  // ── Fallback (generic component) — variant-aware ──────────────────────
-  // Applies meaningful styles based on Type/Variant + State properties
-  // so any custom component gets differentiated variants automatically.
-  const variantKey = type.toLowerCase();
-  const styleByType: Record<string, { bgHex: string; textHex: string; strokeHex?: string; strokeWeight?: number }> = {
-    'primary':     { bgHex: '#18181B', textHex: '#FAFAFA' },
-    'default':     { bgHex: '#18181B', textHex: '#FAFAFA' },
-    'secondary':   { bgHex: '#F4F4F5', textHex: '#18181B' },
-    'destructive': { bgHex: '#EF4444', textHex: '#FAFAFA' },
-    'outline':     { bgHex: '#FFFFFF', textHex: '#18181B', strokeHex: '#E4E4E7', strokeWeight: 1 },
-    'ghost':       { bgHex: 'transparent', textHex: '#18181B' },
-    'success':     { bgHex: '#16A34A', textHex: '#FAFAFA' },
-    'warning':     { bgHex: '#D97706', textHex: '#FAFAFA' },
-    'info':        { bgHex: '#2563EB', textHex: '#FAFAFA' },
-    'error':       { bgHex: '#EF4444', textHex: '#FAFAFA' },
-  };
-
-  const typeStyle = styleByType[variantKey] || styleByType['primary'];
-
-  // State overrides
-  const isDisabledState = state === 'Disabled';
-
-  const bgTokenSpec = isDisabledState
-    ? ct(`${variantKey}-bg-disabled`, ['color/text/disabled', 'color/neutral/400'], '#A1A1AA')
-    : typeStyle.bgHex === 'transparent'
-      ? undefined  // ghost — no fill
-      : ct(`${variantKey}-bg`, [`color/${variantKey}/default`, `color/bg/default`], typeStyle.bgHex);
-
-  const textTokenSpec = isDisabledState
-    ? ct(`${variantKey}-text-disabled`, ['color/text/disabled'], '#A1A1AA')
-    : ct(`${variantKey}-text`, [`color/${variantKey}/text`, 'color/text/primary'], typeStyle.textHex);
-
-  const strokeTokenSpec = typeStyle.strokeHex
-    ? ct(`${variantKey}-border`, ['color/border/default'], typeStyle.strokeHex)
-    : undefined;
-
-  const result: VariantStyle = {
-    ...sizeStyle,
-    bgToken:   bgTokenSpec,
-    bgHex:     (!bgTokenSpec && typeStyle.bgHex === 'transparent') ? undefined : undefined,
-    textToken: textTokenSpec,
-    strokeToken: strokeTokenSpec,
-    strokeWeight: typeStyle.strokeWeight,
-  };
-
-  if (isDisabledState) {
-    // Signal to builder to apply opacity
-    result.fontStyle = 'Regular';
-  }
-
-  return result;
-}
 
 // ─── AI Execute Commands ──────────────────────────────────────────────────────
 
@@ -586,400 +361,6 @@ interface ComponentSpec {
    *  When present, buildFromLayers() is used instead of the generic fallback.
    *  Supports any component: Toast, Avatar, Tag, Switch, Tooltip, List Item, etc. */
   layers?: LayerSpec[];
-}
-
-/** Override aliasFor on a TokenSpec using the AI-supplied tokenMappings. */
-function applyTokenMappings(style: VariantStyle, mappings: Record<string, string>): VariantStyle {
-  function override(spec: TokenSpec | undefined): TokenSpec | undefined {
-    if (!spec) return undefined;
-    const mapped = mappings[spec.name];
-    if (mapped) return { ...spec, aliasFor: [mapped, ...(spec.aliasFor || [])] };
-    return spec;
-  }
-  return {
-    ...style,
-    bgToken:     override(style.bgToken),
-    strokeToken: override(style.strokeToken),
-    textToken:   override(style.textToken),
-  };
-}
-
-// ─── Component builder helpers ───────────────────────────────────────────────
-
-async function loadFonts() {
-  await figma.loadFontAsync({ family: 'Inter', style: 'Regular' });
-  await figma.loadFontAsync({ family: 'Inter', style: 'Medium' });
-  await figma.loadFontAsync({ family: 'Inter', style: 'Semi Bold' });
-}
-
-function makeText(
-  chars: string,
-  opts: { fontSize?: number; fontStyle?: string; color?: string; tokenSpec?: TokenSpec }
-): TextNode {
-  const t = figma.createText();
-  t.fontName = { family: 'Inter', style: opts.fontStyle || 'Regular' };
-  t.fontSize = opts.fontSize || 14;
-  t.characters = chars;
-  t.textAutoResize = 'WIDTH_AND_HEIGHT';
-  if (opts.tokenSpec) {
-    const v = resolveOrCreateVariable(opts.tokenSpec);
-    t.fills = [boundColorPaint(v)];
-  } else {
-    t.fills = [solidPaint(opts.color || '#18181B')];
-  }
-  return t;
-}
-
-/** Resolve a radius token by name and bind all four corners. Falls back to hardcoded value if not found. */
-function applyRadiusToken(node: FrameNode | ComponentNode, tokenName: string, fallbackValue: number) {
-  const v = findVariable(tokenName);
-  if (v) {
-    applyRadius(node, v);
-  } else {
-    // Create the token so future changes propagate
-    const created = resolveOrCreateVariable({
-      name: tokenName,
-      type: 'FLOAT',
-      createInCollection: 'Spacing & Radius',
-      createWithValue: fallbackValue,
-    });
-    applyRadius(node, created);
-  }
-}
-
-/** Bind a padding property to a spacing token. Falls back to hardcoded value if not found. */
-function applyPaddingToken(
-  node: FrameNode | ComponentNode,
-  property: 'paddingLeft' | 'paddingRight' | 'paddingTop' | 'paddingBottom',
-  tokenName: string,
-  fallbackValue: number
-) {
-  const v = findVariable(tokenName);
-  if (v) {
-    node.setBoundVariable(property, v);
-  } else {
-    const created = resolveOrCreateVariable({
-      name: tokenName,
-      type: 'FLOAT',
-      createInCollection: 'Spacing & Radius',
-      createWithValue: fallbackValue,
-    });
-    node.setBoundVariable(property, created);
-  }
-}
-
-function applyFill(node: FrameNode | ComponentNode | RectangleNode, style: VariantStyle) {
-  if (style.bgToken) {
-    const v = resolveOrCreateVariable(style.bgToken);
-    node.fills = [boundColorPaint(v)];
-  } else if (style.bgHex) {
-    node.fills = [solidPaint(style.bgHex)];
-  } else {
-    node.fills = [];
-  }
-}
-
-function applyStroke(node: FrameNode | ComponentNode, style: VariantStyle) {
-  if (style.strokeToken) {
-    const v = resolveOrCreateVariable(style.strokeToken);
-    node.strokes = [boundColorPaint(v)];
-    node.strokeWeight = style.strokeWeight ?? 1;
-    node.strokeAlign = 'INSIDE';
-  } else if (style.strokeHex) {
-    node.strokes = [solidPaint(style.strokeHex)];
-    node.strokeWeight = style.strokeWeight ?? 1;
-    node.strokeAlign = 'INSIDE';
-  } else {
-    node.strokes = [];
-  }
-}
-
-// ─── Button builder (shadcn-accurate) ────────────────────────────────────────
-// Structure: Component (hug×hug) → no fill
-//   └── bg Frame (hug×hug, horizontal AL, padding) → fill + stroke + radius
-//       └── Label text (hug)
-
-async function buildButton(spec: ComponentSpec, variantProps: Record<string, string>): Promise<ComponentNode> {
-  let style = resolveVariantStyle('Button', variantProps);
-  if (spec.tokenMappings) style = applyTokenMappings(style, spec.tokenMappings);
-
-  const type  = variantProps['Type']  || 'Primary';
-  const state = variantProps['State'] || 'Default';
-  const isDisabled = state === 'Disabled';
-  const isLink = type === 'Link';
-
-  const comp = figma.createComponent();
-  comp.name = Object.entries(variantProps).map(([k, v]) => `${k}=${v}`).join(', ');
-  comp.fills = [];
-  comp.layoutMode = 'HORIZONTAL';
-  comp.primaryAxisSizingMode = 'AUTO';
-  comp.counterAxisSizingMode = 'AUTO';
-  comp.primaryAxisAlignItems = 'CENTER';
-  comp.counterAxisAlignItems = 'CENTER';
-
-  if (isLink) {
-    // Link: no background, just underlined text
-    const label = makeText('Button', {
-      fontSize: style.fontSize || 14,
-      fontStyle: 'Medium',
-      tokenSpec: style.textToken,
-      color: '#2563EB',
-    });
-    if (isDisabled) label.opacity = 0.5;
-    comp.appendChild(label);
-    return comp;
-  }
-
-  const bg = figma.createFrame();
-  bg.name = 'Background';
-  bg.layoutMode = 'HORIZONTAL';
-  bg.primaryAxisSizingMode = 'AUTO';
-  bg.counterAxisSizingMode = 'AUTO';
-  bg.primaryAxisAlignItems = 'CENTER';
-  bg.counterAxisAlignItems = 'CENTER';
-  bg.layoutGrow = 0;
-  const sizeKey = normalizeVariantProp(variantProps['Size'] || 'Medium');
-  const hTokenMap: Record<string, [string, number]> = {
-    Small:  ['spacing/3', 12],
-    Medium: ['spacing/4', 16],
-    Large:  ['spacing/5', 20],
-    Icon:   ['spacing/0', 0],
-  };
-  const vTokenMap: Record<string, [string, number]> = {
-    Small:  ['spacing/1-5', 6],
-    Medium: ['spacing/2', 8],
-    Large:  ['spacing/3', 12],
-    Icon:   ['spacing/0', 0],
-  };
-  const [hTok, hFallback] = hTokenMap[sizeKey] || hTokenMap['Medium'];
-  const [vTok, vFallback] = vTokenMap[sizeKey] || vTokenMap['Medium'];
-  applyPaddingToken(bg, 'paddingLeft',   hTok, hFallback);
-  applyPaddingToken(bg, 'paddingRight',  hTok, hFallback);
-  applyPaddingToken(bg, 'paddingTop',    vTok, vFallback);
-  applyPaddingToken(bg, 'paddingBottom', vTok, vFallback);
-  bg.itemSpacing = 6;
-
-  applyFill(bg, style);
-  applyStroke(bg, style);
-  applyRadiusToken(bg, 'radius/md', 6);
-
-  if (isDisabled) bg.opacity = 0.5;
-
-  const label = makeText('Button', {
-    fontSize: style.fontSize || 14,
-    fontStyle: 'Medium',
-    tokenSpec: style.textToken,
-    color: '#FFFFFF',
-  });
-  bg.appendChild(label);
-  comp.appendChild(bg);
-  return comp;
-}
-
-// ─── Input builder (shadcn-accurate) ─────────────────────────────────────────
-// Structure: Component (vertical, hug)
-//   ├── Label text (optional, above)
-//   ├── InputField Frame (horizontal, fixed W × hug H)
-//   │   └── Placeholder text
-//   └── HelperText text (optional, below)
-
-async function buildInput(spec: ComponentSpec, variantProps: Record<string, string>): Promise<ComponentNode> {
-  let style = resolveVariantStyle('Input', variantProps);
-  if (spec.tokenMappings) style = applyTokenMappings(style, spec.tokenMappings);
-
-  const state = variantProps['State'] || 'Default';
-  const isDisabled = state === 'Disabled';
-  const isError    = state === 'Error';
-  const isFilled   = state === 'Filled';
-
-  const fieldW = spec.width || 240;
-
-  const comp = figma.createComponent();
-  comp.name = Object.entries(variantProps).map(([k, v]) => `${k}=${v}`).join(', ');
-  comp.fills = [];
-  comp.layoutMode = 'VERTICAL';
-  comp.primaryAxisSizingMode = 'AUTO';
-  comp.counterAxisSizingMode = 'AUTO';
-  comp.primaryAxisAlignItems = 'MIN';
-  comp.counterAxisAlignItems = 'MIN';
-  comp.itemSpacing = 4;
-
-  // Label above the field
-  const labelText = makeText('Label', {
-    fontSize: 14,
-    fontStyle: 'Medium',
-    color: '#111827',
-  });
-  comp.appendChild(labelText);
-
-  // Input field frame
-  const field = figma.createFrame();
-  field.name = 'InputField';
-  field.resize(fieldW, style.height || 40);
-  field.layoutMode = 'HORIZONTAL';
-  field.primaryAxisSizingMode = 'FIXED';
-  field.counterAxisSizingMode = 'FIXED';
-  field.primaryAxisAlignItems = 'CENTER';
-  field.counterAxisAlignItems = 'CENTER';
-  applyPaddingToken(field, 'paddingLeft',   'spacing/3', 12);
-  applyPaddingToken(field, 'paddingRight',  'spacing/3', 12);
-  applyPaddingToken(field, 'paddingTop',    'spacing/2', 8);
-  applyPaddingToken(field, 'paddingBottom', 'spacing/2', 8);
-  field.clipsContent = true;
-
-  applyFill(field, style);
-  applyStroke(field, style);
-  applyRadiusToken(field, 'radius/md', 6);
-
-  if (isDisabled) field.opacity = 0.5;
-
-  const placeholder = makeText(isFilled ? 'Value' : 'Placeholder text', {
-    fontSize: style.fontSize || 14,
-    fontStyle: 'Regular',
-    color: isFilled ? '#111827' : '#9CA3AF',
-  });
-  placeholder.layoutGrow = 1;
-  placeholder.textAutoResize = 'HEIGHT';
-  placeholder.resize(fieldW - (style.paddingH ?? 12) * 2, placeholder.height);
-  field.appendChild(placeholder);
-
-  comp.appendChild(field);
-
-  // Helper / error text below
-  const helperColor = isError ? '#EF4444' : '#6B7280';
-  const helperChars = isError ? 'This field is required' : 'Helper text';
-  const helper = makeText(helperChars, {
-    fontSize: 12,
-    fontStyle: 'Regular',
-    color: helperColor,
-  });
-  comp.appendChild(helper);
-
-  return comp;
-}
-
-// ─── Checkbox builder (shadcn-accurate) ──────────────────────────────────────
-// Structure: Component (horizontal, hug)
-//   ├── Box Frame (16×16, no layout)
-//   │   └── [if Checked] Checkmark rectangle (10×10, centered)
-//   │   └── [if Indeterminate] Dash rectangle (10×2, centered)
-//   └── Label text
-
-async function buildCheckbox(_spec: ComponentSpec, variantProps: Record<string, string>): Promise<ComponentNode> {
-  const state = variantProps['State'] || 'Unchecked';
-  const isChecked       = state === 'Checked';
-  const isIndeterminate = state === 'Indeterminate';
-  const isDisabled      = state === 'Disabled';
-
-  const comp = figma.createComponent();
-  comp.name = Object.entries(variantProps).map(([k, v]) => `${k}=${v}`).join(', ');
-  comp.fills = [];
-  comp.layoutMode = 'HORIZONTAL';
-  comp.primaryAxisSizingMode = 'AUTO';
-  comp.counterAxisSizingMode = 'AUTO';
-  comp.primaryAxisAlignItems = 'CENTER';
-  comp.counterAxisAlignItems = 'CENTER';
-  comp.itemSpacing = 8;
-
-  if (isDisabled) comp.opacity = 0.5;
-
-  // Checkbox box
-  const box = figma.createFrame();
-  box.name = 'Box';
-  box.resize(16, 16);
-  box.layoutMode = 'NONE';
-  applyRadiusToken(box, 'radius/sm', 3);
-
-  if (isChecked || isIndeterminate) {
-    box.fills = [solidPaint('#2563EB')];
-    box.strokes = [solidPaint('#2563EB')];
-  } else {
-    box.fills = [solidPaint('#FFFFFF')];
-    box.strokes = [solidPaint('#D1D5DB')];
-  }
-  box.strokeWeight = 1.5;
-  box.strokeAlign = 'INSIDE';
-
-  if (isChecked) {
-    // Checkmark: two rectangles forming a tick
-    const check = figma.createRectangle();
-    check.resize(10, 2);
-    check.x = 3;
-    check.y = 7;
-    check.fills = [solidPaint('#FFFFFF')];
-    check.rotation = -45;
-    box.appendChild(check);
-    const check2 = figma.createRectangle();
-    check2.resize(6, 2);
-    check2.x = 7;
-    check2.y = 4;
-    check2.fills = [solidPaint('#FFFFFF')];
-    check2.rotation = 45;
-    box.appendChild(check2);
-  } else if (isIndeterminate) {
-    const dash = figma.createRectangle();
-    dash.resize(8, 2);
-    dash.x = 4;
-    dash.y = 7;
-    dash.fills = [solidPaint('#FFFFFF')];
-    box.appendChild(dash);
-  }
-
-  comp.appendChild(box);
-
-  // Label
-  const label = makeText('Label', {
-    fontSize: 14,
-    fontStyle: 'Regular',
-    color: '#111827',
-  });
-  comp.appendChild(label);
-
-  return comp;
-}
-
-// ─── Badge builder (shadcn-accurate) ─────────────────────────────────────────
-// Structure: Component (horizontal, hug) → bg Frame (hug, horizontal) → Label text
-
-async function buildBadge(spec: ComponentSpec, variantProps: Record<string, string>): Promise<ComponentNode> {
-  let style = resolveVariantStyle('Badge', variantProps);
-  if (spec.tokenMappings) style = applyTokenMappings(style, spec.tokenMappings);
-
-  const comp = figma.createComponent();
-  comp.name = Object.entries(variantProps).map(([k, v]) => `${k}=${v}`).join(', ');
-  comp.fills = [];
-  comp.layoutMode = 'HORIZONTAL';
-  comp.primaryAxisSizingMode = 'AUTO';
-  comp.counterAxisSizingMode = 'AUTO';
-  comp.primaryAxisAlignItems = 'CENTER';
-  comp.counterAxisAlignItems = 'CENTER';
-
-  const bg = figma.createFrame();
-  bg.name = 'Background';
-  bg.layoutMode = 'HORIZONTAL';
-  bg.primaryAxisSizingMode = 'AUTO';
-  bg.counterAxisSizingMode = 'AUTO';
-  bg.primaryAxisAlignItems = 'CENTER';
-  bg.counterAxisAlignItems = 'CENTER';
-  applyPaddingToken(bg, 'paddingLeft',   'spacing/2-5', 10);
-  applyPaddingToken(bg, 'paddingRight',  'spacing/2-5', 10);
-  applyPaddingToken(bg, 'paddingTop',    'spacing/0-5', 2);
-  applyPaddingToken(bg, 'paddingBottom', 'spacing/0-5', 2);
-
-  applyFill(bg, style);
-  applyStroke(bg, style);
-  // Badge uses pill shape
-  bg.cornerRadius = 9999;
-
-  const label = makeText('Badge', {
-    fontSize: style.fontSize || 12,
-    fontStyle: 'Medium',
-    tokenSpec: style.textToken,
-    color: '#18181B',
-  });
-  bg.appendChild(label);
-  comp.appendChild(bg);
-  return comp;
 }
 
 // ─── Layer anatomy engine ─────────────────────────────────────────────────────
@@ -1325,82 +706,95 @@ async function buildFromLayers(
 
   comp.fills = [];
 
-  // If the first root layer defines layout, apply it to the component wrapper;
-  // otherwise fall back to HORIZONTAL auto-layout so children are visible.
-  const rootLayer = spec.layers?.[0];
-  const rootLayout = rootLayer?.layout?.toLowerCase();
-  comp.layoutMode = rootLayout === 'vertical' ? 'VERTICAL'
-                  : rootLayout === 'none'     ? 'NONE'
-                  : 'HORIZONTAL';
+  // The first layer in spec.layers is treated as the root/wrapper layer.
+  // Its layout, padding, fill, stroke, size, and cornerRadius are applied
+  // directly to the ComponentNode — its children become the component's children.
+  // Any additional top-level layers are appended as siblings.
+  const layers = spec.layers ?? [];
+  const [rootLayer, ...extraLayers] = layers;
 
-  if (comp.layoutMode !== 'NONE') {
-    comp.primaryAxisSizingMode = 'AUTO';
-    comp.counterAxisSizingMode = 'AUTO';
-    comp.primaryAxisAlignItems = 'CENTER';
-    comp.counterAxisAlignItems = 'CENTER';
-  }
+  if (rootLayer) {
+    // Apply layout
+    const layout = (rootLayer.layout || 'horizontal').toLowerCase();
+    comp.layoutMode = layout === 'vertical' ? 'VERTICAL'
+                    : layout === 'none'     ? 'NONE'
+                    : 'HORIZONTAL';
 
-  if (spec.layers) {
-    for (const layerSpec of spec.layers) {
-      const node = buildLayerNode(layerSpec, variantProps, spec.tokenMappings);
-      if (node) comp.appendChild(node);
+    if (comp.layoutMode !== 'NONE') {
+      // Sizing
+      comp.primaryAxisSizingMode = rootLayer.width  === undefined || rootLayer.width  === 'hug' ? 'AUTO' : 'FIXED';
+      comp.counterAxisSizingMode = rootLayer.height === undefined || rootLayer.height === 'hug' ? 'AUTO' : 'FIXED';
+
+      if (typeof rootLayer.width  === 'number') comp.resize(rootLayer.width, comp.height || 40);
+      if (typeof rootLayer.height === 'number') comp.resize(comp.width || 100, rootLayer.height);
+
+      // Alignment
+      const pa = rootLayer.primaryAlign || 'center';
+      comp.primaryAxisAlignItems = pa === 'min' ? 'MIN' : pa === 'max' ? 'MAX' : pa === 'space-between' ? 'SPACE_BETWEEN' : 'CENTER';
+      const ca = rootLayer.counterAlign || 'center';
+      comp.counterAxisAlignItems = ca === 'min' ? 'MIN' : ca === 'max' ? 'MAX' : 'CENTER';
+
+      // Padding
+      comp.paddingLeft   = rootLayer.paddingLeft   ?? rootLayer.paddingH ?? 0;
+      comp.paddingRight  = rootLayer.paddingRight  ?? rootLayer.paddingH ?? 0;
+      comp.paddingTop    = rootLayer.paddingTop    ?? rootLayer.paddingV ?? 0;
+      comp.paddingBottom = rootLayer.paddingBottom ?? rootLayer.paddingV ?? 0;
+      comp.itemSpacing   = rootLayer.itemSpacing ?? 0;
+    } else {
+      // NONE layout — absolute size
+      if (typeof rootLayer.width === 'number' && typeof rootLayer.height === 'number') {
+        comp.resize(rootLayer.width, rootLayer.height);
+      }
+    }
+
+    // Fill
+    if (rootLayer.fill) {
+      comp.fills = [resolveFillPaint(rootLayer.fill)];
+    }
+
+    // Stroke
+    if (rootLayer.stroke) {
+      const strokeVar = findVariable(rootLayer.stroke);
+      if (strokeVar && strokeVar.resolvedType === 'COLOR') {
+        comp.strokes = [boundColorPaint(strokeVar)];
+      } else {
+        comp.strokes = [solidPaint(rootLayer.stroke.startsWith('#') ? rootLayer.stroke : '#E4E4E7')];
+      }
+      comp.strokeWeight = rootLayer.strokeWeight ?? 1;
+      comp.strokeAlign = 'INSIDE';
+    }
+
+    // Corner radius
+    if (rootLayer.cornerRadius !== undefined) {
+      const radVar = typeof rootLayer.cornerRadius === 'number' ? null : findVariable(String(rootLayer.cornerRadius));
+      if (radVar) {
+        applyRadius(comp, radVar);
+      } else {
+        comp.cornerRadius = rootLayer.cornerRadius as number;
+      }
+    }
+
+    // Opacity
+    if (rootLayer.opacity !== undefined) comp.opacity = rootLayer.opacity;
+
+    // Clip
+    if (rootLayer.clip) comp.clipsContent = true;
+
+    // Root layer's children → component children
+    if (rootLayer.children) {
+      for (const childSpec of rootLayer.children) {
+        const node = buildLayerNode(childSpec, variantProps, spec.tokenMappings);
+        if (node) comp.appendChild(node);
+      }
     }
   }
 
-  return comp;
-}
+  // Any extra top-level layers are appended as additional children
+  for (const layerSpec of extraLayers) {
+    const node = buildLayerNode(layerSpec, variantProps, spec.tokenMappings);
+    if (node) comp.appendChild(node);
+  }
 
-// ─── Generic component builder (fallback) ────────────────────────────────────
-
-async function buildGenericComponent(spec: ComponentSpec, variantProps: Record<string, string>): Promise<ComponentNode> {
-  let style = resolveVariantStyle(spec.componentName, variantProps);
-  if (spec.tokenMappings) style = applyTokenMappings(style, spec.tokenMappings);
-
-  const w = spec.width || 120;
-
-  const comp = figma.createComponent();
-  comp.name = Object.keys(variantProps).length > 0
-    ? Object.entries(variantProps).map(([k, v]) => `${k}=${v}`).join(', ')
-    : spec.componentName;
-  if (spec.description) comp.description = spec.description;
-
-  comp.fills = [];
-  comp.layoutMode = 'HORIZONTAL';
-  comp.primaryAxisSizingMode = 'AUTO';
-  comp.counterAxisSizingMode = 'AUTO';
-  comp.primaryAxisAlignItems = 'CENTER';
-  comp.counterAxisAlignItems = 'CENTER';
-
-  const bg = figma.createFrame();
-  bg.name = 'Background';
-  bg.layoutMode = 'HORIZONTAL';
-  bg.primaryAxisSizingMode = 'FIXED';
-  bg.counterAxisSizingMode = 'AUTO';
-  bg.primaryAxisAlignItems = 'CENTER';
-  bg.counterAxisAlignItems = 'CENTER';
-  bg.resize(w, style.height || 40);
-  applyPaddingToken(bg, 'paddingLeft',   'spacing/4', 16);
-  applyPaddingToken(bg, 'paddingRight',  'spacing/4', 16);
-  applyPaddingToken(bg, 'paddingTop',    'spacing/2', 8);
-  applyPaddingToken(bg, 'paddingBottom', 'spacing/2', 8);
-  bg.itemSpacing   = 6;
-
-  applyFill(bg, style);
-  applyStroke(bg, style);
-  applyRadiusToken(bg, 'radius/md', 6);
-
-  const isDisabledState = normalizeVariantProp(variantProps['State'] || '') === 'Disabled';
-  if (isDisabledState) bg.opacity = 0.5;
-
-  const label = makeText(spec.componentName, {
-    fontSize: style.fontSize || 14,
-    fontStyle: style.fontStyle || 'Medium',
-    tokenSpec: style.textToken,
-    color: '#18181B',
-  });
-  label.layoutGrow = 0;
-  bg.appendChild(label);
-  comp.appendChild(bg);
   return comp;
 }
 
@@ -1408,16 +802,10 @@ async function buildComponentNode(
   spec: ComponentSpec,
   variantProps: Record<string, string>
 ): Promise<ComponentNode> {
-  await loadFonts();
-
-  switch (spec.componentName) {
-    case 'Button':   return buildButton(spec, variantProps);
-    case 'Input':    return buildInput(spec, variantProps);
-    case 'Checkbox': return buildCheckbox(spec, variantProps);
-    case 'Badge':    return buildBadge(spec, variantProps);
-    default:
-      return spec.layers ? buildFromLayers(spec, variantProps) : buildGenericComponent(spec, variantProps);
-  }
+  await figma.loadFontAsync({ family: 'Inter', style: 'Regular' });
+  await figma.loadFontAsync({ family: 'Inter', style: 'Medium' });
+  await figma.loadFontAsync({ family: 'Inter', style: 'Semi Bold' });
+  return buildFromLayers(spec, variantProps);
 }
 
 async function executeCreateComponent(spec: ComponentSpec): Promise<{ success: boolean; message: string }> {

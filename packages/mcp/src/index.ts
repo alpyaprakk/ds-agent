@@ -83,10 +83,9 @@ server.tool(
   [
     'Create a Figma component set with multiple variants on a specific page.',
     '',
-    'CRITICAL RULE: You MUST provide the `layers` parameter for every component EXCEPT Button, Input, Checkbox, Badge.',
-    'Without `layers`, non-built-in components render as blank rectangles with no internal structure.',
-    'Built-in builders (no layers needed): Button, Input, Checkbox, Badge.',
-    'REQUIRES `layers`: Avatar, Card, Toast, Tag, Switch, Tooltip, Drawer, ListItem, Modal, NavItem, TableRow, Screen, and ALL others.',
+    'CRITICAL RULE: You MUST always provide the `layers` parameter for every component.',
+    'Without `layers`, components render as blank rectangles with no internal structure.',
+    'REQUIRES `layers`: Button, Input, Checkbox, Badge, Avatar, Card, Toast, Tag, Switch, Tooltip, Drawer, ListItem, Modal, NavItem, TableRow, Screen, and ALL others.',
     '',
     'MANDATORY WORKFLOW:',
     '  1. ALWAYS call get_design_system FIRST — you need tokensByRole and layerAnatomyExamples.',
