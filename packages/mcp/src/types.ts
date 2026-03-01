@@ -56,8 +56,8 @@ export const VariantSpecSchema = z.object({
 // Recursive LayerSpec schema — describes the internal anatomy of any component.
 // AI can use this to create Toast, Avatar, Tag, Switch, Tooltip, List Item, etc.
 const LayerSpecSchemaBase = z.object({
-  type: z.enum(['frame', 'text', 'rectangle', 'ellipse', 'divider', 'icon']).describe(
-    'Node type: frame=container, text=text node, rectangle/ellipse=shape, divider=1px horizontal line, icon=icon placeholder'
+  type: z.enum(['frame', 'text', 'rectangle', 'ellipse', 'divider', 'icon', 'componentRef']).describe(
+    'Node type: frame=container, text=text node, rectangle/ellipse=shape, divider=1px line, icon=icon placeholder, componentRef=embed existing Figma component instance'
   ),
   name: z.string().describe('Layer name in Figma'),
   layout: z.enum(['horizontal', 'vertical', 'none']).optional().describe('Auto layout direction (frames only)'),
@@ -84,7 +84,23 @@ const LayerSpecSchemaBase = z.object({
   textAlign: z.enum(['left', 'center', 'right']).optional(),
   clip: z.boolean().optional().describe('Clip children to bounds'),
   variantText: z.record(z.string(), z.string()).optional().describe(
-    'Per-variant text overrides, key is "PropName=Value" e.g. { "State=Error": "Error message" }'
+    'Per-variant text overrides. Key format: "PropName=Value" e.g. { "State=Error": "Error message" }. ' +
+    'Applies to the current layer\'s text content when the variant matches.'
+  ),
+  variantCondition: z.record(z.string(), z.boolean()).optional().describe(
+    'Per-variant visibility control. Key format: "PropName=Value", value is true (show) or false (hide). ' +
+    'Example: { "State=Error": true, "State=Default": false } — shows this layer only on Error state. ' +
+    'If no key matches the current variant, the layer is always shown.'
+  ),
+  componentRef: z.object({
+    componentName: z.string().describe('Exact name of the Figma ComponentSet to embed e.g. "Button", "Input"'),
+    variantProps: z.record(z.string(), z.string()).optional().describe(
+      'Variant property values to select the right variant e.g. { "Type": "Primary", "Size": "Medium", "State": "Default" }'
+    ),
+  }).optional().describe(
+    'Embed an existing Figma component as a real instance. type must be "componentRef". ' +
+    'The plugin finds the named ComponentSet and creates an instance of the best matching variant. ' +
+    'If the component does not exist yet, a placeholder frame is used.'
   ),
 });
 

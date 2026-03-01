@@ -516,7 +516,7 @@ interface TokenBinding {
 // Plugin walks this tree and creates matching Figma nodes.
 
 interface LayerSpec {
-  type: 'frame' | 'text' | 'rectangle' | 'ellipse' | 'divider' | 'icon';
+  type: 'frame' | 'text' | 'rectangle' | 'ellipse' | 'divider' | 'icon' | 'componentRef';
   name: string;
   // Layout
   layout?: 'horizontal' | 'vertical' | 'none';
@@ -549,9 +549,19 @@ interface LayerSpec {
   clip?: boolean;
   // Nesting
   children?: LayerSpec[];
-  // Per-variant text override key — variant prop value that changes this layer's text
+  // Per-variant text override — key is "PropName=Value", value is replacement text
   // e.g. variantText: { "State=Error": "Error message" }
   variantText?: Record<string, string>;
+  // Per-variant visibility — key is "PropName=Value", value is whether this layer is visible
+  // e.g. variantCondition: { "State=Error": true, "State=Default": false }
+  // If NO key in the map matches the current variant, the layer is always shown.
+  variantCondition?: Record<string, boolean>;
+  // Component instance embedding — inserts a real Figma component instance
+  // type must be 'componentRef' to use this
+  componentRef?: {
+    componentName: string;                   // Exact Figma ComponentSet name e.g. "Button"
+    variantProps?: Record<string, string>;   // e.g. { "Type": "Primary", "Size": "Medium" }
+  };
 }
 
 interface ComponentSpec {
@@ -1027,7 +1037,27 @@ function buildLayerNode(
   layerSpec: LayerSpec,
   variantProps: Record<string, string>,
   tokenMappings?: Record<string, string>
-): SceneNode {
+): SceneNode | null {
+  // ── variantCondition: decide visibility before creating anything ──────────
+  if (layerSpec.variantCondition) {
+    const conditions = layerSpec.variantCondition;
+    // Check if any key matches current variant props
+    let matched = false;
+    let visible = true;
+    for (const [condKey, condValue] of Object.entries(conditions)) {
+      // condKey format: "PropName=Value"
+      const [propName, propValue] = condKey.split('=');
+      if (variantProps[propName] === propValue) {
+        matched = true;
+        visible = condValue;
+        break;
+      }
+    }
+    // If a key matched and visibility is false, skip this node entirely
+    if (matched && !visible) return null;
+    // If no key matched, the layer is always shown (default visible)
+  }
+
   const variantKey = Object.entries(variantProps).map(([k, v]) => `${k}=${v}`).join(',');
 
   switch (layerSpec.type) {
@@ -1090,7 +1120,7 @@ function buildLayerNode(
       d.name = layerSpec.name || 'Divider';
       const dw = typeof layerSpec.width === 'number' ? layerSpec.width : 200;
       d.resize(dw, layerSpec.height as number || 1);
-      d.fills = [solidPaint(layerSpec.fill || '#E4E4E7')];
+      d.fills = [layerSpec.fill ? resolveFillPaint(layerSpec.fill) : solidPaint('#E4E4E7')];
       d.layoutGrow = 1;
       d.layoutSizingHorizontal = 'FILL';
       return d;
@@ -1103,11 +1133,81 @@ function buildLayerNode(
       const iconSz = typeof layerSpec.width === 'number' ? layerSpec.width : 16;
       iconFrame.resize(iconSz, typeof layerSpec.height === 'number' ? layerSpec.height : iconSz);
       iconFrame.layoutMode = 'NONE';
-      iconFrame.fills = [solidPaint(layerSpec.fill || '#71717A')];
+      iconFrame.fills = [layerSpec.fill ? resolveFillPaint(layerSpec.fill) : solidPaint('#71717A')];
       if (layerSpec.cornerRadius) iconFrame.cornerRadius = layerSpec.cornerRadius;
       else iconFrame.cornerRadius = 2;
       if (layerSpec.opacity !== undefined) iconFrame.opacity = layerSpec.opacity;
       return iconFrame;
+    }
+
+    case 'componentRef': {
+      // Find an existing ComponentSet by name, pick the best matching variant, create an instance
+      const ref = layerSpec.componentRef;
+      if (!ref) return null;
+
+      const allSets = figma.root.findAll(
+        n => n.type === 'COMPONENT_SET' && n.name === ref.componentName
+      ) as ComponentSetNode[];
+
+      if (allSets.length === 0) {
+        // Component not yet created — create a placeholder frame
+        const placeholder = figma.createFrame();
+        placeholder.name = `[ref: ${ref.componentName}]`;
+        placeholder.resize(100, 36);
+        placeholder.fills = [solidPaint('#F4F4F5')];
+        placeholder.cornerRadius = 4;
+        return placeholder;
+      }
+
+      const compSet = allSets[0];
+      let targetComp: ComponentNode | null = null;
+
+      if (ref.variantProps && Object.keys(ref.variantProps).length > 0) {
+        // Find the variant whose properties are a superset of the requested variantProps
+        const candidates = compSet.children as ComponentNode[];
+        let bestScore = -1;
+
+        for (const candidate of candidates) {
+          const props = candidate.variantProperties || {};
+          let score = 0;
+          let mismatch = false;
+          for (const [k, v] of Object.entries(ref.variantProps)) {
+            if (props[k] === v) {
+              score++;
+            } else if (props[k] !== undefined) {
+              // Key exists but value differs — penalise
+              mismatch = true;
+              break;
+            }
+          }
+          if (!mismatch && score > bestScore) {
+            bestScore = score;
+            targetComp = candidate;
+          }
+        }
+      }
+
+      // Fallback: first child
+      if (!targetComp) targetComp = compSet.children[0] as ComponentNode;
+
+      const instance = targetComp.createInstance();
+      instance.name = layerSpec.name;
+
+      // Apply sizing if specified
+      if (typeof layerSpec.width === 'number' || typeof layerSpec.height === 'number') {
+        const iw = typeof layerSpec.width === 'number' ? layerSpec.width : instance.width;
+        const ih = typeof layerSpec.height === 'number' ? layerSpec.height : instance.height;
+        instance.resize(iw, ih);
+      }
+      if (layerSpec.width === 'fill') {
+        instance.layoutSizingHorizontal = 'FILL';
+      }
+      if (layerSpec.height === 'fill') {
+        instance.layoutSizingVertical = 'FILL';
+      }
+      if (layerSpec.opacity !== undefined) instance.opacity = layerSpec.opacity;
+
+      return instance;
     }
 
     case 'frame':
@@ -1204,7 +1304,7 @@ function buildLayerNode(
       if (layerSpec.children) {
         for (const childSpec of layerSpec.children) {
           const child = buildLayerNode(childSpec, variantProps, tokenMappings);
-          f.appendChild(child);
+          if (child) f.appendChild(child);
         }
       }
 
@@ -1224,16 +1324,26 @@ async function buildFromLayers(
   if (spec.description) comp.description = spec.description;
 
   comp.fills = [];
-  comp.layoutMode = 'HORIZONTAL';
-  comp.primaryAxisSizingMode = 'AUTO';
-  comp.counterAxisSizingMode = 'AUTO';
-  comp.primaryAxisAlignItems = 'CENTER';
-  comp.counterAxisAlignItems = 'CENTER';
+
+  // If the first root layer defines layout, apply it to the component wrapper;
+  // otherwise fall back to HORIZONTAL auto-layout so children are visible.
+  const rootLayer = spec.layers?.[0];
+  const rootLayout = rootLayer?.layout?.toLowerCase();
+  comp.layoutMode = rootLayout === 'vertical' ? 'VERTICAL'
+                  : rootLayout === 'none'     ? 'NONE'
+                  : 'HORIZONTAL';
+
+  if (comp.layoutMode !== 'NONE') {
+    comp.primaryAxisSizingMode = 'AUTO';
+    comp.counterAxisSizingMode = 'AUTO';
+    comp.primaryAxisAlignItems = 'CENTER';
+    comp.counterAxisAlignItems = 'CENTER';
+  }
 
   if (spec.layers) {
     for (const layerSpec of spec.layers) {
       const node = buildLayerNode(layerSpec, variantProps, spec.tokenMappings);
-      comp.appendChild(node);
+      if (node) comp.appendChild(node);
     }
   }
 
@@ -1346,13 +1456,32 @@ async function executeCreateComponent(spec: ComponentSpec): Promise<{ success: b
       const props = spec.properties || [];
       const colProp = props[props.length - 1];
       const numCols = colProp?.values?.length || 1;
+      const numRows = Math.ceil(components.length / numCols);
+
+      // Compute per-column max width and per-row max height for aligned grid
+      const colWidths = Array.from({ length: numCols }, (_, col) =>
+        Math.max(...components.filter((_, i) => i % numCols === col).map(c => c.width))
+      );
+      const rowHeights = Array.from({ length: numRows }, (_, row) =>
+        Math.max(...components.filter((_, i) => Math.floor(i / numCols) === row).map(c => c.height))
+      );
+
+      // Compute column X offsets from cumulative widths
+      const colX = colWidths.reduce<number[]>((acc, _w, i) => {
+        acc.push(i === 0 ? PAD : acc[i - 1] + colWidths[i - 1] + GAP_X);
+        return acc;
+      }, []);
+      const rowY = rowHeights.reduce<number[]>((acc, _h, i) => {
+        acc.push(i === 0 ? PAD : acc[i - 1] + rowHeights[i - 1] + GAP_Y);
+        return acc;
+      }, []);
 
       // Position every variant inside the set with padding offset
       components.forEach((comp, i) => {
         const col = i % numCols;
         const row = Math.floor(i / numCols);
-        comp.x = PAD + col * (comp.width + GAP_X);
-        comp.y = PAD + row * (comp.height + GAP_Y);
+        comp.x = colX[col];
+        comp.y = rowY[row];
       });
 
       // Resize the set to exactly hug all variants + padding

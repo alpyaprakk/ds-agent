@@ -50,7 +50,15 @@ server.tool(
 // ── get_design_system ──────────────────────────────────────────────────────────
 server.tool(
   'get_design_system',
-  'Retrieve the current design system state: all variables (tokens), collections, and components from a workspace. Always call this before creating components so you can supply correct tokenMappings.',
+  [
+    'Retrieve the current design system state: all variables (tokens), collections, and components from a workspace.',
+    'ALWAYS call this before create_component so you can:',
+    '  1. Use exact token names from tokensByRole (e.g. "color/bg/default", "color/text/primary") in layers fill/stroke/textColor fields.',
+    '  2. Supply correct tokenMappings mapping component-scoped token names to workspace variable names.',
+    '  3. Reference layerAnatomyExamples for correct layer JSON structure — these examples are pre-populated with real token names from this workspace.',
+    '  4. See which components already exist (components list) before creating new ones.',
+    'The tokensByRole map groups color tokens by semantic role — use it to pick the right token for each visual property.',
+  ].join(' '),
   GetDesignSystemInputSchema.shape,
   async (input) => {
     const result = await getDesignSystem(input);
@@ -72,7 +80,25 @@ server.tool(
 // ── create_component ───────────────────────────────────────────────────────────
 server.tool(
   'create_component',
-  'Create a Figma component set with multiple variants on a specific page. Supported components with built-in shadcn-accurate styling: Button, Input, Checkbox. For others a generic builder is used. Always call get_design_system first and supply tokenMappings mapping component token names to existing variable names.',
+  [
+    'Create a Figma component set with multiple variants on a specific page.',
+    'Built-in shadcn-accurate builders: Button, Input, Checkbox, Badge.',
+    'For ALL other components (Toast, Avatar, Tag, Switch, Tooltip, Drawer, ListItem, Modal, etc.) use the `layers` parameter to describe the full internal anatomy.',
+    '',
+    'WORKFLOW:',
+    '  1. Call get_design_system first — read tokensByRole and layerAnatomyExamples.',
+    '  2. Use EXACT token names from the workspace variables in layers fill/stroke/textColor.',
+    '  3. Use variantCondition on layers to show/hide parts per variant (e.g. error icon only on Error state).',
+    '  4. Use componentRef layers to embed existing Figma components (e.g. Button inside a Drawer footer).',
+    '',
+    'LAYERS RULES:',
+    '  - fill/stroke/textColor: use exact token name from variables OR hex string.',
+    '  - layout "horizontal"/"vertical" enables auto-layout; "none" = absolute positioning.',
+    '  - width/height: number=fixed px, "fill"=stretch in parent, "hug"=wrap content.',
+    '  - variantCondition: { "PropName=Value": true/false } — controls layer visibility per variant.',
+    '  - componentRef: { componentName: "Button", variantProps: { "Type": "Primary" } } — inserts a real component instance.',
+    '  - Always set counterAlign and primaryAlign on frames to control child alignment.',
+  ].join('\n'),
   CreateComponentInputSchema.shape,
   async (input) => {
     const result = await createComponent(input);
