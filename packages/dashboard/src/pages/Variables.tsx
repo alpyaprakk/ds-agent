@@ -1,6 +1,7 @@
-import { useEffect, useState, useMemo } from 'react';
+import { useEffect, useState, useMemo, useCallback } from 'react';
 import { useWorkspaceStore } from '../store/workspace-store';
 import { apiClient, VariableCollection, DesignVariable } from '../lib/api-client';
+import { wsClient } from '../lib/websocket';
 import { HugeiconsIcon } from '@hugeicons/react';
 import {
   ArrowRight01Icon,
@@ -206,13 +207,7 @@ export function Variables() {
   const [loading, setLoading] = useState(false);
   const [selectedGroup, setSelectedGroup] = useState<string | null>(null);
 
-  useEffect(() => {
-    if (currentWorkspace) {
-      loadData();
-    }
-  }, [currentWorkspace]);
-
-  const loadData = async () => {
+  const loadData = useCallback(async () => {
     if (!currentWorkspace) return;
     setLoading(true);
     try {
@@ -228,7 +223,29 @@ export function Variables() {
     } finally {
       setLoading(false);
     }
-  };
+  }, [currentWorkspace]);
+
+  useEffect(() => {
+    if (currentWorkspace) {
+      loadData();
+    }
+  }, [currentWorkspace, loadData]);
+
+  // Auto-refresh when Figma plugin completes a sync
+  useEffect(() => {
+    if (!currentWorkspace) return;
+
+    const handleFigmaSynced = (data: any) => {
+      if (!data.workspaceId || data.workspaceId === currentWorkspace.id) {
+        loadData();
+      }
+    };
+
+    wsClient.on('figma_synced', handleFigmaSynced);
+    return () => {
+      wsClient.off('figma_synced', handleFigmaSynced);
+    };
+  }, [currentWorkspace, loadData]);
 
   const handleCollectionSelect = async (figmaId: string | null) => {
     setSelectedCollectionId(figmaId);

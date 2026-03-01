@@ -1,6 +1,7 @@
-import { useEffect, useState, useMemo } from 'react';
+import { useEffect, useState, useMemo, useCallback } from 'react';
 import { useWorkspaceStore } from '../store/workspace-store';
 import { apiClient, DesignComponent } from '../lib/api-client';
+import { wsClient } from '../lib/websocket';
 import { HugeiconsIcon } from '@hugeicons/react';
 import {
   ArrowRight01Icon,
@@ -68,13 +69,7 @@ export function Components() {
   const [selectedComponent, setSelectedComponent] = useState<DesignComponent | null>(null);
   const [expandedGroups, setExpandedGroups] = useState<Set<string>>(new Set());
 
-  useEffect(() => {
-    if (currentWorkspace) {
-      loadComponents();
-    }
-  }, [currentWorkspace]);
-
-  const loadComponents = async () => {
+  const loadComponents = useCallback(async () => {
     if (!currentWorkspace) return;
     setLoading(true);
     try {
@@ -85,7 +80,29 @@ export function Components() {
     } finally {
       setLoading(false);
     }
-  };
+  }, [currentWorkspace]);
+
+  useEffect(() => {
+    if (currentWorkspace) {
+      loadComponents();
+    }
+  }, [currentWorkspace, loadComponents]);
+
+  // Auto-refresh when Figma plugin completes a sync
+  useEffect(() => {
+    if (!currentWorkspace) return;
+
+    const handleFigmaSynced = (data: any) => {
+      if (!data.workspaceId || data.workspaceId === currentWorkspace.id) {
+        loadComponents();
+      }
+    };
+
+    wsClient.on('figma_synced', handleFigmaSynced);
+    return () => {
+      wsClient.off('figma_synced', handleFigmaSynced);
+    };
+  }, [currentWorkspace, loadComponents]);
 
   // Filter by search
   const filteredComponents = useMemo(() => {
