@@ -75,7 +75,9 @@ const LayerSpecSchemaBase = z.object({
   fill: z.string().optional().describe('Fill color — hex (#ffffff) or token name (e.g. "color/surface/default")'),
   stroke: z.string().optional().describe('Stroke color — hex or token name'),
   strokeWeight: z.number().optional(),
-  cornerRadius: z.number().optional(),
+  cornerRadius: z.union([z.number(), z.string()]).optional().describe(
+    'Corner radius — number for fixed px (e.g. 8), or token name for variable-bound radius (e.g. "radius/md"). Use 9999 for pill shapes.'
+  ),
   opacity: z.number().min(0).max(1).optional(),
   text: z.string().optional().describe('Text content (text nodes only)'),
   fontSize: z.number().optional(),
@@ -125,11 +127,14 @@ export const CreateComponentInputSchema = z.object({
   tokenMappings: z.record(z.string(), z.string()).optional().describe(
     'Component token → existing variable, e.g. { "button-primary-bg": "color/brand/primary" }'
   ),
-  layers: z.array(LayerSpecSchema).optional().describe(
-    'Layer anatomy — describes the full internal structure of the component. ' +
-    'When provided, the plugin builds the component from this layer tree instead of using built-in templates. ' +
-    'Use this for any component type: Toast, Avatar, Tag, Switch, Tooltip, List Item, Dropdown, Card, etc. ' +
-    'Fill/stroke/textColor accept hex (#ffffff) or token names (color/surface/default).'
+  layers: z.array(LayerSpecSchema).describe(
+    '⚠️ REQUIRED — always provide this. ' +
+    'Layer anatomy describing the full internal structure of the component. ' +
+    'Without this, components render as blank rectangles. ' +
+    'The first element is the root/wrapper layer; its children become the component children. ' +
+    'Fill/stroke/textColor/cornerRadius accept hex (#ffffff) or token names (color/surface/default). ' +
+    'Use variantCondition to show/hide layers per variant state. ' +
+    'Use componentRef to embed existing Figma components as real instances.'
   ),
 });
 
