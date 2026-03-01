@@ -132,6 +132,7 @@ function AppContent() {
       });
       const store = useWorkspaceStore.getState();
       store.fetchWorkspaces();
+      store.bumpLastSyncAt();
       if (store.currentWorkspace) {
         store.fetchFigmaFiles(store.currentWorkspace.id);
         store.fetchConflicts(store.currentWorkspace.id, 'active');

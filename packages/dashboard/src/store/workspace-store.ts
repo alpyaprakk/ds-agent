@@ -12,9 +12,11 @@ interface WorkspaceStore {
   myInvitations: WorkspaceInvitation[];
   loading: boolean;
   error: string | null;
+  lastSyncAt: number | null; // epoch ms — bumped after every figma_synced event
 
   // Actions
   fetchWorkspaces: () => Promise<void>;
+  bumpLastSyncAt: () => void;
   setCurrentWorkspace: (workspace: Workspace | null) => void;
   createWorkspace: (data: Partial<Workspace>) => Promise<Workspace>;
   updateWorkspace: (id: string, data: Partial<Workspace>) => Promise<void>;
@@ -52,6 +54,9 @@ export const useWorkspaceStore = create<WorkspaceStore>((set, get) => ({
   myInvitations: [],
   loading: false,
   error: null,
+  lastSyncAt: null,
+
+  bumpLastSyncAt: () => set({ lastSyncAt: Date.now() }),
 
   fetchWorkspaces: async () => {
     set({ loading: true, error: null });
@@ -86,11 +91,11 @@ export const useWorkspaceStore = create<WorkspaceStore>((set, get) => ({
     set({ loading: true, error: null });
     try {
       const { workspace } = await apiClient.createWorkspace(data);
-      set((state) => ({
-        workspaces: [...state.workspaces, workspace],
-        loading: false,
-      }));
-      return workspace;
+      // Re-fetch workspaces so the returned workspace includes member_role and other server-populated fields
+      const { workspaces } = await apiClient.getWorkspaces();
+      const enrichedWorkspace = workspaces.find((w) => w.id === workspace.id) ?? workspace;
+      set({ workspaces, loading: false });
+      return enrichedWorkspace;
     } catch (error) {
       set({
         error: error instanceof Error ? error.message : 'Failed to create workspace',
