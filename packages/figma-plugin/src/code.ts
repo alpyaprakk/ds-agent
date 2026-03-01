@@ -108,74 +108,6 @@ function findVariable(nameOrPath: string): Variable | null {
   return byParts || null;
 }
 
-// ─── Value-based color matching ──────────────────────────────────────────────
-
-function hexToRgbRaw(hex: string): { r: number; g: number; b: number } | null {
-  const h = hex.replace('#', '');
-  if (h.length !== 6) return null;
-  return {
-    r: parseInt(h.slice(0, 2), 16),
-    g: parseInt(h.slice(2, 4), 16),
-    b: parseInt(h.slice(4, 6), 16),
-  };
-}
-
-function colorDistance(a: { r: number; g: number; b: number }, b: RGB): number {
-  // b is Figma RGB (0-1), a is raw (0-255)
-  const dr = a.r / 255 - b.r;
-  const dg = a.g / 255 - b.g;
-  const db = a.b / 255 - b.b;
-  return Math.sqrt(dr * dr + dg * dg + db * db);
-}
-
-/** Find the closest existing COLOR variable to a given hex. Returns null if nothing is close enough. */
-function findClosestColorVariable(hex: string, threshold = 0.08): Variable | null {
-  const target = hexToRgbRaw(hex);
-  if (!target) return null;
-
-  const colorVars = figma.variables.getLocalVariables().filter(v => v.resolvedType === 'COLOR');
-  if (colorVars.length === 0) return null;
-
-  let best: Variable | null = null;
-  let bestDist = Infinity;
-
-  for (const v of colorVars) {
-    const collection = figma.variables.getVariableCollectionById(v.variableCollectionId);
-    if (!collection) continue;
-    const val = v.valuesByMode[collection.defaultModeId];
-    if (!val || typeof val !== 'object' || !('r' in val)) continue;
-    const dist = colorDistance(target, val as RGB);
-    if (dist < bestDist) {
-      bestDist = dist;
-      best = v;
-    }
-  }
-
-  return bestDist <= threshold ? best : null;
-}
-
-/** Find the closest existing FLOAT variable to a given number. Returns null if nothing is close enough. */
-function findClosestFloatVariable(value: number, threshold = 2): Variable | null {
-  const floatVars = figma.variables.getLocalVariables().filter(v => v.resolvedType === 'FLOAT');
-  if (floatVars.length === 0) return null;
-
-  let best: Variable | null = null;
-  let bestDist = Infinity;
-
-  for (const v of floatVars) {
-    const collection = figma.variables.getVariableCollectionById(v.variableCollectionId);
-    if (!collection) continue;
-    const val = v.valuesByMode[collection.defaultModeId];
-    if (typeof val !== 'number') continue;
-    const dist = Math.abs(val - value);
-    if (dist < bestDist) {
-      bestDist = dist;
-      best = v;
-    }
-  }
-
-  return bestDist <= threshold ? best : null;
-}
 
 function inferCollectionForVariable(name: string): string {
   const lower = name.toLowerCase();
@@ -271,20 +203,13 @@ function boundColorPaint(variable: Variable): SolidPaint {
   return figma.variables.setBoundVariableForPaint(base, 'color', variable) as SolidPaint;
 }
 
-function applyRadius(node: FrameNode | ComponentNode, variable: Variable) {
+function applyRadius(node: FrameNode | ComponentNode | RectangleNode, variable: Variable) {
   node.setBoundVariable('topLeftRadius', variable);
   node.setBoundVariable('topRightRadius', variable);
   node.setBoundVariable('bottomLeftRadius', variable);
   node.setBoundVariable('bottomRightRadius', variable);
 }
 
-
-// ─── AI Execute Commands ──────────────────────────────────────────────────────
-
-interface TokenBinding {
-  property: 'fill' | 'stroke' | 'cornerRadius' | 'paddingTop' | 'paddingRight' | 'paddingBottom' | 'paddingLeft' | 'itemSpacing' | 'width' | 'height';
-  token: TokenSpec;
-}
 
 // ─── Layer anatomy spec ───────────────────────────────────────────────────────
 // AI can describe any component's internal structure via a layer tree.
@@ -312,7 +237,7 @@ interface LayerSpec {
   fill?: string;
   stroke?: string;
   strokeWeight?: number;
-  cornerRadius?: number;
+  cornerRadius?: number | string;  // number for raw px, string for token name (e.g. "radius/md")
   opacity?: number;
   // Text specific
   text?: string;
@@ -343,23 +268,16 @@ interface ComponentSpec {
   pageName: string;
   componentName: string;
   description?: string;
-  width?: number;
-  height?: number;
   variants?: Array<{ properties: Record<string, string> }>;
   properties?: Array<{ name: string; type: 'VARIANT' | 'BOOLEAN' | 'TEXT' | 'INSTANCE_SWAP'; values?: string[] }>;
-  fills?: Array<{ variableName?: string; hex?: string }>;
-  cornerRadius?: number | string;
-  padding?: { top: number; right: number; bottom: number; left: number };
-  layoutMode?: 'HORIZONTAL' | 'VERTICAL' | 'NONE';
-  itemSpacing?: number;
-  tokenBindings?: TokenBinding[];
-  /** AI-supplied mapping: component token name → existing variable name to alias to.
-   *  e.g. { "button-primary-bg": "color/brand/primary" }
-   *  Overrides the plugin's built-in aliasFor lists for matched token names. */
+  /** AI-supplied mapping: component token name → existing variable name.
+   *  e.g. { "btn-bg": "color/brand/primary" }
+   *  During layer building, fill/stroke/textColor/cornerRadius values matching a key
+   *  are resolved via the mapped variable name instead of a direct lookup. */
   tokenMappings?: Record<string, string>;
   /** Layer anatomy — AI describes the full internal structure of the component.
-   *  When present, buildFromLayers() is used instead of the generic fallback.
-   *  Supports any component: Toast, Avatar, Tag, Switch, Tooltip, List Item, etc. */
+   *  Root layer (layers[0]) properties are applied to the ComponentNode directly.
+   *  Use fill/stroke/textColor/cornerRadius with either a hex (#fff) or token name. */
   layers?: LayerSpec[];
 }
 
@@ -369,49 +287,33 @@ interface ComponentSpec {
 // Fill/stroke/textColor accept either a hex string (#fff) or a token name
 // (e.g. color/brand/primary) — token takes priority if found in local variables.
 
-function resolveFillPaint(value: string): Paint {
-  // Try to find a matching variable first
-  const variable = findVariable(value);
-  if (variable && variable.resolvedType === 'COLOR') {
-    return boundColorPaint(variable);
+function resolveColorValue(value: string, tokenMappings?: Record<string, string>): Variable | null {
+  // tokenMappings override: if AI mapped this token name to an existing variable, use that
+  if (tokenMappings && tokenMappings[value]) {
+    const mapped = findVariable(tokenMappings[value]);
+    if (mapped && mapped.resolvedType === 'COLOR') return mapped;
   }
+  const variable = findVariable(value);
+  if (variable && variable.resolvedType === 'COLOR') return variable;
+  return null;
+}
+
+function resolveFloatVariable(value: string, tokenMappings?: Record<string, string>): Variable | null {
+  if (tokenMappings && tokenMappings[value]) {
+    const mapped = findVariable(tokenMappings[value]);
+    if (mapped && mapped.resolvedType === 'FLOAT') return mapped;
+  }
+  const variable = findVariable(value);
+  if (variable && variable.resolvedType === 'FLOAT') return variable;
+  return null;
+}
+
+function resolveFillPaint(value: string, tokenMappings?: Record<string, string>): Paint {
+  const variable = resolveColorValue(value, tokenMappings);
+  if (variable) return boundColorPaint(variable);
   // Fallback to treating as hex
   const hex = value.startsWith('#') ? value : `#${value}`;
   return solidPaint(hex.length >= 7 ? hex : '#888888');
-}
-
-function applyLayerSizing(
-  node: FrameNode | RectangleNode,
-  spec: LayerSpec,
-  parent?: FrameNode | ComponentNode
-) {
-  if (node.type !== 'FRAME' && node.type !== 'RECTANGLE') return;
-
-  const w = spec.width;
-  const h = spec.height;
-
-  // Width
-  if (w === 'fill') {
-    node.layoutGrow = 1;
-    node.layoutSizingHorizontal = 'FILL';
-  } else if (w === 'hug') {
-    (node as FrameNode).primaryAxisSizingMode = 'AUTO';
-    node.layoutSizingHorizontal = 'HUG';
-  } else if (typeof w === 'number') {
-    node.resize(w, node.height || 40);
-    node.layoutSizingHorizontal = 'FIXED';
-  }
-
-  // Height
-  if (h === 'fill') {
-    node.layoutSizingVertical = 'FILL';
-  } else if (h === 'hug') {
-    (node as FrameNode).counterAxisSizingMode = 'AUTO';
-    node.layoutSizingVertical = 'HUG';
-  } else if (typeof h === 'number') {
-    node.resize(node.width || 100, h);
-    node.layoutSizingVertical = 'FIXED';
-  }
 }
 
 function buildLayerNode(
@@ -439,8 +341,6 @@ function buildLayerNode(
     // If no key matched, the layer is always shown (default visible)
   }
 
-  const variantKey = Object.entries(variantProps).map(([k, v]) => `${k}=${v}`).join(',');
-
   switch (layerSpec.type) {
     case 'text': {
       const t = figma.createText();
@@ -452,8 +352,15 @@ function buildLayerNode(
       t.fontName = { family: 'Inter', style };
       t.fontSize = layerSpec.fontSize || 14;
 
-      // Check per-variant text override
-      const overrideText = layerSpec.variantText?.[variantKey];
+      // Per-variant text override — each key is "PropName=Value", checked individually
+      // so { "State=Error": "Error!" } works regardless of how many variant props exist
+      let overrideText: string | undefined;
+      if (layerSpec.variantText) {
+        for (const [condKey, text] of Object.entries(layerSpec.variantText)) {
+          const [propName, propValue] = condKey.split('=');
+          if (variantProps[propName] === propValue) { overrideText = text; break; }
+        }
+      }
       t.characters = overrideText || layerSpec.text || layerSpec.name;
       t.textAutoResize = 'WIDTH_AND_HEIGHT';
 
@@ -461,8 +368,8 @@ function buildLayerNode(
       else if (layerSpec.textAlign === 'right') t.textAlignHorizontal = 'RIGHT';
 
       const textColor = layerSpec.textColor || '#18181B';
-      const textVar = findVariable(textColor);
-      if (textVar && textVar.resolvedType === 'COLOR') {
+      const textVar = resolveColorValue(textColor, tokenMappings);
+      if (textVar) {
         t.fills = [boundColorPaint(textVar)];
       } else {
         t.fills = [solidPaint(textColor.startsWith('#') ? textColor : '#18181B')];
@@ -480,8 +387,12 @@ function buildLayerNode(
       } else {
         r.resize(layerSpec.width as number || 100, layerSpec.height as number || 40);
       }
-      if (layerSpec.fill) r.fills = [resolveFillPaint(layerSpec.fill)];
-      if (layerSpec.cornerRadius) r.cornerRadius = layerSpec.cornerRadius;
+      if (layerSpec.fill) r.fills = [resolveFillPaint(layerSpec.fill, tokenMappings)];
+      if (layerSpec.cornerRadius !== undefined) {
+        const radVar = typeof layerSpec.cornerRadius === 'number' ? null : resolveFloatVariable(String(layerSpec.cornerRadius), tokenMappings);
+        if (radVar) applyRadius(r, radVar);
+        else r.cornerRadius = typeof layerSpec.cornerRadius === 'number' ? layerSpec.cornerRadius : 0;
+      }
       if (layerSpec.opacity !== undefined) r.opacity = layerSpec.opacity;
       return r;
     }
@@ -491,7 +402,7 @@ function buildLayerNode(
       e.name = layerSpec.name;
       const sz = typeof layerSpec.width === 'number' ? layerSpec.width : 40;
       e.resize(sz, typeof layerSpec.height === 'number' ? layerSpec.height : sz);
-      if (layerSpec.fill) e.fills = [resolveFillPaint(layerSpec.fill)];
+      if (layerSpec.fill) e.fills = [resolveFillPaint(layerSpec.fill, tokenMappings)];
       if (layerSpec.opacity !== undefined) e.opacity = layerSpec.opacity;
       return e;
     }
@@ -501,7 +412,7 @@ function buildLayerNode(
       d.name = layerSpec.name || 'Divider';
       const dw = typeof layerSpec.width === 'number' ? layerSpec.width : 200;
       d.resize(dw, layerSpec.height as number || 1);
-      d.fills = [layerSpec.fill ? resolveFillPaint(layerSpec.fill) : solidPaint('#E4E4E7')];
+      d.fills = [layerSpec.fill ? resolveFillPaint(layerSpec.fill, tokenMappings) : solidPaint('#E4E4E7')];
       d.layoutGrow = 1;
       d.layoutSizingHorizontal = 'FILL';
       return d;
@@ -514,9 +425,14 @@ function buildLayerNode(
       const iconSz = typeof layerSpec.width === 'number' ? layerSpec.width : 16;
       iconFrame.resize(iconSz, typeof layerSpec.height === 'number' ? layerSpec.height : iconSz);
       iconFrame.layoutMode = 'NONE';
-      iconFrame.fills = [layerSpec.fill ? resolveFillPaint(layerSpec.fill) : solidPaint('#71717A')];
-      if (layerSpec.cornerRadius) iconFrame.cornerRadius = layerSpec.cornerRadius;
-      else iconFrame.cornerRadius = 2;
+      iconFrame.fills = [layerSpec.fill ? resolveFillPaint(layerSpec.fill, tokenMappings) : solidPaint('#71717A')];
+      if (layerSpec.cornerRadius !== undefined) {
+        const radVar = typeof layerSpec.cornerRadius === 'number' ? null : resolveFloatVariable(String(layerSpec.cornerRadius), tokenMappings);
+        if (radVar) applyRadius(iconFrame, radVar);
+        else iconFrame.cornerRadius = typeof layerSpec.cornerRadius === 'number' ? layerSpec.cornerRadius : 2;
+      } else {
+        iconFrame.cornerRadius = 2;
+      }
       if (layerSpec.opacity !== undefined) iconFrame.opacity = layerSpec.opacity;
       return iconFrame;
     }
@@ -647,15 +563,15 @@ function buildLayerNode(
 
       // Fill
       if (layerSpec.fill) {
-        f.fills = [resolveFillPaint(layerSpec.fill)];
+        f.fills = [resolveFillPaint(layerSpec.fill, tokenMappings)];
       } else {
         f.fills = [];
       }
 
       // Stroke
       if (layerSpec.stroke) {
-        const strokeVar = findVariable(layerSpec.stroke);
-        if (strokeVar && strokeVar.resolvedType === 'COLOR') {
+        const strokeVar = resolveColorValue(layerSpec.stroke, tokenMappings);
+        if (strokeVar) {
           f.strokes = [boundColorPaint(strokeVar)];
         } else {
           f.strokes = [solidPaint(layerSpec.stroke.startsWith('#') ? layerSpec.stroke : '#E4E4E7')];
@@ -666,12 +582,11 @@ function buildLayerNode(
 
       // Corner radius
       if (layerSpec.cornerRadius !== undefined) {
-        // Check if it's a token name
-        const radVar = typeof layerSpec.cornerRadius === 'number' ? null : findVariable(String(layerSpec.cornerRadius));
+        const radVar = typeof layerSpec.cornerRadius === 'number' ? null : resolveFloatVariable(String(layerSpec.cornerRadius), tokenMappings);
         if (radVar) {
           applyRadius(f, radVar);
         } else {
-          f.cornerRadius = layerSpec.cornerRadius;
+          f.cornerRadius = typeof layerSpec.cornerRadius === 'number' ? layerSpec.cornerRadius : 0;
         }
       }
 
@@ -721,12 +636,26 @@ async function buildFromLayers(
                     : 'HORIZONTAL';
 
     if (comp.layoutMode !== 'NONE') {
-      // Sizing
-      comp.primaryAxisSizingMode = rootLayer.width  === undefined || rootLayer.width  === 'hug' ? 'AUTO' : 'FIXED';
-      comp.counterAxisSizingMode = rootLayer.height === undefined || rootLayer.height === 'hug' ? 'AUTO' : 'FIXED';
+      // Width sizing
+      if (rootLayer.width === 'fill') {
+        comp.layoutGrow = 1;
+        comp.layoutSizingHorizontal = 'FILL';
+      } else if (rootLayer.width === 'hug' || rootLayer.width === undefined) {
+        comp.primaryAxisSizingMode = 'AUTO';
+      } else if (typeof rootLayer.width === 'number') {
+        comp.resize(rootLayer.width, comp.height || 40);
+        comp.primaryAxisSizingMode = 'FIXED';
+      }
 
-      if (typeof rootLayer.width  === 'number') comp.resize(rootLayer.width, comp.height || 40);
-      if (typeof rootLayer.height === 'number') comp.resize(comp.width || 100, rootLayer.height);
+      // Height sizing
+      if (rootLayer.height === 'fill') {
+        comp.layoutSizingVertical = 'FILL';
+      } else if (rootLayer.height === 'hug' || rootLayer.height === undefined) {
+        comp.counterAxisSizingMode = 'AUTO';
+      } else if (typeof rootLayer.height === 'number') {
+        comp.resize(comp.width || 100, rootLayer.height);
+        comp.counterAxisSizingMode = 'FIXED';
+      }
 
       // Alignment
       const pa = rootLayer.primaryAlign || 'center';
@@ -749,13 +678,13 @@ async function buildFromLayers(
 
     // Fill
     if (rootLayer.fill) {
-      comp.fills = [resolveFillPaint(rootLayer.fill)];
+      comp.fills = [resolveFillPaint(rootLayer.fill, spec.tokenMappings)];
     }
 
     // Stroke
     if (rootLayer.stroke) {
-      const strokeVar = findVariable(rootLayer.stroke);
-      if (strokeVar && strokeVar.resolvedType === 'COLOR') {
+      const strokeVar = resolveColorValue(rootLayer.stroke, spec.tokenMappings);
+      if (strokeVar) {
         comp.strokes = [boundColorPaint(strokeVar)];
       } else {
         comp.strokes = [solidPaint(rootLayer.stroke.startsWith('#') ? rootLayer.stroke : '#E4E4E7')];
@@ -766,7 +695,7 @@ async function buildFromLayers(
 
     // Corner radius
     if (rootLayer.cornerRadius !== undefined) {
-      const radVar = typeof rootLayer.cornerRadius === 'number' ? null : findVariable(String(rootLayer.cornerRadius));
+      const radVar = typeof rootLayer.cornerRadius === 'number' ? null : resolveFloatVariable(String(rootLayer.cornerRadius), spec.tokenMappings);
       if (radVar) {
         applyRadius(comp, radVar);
       } else {
@@ -805,6 +734,7 @@ async function buildComponentNode(
   await figma.loadFontAsync({ family: 'Inter', style: 'Regular' });
   await figma.loadFontAsync({ family: 'Inter', style: 'Medium' });
   await figma.loadFontAsync({ family: 'Inter', style: 'Semi Bold' });
+  await figma.loadFontAsync({ family: 'Inter', style: 'Bold' });
   return buildFromLayers(spec, variantProps);
 }
 
@@ -1075,11 +1005,18 @@ async function executeCommand(command: any): Promise<{ success: boolean; message
         if (Array.isArray(spec.addVariants) && spec.addVariants.length > 0) {
           const newComponents: ComponentNode[] = [];
           for (const variantSpec of spec.addVariants) {
-            const comp = figma.createComponent();
+            let comp: ComponentNode;
+            if (spec.layers && spec.layers.length > 0) {
+              // Build full layer anatomy for new variant
+              comp = await buildComponentNode(spec, variantSpec.properties);
+            } else {
+              // Fallback: create empty component
+              comp = figma.createComponent();
+              comp.resize(compSet.width / Math.max(compSet.children.length, 1), 40);
+            }
             comp.name = Object.entries(variantSpec.properties)
               .map(([k, v]) => `${k}=${v}`)
               .join(', ');
-            comp.resize(compSet.width / Math.max(compSet.children.length, 1), 40);
             newComponents.push(comp);
           }
 
