@@ -7,8 +7,8 @@ figma.showUI(__html__, { width: 400, height: 600 });
 
 async function runFullSync() {
   try {
-    const variables = figma.variables.getLocalVariables();
-    const collections = figma.variables.getLocalVariableCollections();
+    const variables = await figma.variables.getLocalVariablesAsync();
+    const collections = await figma.variables.getLocalVariableCollectionsAsync();
     const components = figma.root.findAll(node => node.type === 'COMPONENT') as ComponentNode[];
 
     const syncData = {
@@ -52,8 +52,8 @@ async function runFullSync() {
 
 // ─── Variable Operations ──────────────────────────────────────────────────────
 
-function applyVariableOp(op: { action: string; variableId?: string; variableName?: string; newName?: string; newValue?: any; modeId?: string }) {
-  const variables = figma.variables.getLocalVariables();
+async function applyVariableOp(op: { action: string; variableId?: string; variableName?: string; newName?: string; newValue?: any; modeId?: string }) {
+  const variables = await figma.variables.getLocalVariablesAsync();
   const variable = variables.find(v => v.id === op.variableId || v.name === op.variableName);
   if (!variable) return { success: false, error: `Variable not found: ${op.variableId || op.variableName}` };
 
@@ -87,8 +87,16 @@ interface TokenSpec {
                            // Plugin will alias to the first one found; falls back to createWithValue
 }
 
+// Variable lookup cache — populated before each operation that needs it.
+// Avoids repeated async calls and keeps resolveColorValue/resolveFloatVariable sync.
+let _variableCache: Variable[] = [];
+
+async function refreshVariableCache(): Promise<void> {
+  _variableCache = await figma.variables.getLocalVariablesAsync();
+}
+
 function findVariable(nameOrPath: string): Variable | null {
-  const all = figma.variables.getLocalVariables();
+  const all = _variableCache;
 
   // 1. Exact match
   const exact = all.find(v => v.name === nameOrPath);
@@ -123,15 +131,16 @@ function inferCollectionForVariable(name: string): string {
   return 'Primitives';
 }
 
-function getOrCreateCollection(collectionName: string): { collection: VariableCollection; defaultModeId: string } {
-  const existing = figma.variables.getLocalVariableCollections().find(c => c.name === collectionName);
+async function getOrCreateCollection(collectionName: string): Promise<{ collection: VariableCollection; defaultModeId: string }> {
+  const all = await figma.variables.getLocalVariableCollectionsAsync();
+  const existing = all.find(c => c.name === collectionName);
   if (existing) return { collection: existing, defaultModeId: existing.defaultModeId };
   const created = figma.variables.createVariableCollection(collectionName);
   console.log(`📦 Created collection: ${collectionName}`);
   return { collection: created, defaultModeId: created.defaultModeId };
 }
 
-function resolveOrCreateVariable(spec: TokenSpec): Variable {
+async function resolveOrCreateVariable(spec: TokenSpec): Promise<Variable> {
   // 1. Name-based lookup (exact → suffix → partial)
   const found = findVariable(spec.name);
   if (found) return found;
@@ -149,8 +158,8 @@ function resolveOrCreateVariable(spec: TokenSpec): Variable {
   //     their own identity so they can be individually aliased to the right semantic token.
   //     Reusing e.g. color/semantic/error for input-bg would give wrong color.)
   const collectionName = spec.createInCollection || inferCollectionForVariable(spec.name);
-  const { collection, defaultModeId } = getOrCreateCollection(collectionName);
-  const newVar = figma.variables.createVariable(spec.name, collection, spec.type);
+  const { collection, defaultModeId } = await getOrCreateCollection(collectionName);
+  const newVar = figma.variables.createVariable(spec.name, collection.id, spec.type);
 
   // Try to alias to a semantic/primitive token first (preferred over raw hex)
   let aliased = false;
@@ -178,6 +187,9 @@ function resolveOrCreateVariable(spec: TokenSpec): Variable {
       newVar.setValueForMode(defaultModeId, spec.createWithValue);
     }
   }
+
+  // Update cache so subsequent findVariable() calls in this command see the new var
+  _variableCache.push(newVar);
 
   console.log(`✨ Created token: ${spec.name}`);
   return newVar;
@@ -215,6 +227,30 @@ function applyRadius(node: FrameNode | ComponentNode | RectangleNode, variable: 
 // AI can describe any component's internal structure via a layer tree.
 // Plugin walks this tree and creates matching Figma nodes.
 
+// Per-variant style overrides applied on top of base styles when the variant matches.
+// Key format: "PropName=Value" e.g. "Type=Primary" or "State=Hover"
+// All style properties are optional — only specified ones are overridden.
+interface VariantStyleOverride {
+  fill?: string;
+  stroke?: string;
+  strokeWeight?: number;
+  textColor?: string;
+  fontSize?: number;
+  fontWeight?: 400 | 500 | 600 | 700;
+  opacity?: number;
+  cornerRadius?: number | string;
+  paddingH?: number;
+  paddingV?: number;
+  paddingLeft?: number;
+  paddingRight?: number;
+  paddingTop?: number;
+  paddingBottom?: number;
+  itemSpacing?: number;
+  width?: number | 'fill' | 'hug';
+  height?: number | 'fill' | 'hug';
+  text?: string;
+}
+
 interface LayerSpec {
   type: 'frame' | 'text' | 'rectangle' | 'ellipse' | 'divider' | 'icon' | 'componentRef';
   name: string;
@@ -222,6 +258,9 @@ interface LayerSpec {
   layout?: 'horizontal' | 'vertical' | 'none';
   width?: number | 'fill' | 'hug';
   height?: number | 'fill' | 'hug';
+  // Absolute positioning (for layout:'none' parents)
+  x?: number;
+  y?: number;
   // Alignment
   primaryAlign?: 'min' | 'center' | 'max' | 'space-between';
   counterAlign?: 'min' | 'center' | 'max';
@@ -256,6 +295,10 @@ interface LayerSpec {
   // e.g. variantCondition: { "State=Error": true, "State=Default": false }
   // If NO key in the map matches the current variant, the layer is always shown.
   variantCondition?: Record<string, boolean>;
+  // Per-variant style overrides — applies style changes when a variant property matches.
+  // Key format: "PropName=Value" e.g. { "Type=Primary": { fill: "color/brand/primary" } }
+  // Multiple keys can match simultaneously (all matching overrides are applied in order).
+  variantStyles?: Record<string, VariantStyleOverride>;
   // Component instance embedding — inserts a real Figma component instance
   // type must be 'componentRef' to use this
   componentRef?: {
@@ -287,6 +330,41 @@ interface ComponentSpec {
 // Fill/stroke/textColor accept either a hex string (#fff) or a token name
 // (e.g. color/brand/primary) — token takes priority if found in local variables.
 
+// ─── Variant matching helpers ─────────────────────────────────────────────────
+
+/**
+ * Check whether a single condition key ("PropName=Value") matches the current variant props.
+ * Supports multi-condition keys joined by "," e.g. "Type=Primary,State=Hover"
+ */
+function matchesCondition(condKey: string, variantProps: Record<string, string>): boolean {
+  const pairs = condKey.split(',').map(s => s.trim());
+  return pairs.every(pair => {
+    const eqIdx = pair.indexOf('=');
+    if (eqIdx === -1) return false;
+    const propName = pair.slice(0, eqIdx).trim();
+    const propValue = pair.slice(eqIdx + 1).trim();
+    return variantProps[propName] === propValue;
+  });
+}
+
+/**
+ * Resolve variantStyles for the current variant props.
+ * All keys that match are collected and merged in order (later keys win).
+ */
+function resolveVariantStyles(
+  variantStyles: Record<string, VariantStyleOverride> | undefined,
+  variantProps: Record<string, string>
+): VariantStyleOverride {
+  if (!variantStyles) return {};
+  const merged: VariantStyleOverride = {};
+  for (const [condKey, overrides] of Object.entries(variantStyles)) {
+    if (matchesCondition(condKey, variantProps)) {
+      Object.assign(merged, overrides);
+    }
+  }
+  return merged;
+}
+
 function resolveColorValue(value: string, tokenMappings?: Record<string, string>): Variable | null {
   // tokenMappings override: if AI mapped this token name to an existing variable, use that
   if (tokenMappings && tokenMappings[value]) {
@@ -311,9 +389,10 @@ function resolveFloatVariable(value: string, tokenMappings?: Record<string, stri
 function resolveFillPaint(value: string, tokenMappings?: Record<string, string>): Paint {
   const variable = resolveColorValue(value, tokenMappings);
   if (variable) return boundColorPaint(variable);
-  // Fallback to treating as hex
+  // Fallback to treating as hex — preserve original value if already valid hex
   const hex = value.startsWith('#') ? value : `#${value}`;
-  return solidPaint(hex.length >= 7 ? hex : '#888888');
+  // Validate: must be #rrggbb or #rrggbbaa (6 or 8 hex chars after #)
+  return solidPaint(/^#[0-9a-fA-F]{6}([0-9a-fA-F]{2})?$/.test(hex) ? hex : '#888888');
 }
 
 function buildLayerNode(
@@ -324,13 +403,11 @@ function buildLayerNode(
   // ── variantCondition: decide visibility before creating anything ──────────
   if (layerSpec.variantCondition) {
     const conditions = layerSpec.variantCondition;
-    // Check if any key matches current variant props
+    // Check if any key matches current variant props (supports multi-condition keys)
     let matched = false;
     let visible = true;
     for (const [condKey, condValue] of Object.entries(conditions)) {
-      // condKey format: "PropName=Value"
-      const [propName, propValue] = condKey.split('=');
-      if (variantProps[propName] === propValue) {
+      if (matchesCondition(condKey, variantProps)) {
         matched = true;
         visible = condValue;
         break;
@@ -341,33 +418,38 @@ function buildLayerNode(
     // If no key matched, the layer is always shown (default visible)
   }
 
-  switch (layerSpec.type) {
+  // ── variantStyles: merge per-variant overrides on top of base spec ────────
+  const vs = resolveVariantStyles(layerSpec.variantStyles, variantProps);
+  // Merge vs into a resolved spec (vs overrides base values)
+  const s: LayerSpec = { ...layerSpec, ...vs };
+
+  switch (s.type) {
     case 'text': {
       const t = figma.createText();
-      t.name = layerSpec.name;
-      const style = layerSpec.fontWeight === 700 ? 'Bold'
-                  : layerSpec.fontWeight === 600 ? 'Semi Bold'
-                  : layerSpec.fontWeight === 500 ? 'Medium'
-                  : 'Regular';
+      t.name = s.name;
+      const fw = s.fontWeight ?? 400;
+      const style = fw === 700 ? 'Bold' : fw === 600 ? 'Semi Bold' : fw === 500 ? 'Medium' : 'Regular';
       t.fontName = { family: 'Inter', style };
-      t.fontSize = layerSpec.fontSize || 14;
+      t.fontSize = s.fontSize || 14;
 
-      // Per-variant text override — each key is "PropName=Value", checked individually
-      // so { "State=Error": "Error!" } works regardless of how many variant props exist
-      let overrideText: string | undefined;
-      if (layerSpec.variantText) {
+      // Per-variant text override — variantText OR variantStyles.text (both supported)
+      let overrideText: string | undefined = s.text !== layerSpec.text ? s.text : undefined;
+      if (!overrideText && layerSpec.variantText) {
         for (const [condKey, text] of Object.entries(layerSpec.variantText)) {
-          const [propName, propValue] = condKey.split('=');
-          if (variantProps[propName] === propValue) { overrideText = text; break; }
+          if (matchesCondition(condKey, variantProps)) { overrideText = text; break; }
         }
       }
-      t.characters = overrideText || layerSpec.text || layerSpec.name;
+      t.characters = overrideText || s.text || s.name;
       t.textAutoResize = 'WIDTH_AND_HEIGHT';
 
-      if (layerSpec.textAlign === 'center') t.textAlignHorizontal = 'CENTER';
-      else if (layerSpec.textAlign === 'right') t.textAlignHorizontal = 'RIGHT';
+      if (s.textAlign === 'center') t.textAlignHorizontal = 'CENTER';
+      else if (s.textAlign === 'right') t.textAlignHorizontal = 'RIGHT';
 
-      const textColor = layerSpec.textColor || '#18181B';
+      // Apply width/height sizing for text inside auto-layout parents
+      if (s.width === 'fill') t.layoutSizingHorizontal = 'FILL';
+      if (s.height === 'fill') t.layoutSizingVertical = 'FILL';
+
+      const textColor = s.textColor || '#18181B';
       const textVar = resolveColorValue(textColor, tokenMappings);
       if (textVar) {
         t.fills = [boundColorPaint(textVar)];
@@ -375,71 +457,94 @@ function buildLayerNode(
         t.fills = [solidPaint(textColor.startsWith('#') ? textColor : '#18181B')];
       }
 
-      if (layerSpec.opacity !== undefined) t.opacity = layerSpec.opacity;
+      if (s.opacity !== undefined) t.opacity = s.opacity;
+      // Absolute position within layout:none parent
+      if (s.x !== undefined) t.x = s.x;
+      if (s.y !== undefined) t.y = s.y;
       return t;
     }
 
     case 'rectangle': {
       const r = figma.createRectangle();
-      r.name = layerSpec.name;
-      if (typeof layerSpec.width === 'number' && typeof layerSpec.height === 'number') {
-        r.resize(layerSpec.width, layerSpec.height);
-      } else {
-        r.resize(layerSpec.width as number || 100, layerSpec.height as number || 40);
+      r.name = s.name;
+      const rw = typeof s.width === 'number' ? s.width : 100;
+      const rh = typeof s.height === 'number' ? s.height : 40;
+      r.resize(rw, rh);
+      if (s.fill) r.fills = [resolveFillPaint(s.fill, tokenMappings)];
+      if (s.stroke) {
+        const sv = resolveColorValue(s.stroke, tokenMappings);
+        r.strokes = [sv ? boundColorPaint(sv) : solidPaint(s.stroke.startsWith('#') ? s.stroke : '#E4E4E7')];
+        r.strokeWeight = s.strokeWeight ?? 1;
       }
-      if (layerSpec.fill) r.fills = [resolveFillPaint(layerSpec.fill, tokenMappings)];
-      if (layerSpec.cornerRadius !== undefined) {
-        const radVar = typeof layerSpec.cornerRadius === 'number' ? null : resolveFloatVariable(String(layerSpec.cornerRadius), tokenMappings);
+      if (s.cornerRadius !== undefined) {
+        const radVar = typeof s.cornerRadius === 'number' ? null : resolveFloatVariable(String(s.cornerRadius), tokenMappings);
         if (radVar) applyRadius(r, radVar);
-        else r.cornerRadius = typeof layerSpec.cornerRadius === 'number' ? layerSpec.cornerRadius : 0;
+        else r.cornerRadius = typeof s.cornerRadius === 'number' ? s.cornerRadius : 0;
       }
-      if (layerSpec.opacity !== undefined) r.opacity = layerSpec.opacity;
+      if (s.opacity !== undefined) r.opacity = s.opacity;
+      if (s.x !== undefined) r.x = s.x;
+      if (s.y !== undefined) r.y = s.y;
+      if (s.width === 'fill') r.layoutSizingHorizontal = 'FILL';
+      if (s.height === 'fill') r.layoutSizingVertical = 'FILL';
       return r;
     }
 
     case 'ellipse': {
       const e = figma.createEllipse();
-      e.name = layerSpec.name;
-      const sz = typeof layerSpec.width === 'number' ? layerSpec.width : 40;
-      e.resize(sz, typeof layerSpec.height === 'number' ? layerSpec.height : sz);
-      if (layerSpec.fill) e.fills = [resolveFillPaint(layerSpec.fill, tokenMappings)];
-      if (layerSpec.opacity !== undefined) e.opacity = layerSpec.opacity;
+      e.name = s.name;
+      const esz = typeof s.width === 'number' ? s.width : 40;
+      e.resize(esz, typeof s.height === 'number' ? s.height : esz);
+      if (s.fill) e.fills = [resolveFillPaint(s.fill, tokenMappings)];
+      if (s.stroke) {
+        const sv = resolveColorValue(s.stroke, tokenMappings);
+        e.strokes = [sv ? boundColorPaint(sv) : solidPaint(s.stroke.startsWith('#') ? s.stroke : '#E4E4E7')];
+        e.strokeWeight = s.strokeWeight ?? 1;
+      }
+      if (s.opacity !== undefined) e.opacity = s.opacity;
+      if (s.x !== undefined) e.x = s.x;
+      if (s.y !== undefined) e.y = s.y;
       return e;
     }
 
     case 'divider': {
       const d = figma.createRectangle();
-      d.name = layerSpec.name || 'Divider';
-      const dw = typeof layerSpec.width === 'number' ? layerSpec.width : 200;
-      d.resize(dw, layerSpec.height as number || 1);
-      d.fills = [layerSpec.fill ? resolveFillPaint(layerSpec.fill, tokenMappings) : solidPaint('#E4E4E7')];
+      d.name = s.name || 'Divider';
+      const dw = typeof s.width === 'number' ? s.width : 200;
+      d.resize(dw, typeof s.height === 'number' ? s.height : 1);
+      d.fills = [s.fill ? resolveFillPaint(s.fill, tokenMappings) : solidPaint('#E4E4E7')];
       d.layoutGrow = 1;
       d.layoutSizingHorizontal = 'FILL';
       return d;
     }
 
     case 'icon': {
-      // Icon placeholder: a small rounded rectangle with an "icon" label
+      // Icon placeholder: small rounded frame acting as icon shape
       const iconFrame = figma.createFrame();
-      iconFrame.name = layerSpec.name || 'Icon';
-      const iconSz = typeof layerSpec.width === 'number' ? layerSpec.width : 16;
-      iconFrame.resize(iconSz, typeof layerSpec.height === 'number' ? layerSpec.height : iconSz);
+      iconFrame.name = s.name || 'Icon';
+      const iconSz = typeof s.width === 'number' ? s.width : 16;
+      iconFrame.resize(iconSz, typeof s.height === 'number' ? s.height : iconSz);
       iconFrame.layoutMode = 'NONE';
-      iconFrame.fills = [layerSpec.fill ? resolveFillPaint(layerSpec.fill, tokenMappings) : solidPaint('#71717A')];
-      if (layerSpec.cornerRadius !== undefined) {
-        const radVar = typeof layerSpec.cornerRadius === 'number' ? null : resolveFloatVariable(String(layerSpec.cornerRadius), tokenMappings);
+      // Use token or hex for fill — fall back to neutral gray
+      iconFrame.fills = [s.fill ? resolveFillPaint(s.fill, tokenMappings) : solidPaint('#71717A')];
+      const iconCr = s.cornerRadius;
+      if (iconCr !== undefined) {
+        const radVar = typeof iconCr === 'number' ? null : resolveFloatVariable(String(iconCr), tokenMappings);
         if (radVar) applyRadius(iconFrame, radVar);
-        else iconFrame.cornerRadius = typeof layerSpec.cornerRadius === 'number' ? layerSpec.cornerRadius : 2;
+        else iconFrame.cornerRadius = typeof iconCr === 'number' ? iconCr : 2;
       } else {
         iconFrame.cornerRadius = 2;
       }
-      if (layerSpec.opacity !== undefined) iconFrame.opacity = layerSpec.opacity;
+      if (s.opacity !== undefined) iconFrame.opacity = s.opacity;
+      if (s.x !== undefined) iconFrame.x = s.x;
+      if (s.y !== undefined) iconFrame.y = s.y;
+      if (s.width === 'fill') iconFrame.layoutSizingHorizontal = 'FILL';
+      if (s.height === 'fill') iconFrame.layoutSizingVertical = 'FILL';
       return iconFrame;
     }
 
     case 'componentRef': {
       // Find an existing ComponentSet by name, pick the best matching variant, create an instance
-      const ref = layerSpec.componentRef;
+      const ref = s.componentRef;
       if (!ref) return null;
 
       const allSets = figma.root.findAll(
@@ -460,19 +565,19 @@ function buildLayerNode(
       let targetComp: ComponentNode | null = null;
 
       if (ref.variantProps && Object.keys(ref.variantProps).length > 0) {
-        // Find the variant whose properties are a superset of the requested variantProps
+        // Find the variant whose properties best match the requested variantProps
         const candidates = compSet.children as ComponentNode[];
         let bestScore = -1;
 
         for (const candidate of candidates) {
-          const props = candidate.variantProperties || {};
+          // Use componentPropertyDefinitions-based approach; variantProperties still works at runtime
+          const props = (candidate as any).variantProperties as Record<string, string> || {};
           let score = 0;
           let mismatch = false;
           for (const [k, v] of Object.entries(ref.variantProps)) {
             if (props[k] === v) {
               score++;
             } else if (props[k] !== undefined) {
-              // Key exists but value differs — penalise
               mismatch = true;
               break;
             }
@@ -488,21 +593,19 @@ function buildLayerNode(
       if (!targetComp) targetComp = compSet.children[0] as ComponentNode;
 
       const instance = targetComp.createInstance();
-      instance.name = layerSpec.name;
+      instance.name = s.name;
 
-      // Apply sizing if specified
-      if (typeof layerSpec.width === 'number' || typeof layerSpec.height === 'number') {
-        const iw = typeof layerSpec.width === 'number' ? layerSpec.width : instance.width;
-        const ih = typeof layerSpec.height === 'number' ? layerSpec.height : instance.height;
+      // Apply sizing
+      if (typeof s.width === 'number' || typeof s.height === 'number') {
+        const iw = typeof s.width === 'number' ? s.width : instance.width;
+        const ih = typeof s.height === 'number' ? s.height : instance.height;
         instance.resize(iw, ih);
       }
-      if (layerSpec.width === 'fill') {
-        instance.layoutSizingHorizontal = 'FILL';
-      }
-      if (layerSpec.height === 'fill') {
-        instance.layoutSizingVertical = 'FILL';
-      }
-      if (layerSpec.opacity !== undefined) instance.opacity = layerSpec.opacity;
+      if (s.width === 'fill') instance.layoutSizingHorizontal = 'FILL';
+      if (s.height === 'fill') instance.layoutSizingVertical = 'FILL';
+      if (s.opacity !== undefined) instance.opacity = s.opacity;
+      if (s.x !== undefined) instance.x = s.x;
+      if (s.y !== undefined) instance.y = s.y;
 
       return instance;
     }
@@ -510,17 +613,17 @@ function buildLayerNode(
     case 'frame':
     default: {
       const f = figma.createFrame();
-      f.name = layerSpec.name;
+      f.name = s.name;
 
       // Layout
-      const layout = (layerSpec.layout || 'horizontal').toLowerCase();
+      const layout = (s.layout || 'horizontal').toLowerCase();
       f.layoutMode = layout === 'vertical' ? 'VERTICAL'
                    : layout === 'none'     ? 'NONE'
                    : 'HORIZONTAL';
 
       if (f.layoutMode !== 'NONE') {
         // Primary axis sizing
-        const wSpec = layerSpec.width;
+        const wSpec = s.width;
         if (wSpec === 'hug' || wSpec === undefined) {
           f.primaryAxisSizingMode = 'AUTO';
         } else if (wSpec === 'fill') {
@@ -532,7 +635,7 @@ function buildLayerNode(
         }
 
         // Counter axis sizing
-        const hSpec = layerSpec.height;
+        const hSpec = s.height;
         if (hSpec === 'hug' || hSpec === undefined) {
           f.counterAxisSizingMode = 'AUTO';
         } else if (hSpec === 'fill') {
@@ -543,60 +646,68 @@ function buildLayerNode(
         }
 
         // Alignment
-        const pa = layerSpec.primaryAlign || 'center';
+        const pa = s.primaryAlign || 'center';
         f.primaryAxisAlignItems = pa === 'min' ? 'MIN' : pa === 'max' ? 'MAX' : pa === 'space-between' ? 'SPACE_BETWEEN' : 'CENTER';
-        const ca = layerSpec.counterAlign || 'center';
+        const ca = s.counterAlign || 'center';
         f.counterAxisAlignItems = ca === 'min' ? 'MIN' : ca === 'max' ? 'MAX' : 'CENTER';
 
         // Padding
-        f.paddingLeft   = layerSpec.paddingLeft   ?? layerSpec.paddingH ?? 0;
-        f.paddingRight  = layerSpec.paddingRight  ?? layerSpec.paddingH ?? 0;
-        f.paddingTop    = layerSpec.paddingTop    ?? layerSpec.paddingV ?? 0;
-        f.paddingBottom = layerSpec.paddingBottom ?? layerSpec.paddingV ?? 0;
-        f.itemSpacing   = layerSpec.itemSpacing ?? 0;
+        f.paddingLeft   = s.paddingLeft   ?? s.paddingH ?? 0;
+        f.paddingRight  = s.paddingRight  ?? s.paddingH ?? 0;
+        f.paddingTop    = s.paddingTop    ?? s.paddingV ?? 0;
+        f.paddingBottom = s.paddingBottom ?? s.paddingV ?? 0;
+        f.itemSpacing   = s.itemSpacing ?? 0;
       } else {
-        // Free layout — set absolute size if given
-        if (typeof layerSpec.width === 'number' && typeof layerSpec.height === 'number') {
-          f.resize(layerSpec.width, layerSpec.height);
+        // Free layout (layout:none) — set absolute size
+        if (typeof s.width === 'number' && typeof s.height === 'number') {
+          f.resize(s.width, s.height);
+        } else if (typeof s.width === 'number') {
+          f.resize(s.width, f.height || 40);
+        } else if (typeof s.height === 'number') {
+          f.resize(f.width || 100, s.height);
         }
+        // Absolute position within a layout:none parent
+        if (s.x !== undefined) f.x = s.x;
+        if (s.y !== undefined) f.y = s.y;
       }
 
       // Fill
-      if (layerSpec.fill) {
-        f.fills = [resolveFillPaint(layerSpec.fill, tokenMappings)];
+      if (s.fill) {
+        f.fills = [resolveFillPaint(s.fill, tokenMappings)];
       } else {
         f.fills = [];
       }
 
       // Stroke
-      if (layerSpec.stroke) {
-        const strokeVar = resolveColorValue(layerSpec.stroke, tokenMappings);
+      if (s.stroke) {
+        const strokeVar = resolveColorValue(s.stroke, tokenMappings);
         if (strokeVar) {
           f.strokes = [boundColorPaint(strokeVar)];
         } else {
-          f.strokes = [solidPaint(layerSpec.stroke.startsWith('#') ? layerSpec.stroke : '#E4E4E7')];
+          f.strokes = [solidPaint(s.stroke.startsWith('#') ? s.stroke : '#E4E4E7')];
         }
-        f.strokeWeight = layerSpec.strokeWeight ?? 1;
+        f.strokeWeight = s.strokeWeight ?? 1;
         f.strokeAlign = 'INSIDE';
       }
 
       // Corner radius
-      if (layerSpec.cornerRadius !== undefined) {
-        const radVar = typeof layerSpec.cornerRadius === 'number' ? null : resolveFloatVariable(String(layerSpec.cornerRadius), tokenMappings);
+      if (s.cornerRadius !== undefined) {
+        const radVar = typeof s.cornerRadius === 'number' ? null : resolveFloatVariable(String(s.cornerRadius), tokenMappings);
         if (radVar) {
           applyRadius(f, radVar);
         } else {
-          f.cornerRadius = typeof layerSpec.cornerRadius === 'number' ? layerSpec.cornerRadius : 0;
+          f.cornerRadius = typeof s.cornerRadius === 'number' ? s.cornerRadius : 0;
         }
       }
 
       // Opacity
-      if (layerSpec.opacity !== undefined) f.opacity = layerSpec.opacity;
+      if (s.opacity !== undefined) f.opacity = s.opacity;
 
       // Clip content
-      if (layerSpec.clip) f.clipsContent = true;
+      if (s.clip) f.clipsContent = true;
 
-      // Recursively build children
+      // Recursively build children — use original layerSpec.children (not s.children)
+      // so child variantStyles are evaluated fresh against their own base spec
       if (layerSpec.children) {
         for (const childSpec of layerSpec.children) {
           const child = buildLayerNode(childSpec, variantProps, tokenMappings);
@@ -629,87 +740,94 @@ async function buildFromLayers(
   const [rootLayer, ...extraLayers] = layers;
 
   if (rootLayer) {
+    // Merge variantStyles into rootLayer for this specific variant
+    const rs: LayerSpec = { ...rootLayer, ...resolveVariantStyles(rootLayer.variantStyles, variantProps) };
+
     // Apply layout
-    const layout = (rootLayer.layout || 'horizontal').toLowerCase();
+    const layout = (rs.layout || 'horizontal').toLowerCase();
     comp.layoutMode = layout === 'vertical' ? 'VERTICAL'
                     : layout === 'none'     ? 'NONE'
                     : 'HORIZONTAL';
 
     if (comp.layoutMode !== 'NONE') {
       // Width sizing
-      if (rootLayer.width === 'fill') {
+      if (rs.width === 'fill') {
         comp.layoutGrow = 1;
         comp.layoutSizingHorizontal = 'FILL';
-      } else if (rootLayer.width === 'hug' || rootLayer.width === undefined) {
+      } else if (rs.width === 'hug' || rs.width === undefined) {
         comp.primaryAxisSizingMode = 'AUTO';
-      } else if (typeof rootLayer.width === 'number') {
-        comp.resize(rootLayer.width, comp.height || 40);
+      } else if (typeof rs.width === 'number') {
+        comp.resize(rs.width, comp.height || 40);
         comp.primaryAxisSizingMode = 'FIXED';
       }
 
       // Height sizing
-      if (rootLayer.height === 'fill') {
+      if (rs.height === 'fill') {
         comp.layoutSizingVertical = 'FILL';
-      } else if (rootLayer.height === 'hug' || rootLayer.height === undefined) {
+      } else if (rs.height === 'hug' || rs.height === undefined) {
         comp.counterAxisSizingMode = 'AUTO';
-      } else if (typeof rootLayer.height === 'number') {
-        comp.resize(comp.width || 100, rootLayer.height);
+      } else if (typeof rs.height === 'number') {
+        comp.resize(comp.width || 100, rs.height);
         comp.counterAxisSizingMode = 'FIXED';
       }
 
       // Alignment
-      const pa = rootLayer.primaryAlign || 'center';
+      const pa = rs.primaryAlign || 'center';
       comp.primaryAxisAlignItems = pa === 'min' ? 'MIN' : pa === 'max' ? 'MAX' : pa === 'space-between' ? 'SPACE_BETWEEN' : 'CENTER';
-      const ca = rootLayer.counterAlign || 'center';
+      const ca = rs.counterAlign || 'center';
       comp.counterAxisAlignItems = ca === 'min' ? 'MIN' : ca === 'max' ? 'MAX' : 'CENTER';
 
       // Padding
-      comp.paddingLeft   = rootLayer.paddingLeft   ?? rootLayer.paddingH ?? 0;
-      comp.paddingRight  = rootLayer.paddingRight  ?? rootLayer.paddingH ?? 0;
-      comp.paddingTop    = rootLayer.paddingTop    ?? rootLayer.paddingV ?? 0;
-      comp.paddingBottom = rootLayer.paddingBottom ?? rootLayer.paddingV ?? 0;
-      comp.itemSpacing   = rootLayer.itemSpacing ?? 0;
+      comp.paddingLeft   = rs.paddingLeft   ?? rs.paddingH ?? 0;
+      comp.paddingRight  = rs.paddingRight  ?? rs.paddingH ?? 0;
+      comp.paddingTop    = rs.paddingTop    ?? rs.paddingV ?? 0;
+      comp.paddingBottom = rs.paddingBottom ?? rs.paddingV ?? 0;
+      comp.itemSpacing   = rs.itemSpacing ?? 0;
     } else {
       // NONE layout — absolute size
-      if (typeof rootLayer.width === 'number' && typeof rootLayer.height === 'number') {
-        comp.resize(rootLayer.width, rootLayer.height);
+      if (typeof rs.width === 'number' && typeof rs.height === 'number') {
+        comp.resize(rs.width, rs.height);
+      } else if (typeof rs.width === 'number') {
+        comp.resize(rs.width, comp.height || 40);
+      } else if (typeof rs.height === 'number') {
+        comp.resize(comp.width || 100, rs.height);
       }
     }
 
-    // Fill
-    if (rootLayer.fill) {
-      comp.fills = [resolveFillPaint(rootLayer.fill, spec.tokenMappings)];
+    // Fill — variantStyles.fill overrides base fill per variant
+    if (rs.fill) {
+      comp.fills = [resolveFillPaint(rs.fill, spec.tokenMappings)];
     }
 
-    // Stroke
-    if (rootLayer.stroke) {
-      const strokeVar = resolveColorValue(rootLayer.stroke, spec.tokenMappings);
+    // Stroke — variantStyles.stroke overrides base stroke per variant
+    if (rs.stroke) {
+      const strokeVar = resolveColorValue(rs.stroke, spec.tokenMappings);
       if (strokeVar) {
         comp.strokes = [boundColorPaint(strokeVar)];
       } else {
-        comp.strokes = [solidPaint(rootLayer.stroke.startsWith('#') ? rootLayer.stroke : '#E4E4E7')];
+        comp.strokes = [solidPaint(rs.stroke.startsWith('#') ? rs.stroke : '#E4E4E7')];
       }
-      comp.strokeWeight = rootLayer.strokeWeight ?? 1;
+      comp.strokeWeight = rs.strokeWeight ?? 1;
       comp.strokeAlign = 'INSIDE';
     }
 
     // Corner radius
-    if (rootLayer.cornerRadius !== undefined) {
-      const radVar = typeof rootLayer.cornerRadius === 'number' ? null : resolveFloatVariable(String(rootLayer.cornerRadius), spec.tokenMappings);
+    if (rs.cornerRadius !== undefined) {
+      const radVar = typeof rs.cornerRadius === 'number' ? null : resolveFloatVariable(String(rs.cornerRadius), spec.tokenMappings);
       if (radVar) {
         applyRadius(comp, radVar);
       } else {
-        comp.cornerRadius = rootLayer.cornerRadius as number;
+        comp.cornerRadius = typeof rs.cornerRadius === 'number' ? rs.cornerRadius : 0;
       }
     }
 
     // Opacity
-    if (rootLayer.opacity !== undefined) comp.opacity = rootLayer.opacity;
+    if (rs.opacity !== undefined) comp.opacity = rs.opacity;
 
     // Clip
-    if (rootLayer.clip) comp.clipsContent = true;
+    if (rs.clip) comp.clipsContent = true;
 
-    // Root layer's children → component children
+    // Root layer's children → component children (use original rootLayer.children so child variantStyles evaluate fresh)
     if (rootLayer.children) {
       for (const childSpec of rootLayer.children) {
         const node = buildLayerNode(childSpec, variantProps, spec.tokenMappings);
@@ -850,13 +968,16 @@ async function executeCreateComponent(spec: ComponentSpec): Promise<{ success: b
 
 async function executeCommand(command: any): Promise<{ success: boolean; message: string; data?: any }> {
   try {
+    // Refresh variable cache once per command so findVariable() works correctly
+    await refreshVariableCache();
+
     switch (command.type) {
       case 'create_component':
         return await executeCreateComponent(command.spec);
 
       case 'rename_variable': {
         const renameSpec = command.spec || command;
-        const result = applyVariableOp({ action: 'rename', variableName: renameSpec.oldName || command.variableName, newName: renameSpec.newName || command.newName });
+        const result = await applyVariableOp({ action: 'rename', variableName: renameSpec.oldName || command.variableName, newName: renameSpec.newName || command.newName });
         return { success: result.success, message: result.message || result.error || 'Unknown error' };
       }
 
@@ -876,14 +997,15 @@ async function executeCommand(command: any): Promise<{ success: boolean; message
           const inferredType: VariableType = typeof value === 'string' ? 'COLOR' : 'FLOAT';
 
           // Resolve or create the variable
-          const variable = resolveOrCreateVariable({
+          const variable = await resolveOrCreateVariable({
             name: variableName,
             type: inferredType,
             createWithValue: value,
           });
 
           // Set value in default mode
-          const collection = figma.variables.getVariableCollectionById(variable.variableCollectionId);
+          const allCols = await figma.variables.getLocalVariableCollectionsAsync();
+          const collection = allCols.find(c => c.id === variable.variableCollectionId);
           const modeId = command.modeId || collection?.defaultModeId;
           if (!modeId) { errors.push(`No modeId for ${variableName}`); continue; }
 
@@ -914,8 +1036,9 @@ async function executeCommand(command: any): Promise<{ success: boolean; message
         const deleted: string[] = [];
         const notFound: string[] = [];
 
+        const allVarsForDelete = await figma.variables.getLocalVariablesAsync();
         for (const name of names) {
-          const v = figma.variables.getLocalVariables().find(x => x.name === name);
+          const v = allVarsForDelete.find(x => x.name === name);
           if (v) {
             v.remove();
             deleted.push(name);
@@ -1067,7 +1190,7 @@ figma.ui.onmessage = async (msg) => {
     let fixed = false;
 
     if (action === 'auto-fix') {
-      const variables = figma.variables.getLocalVariables();
+      const variables = await figma.variables.getLocalVariablesAsync();
       const variable = variables.find(v => v.name === entityId || v.id === entityId);
       if (variable) {
         const renameMatch = suggestion?.match(/[Rr]ename(?:\s+to)?[:\s]+["']?([^"'\n,.]+)["']?/);
@@ -1092,7 +1215,7 @@ figma.ui.onmessage = async (msg) => {
       }
 
       if (!fixed) {
-        const collections = figma.variables.getLocalVariableCollections();
+        const collections = await figma.variables.getLocalVariableCollectionsAsync();
         const collection = collections.find(c =>
           c.name === entityId || c.id === entityId ||
           entityId.includes(c.name) || c.name.includes(entityId)

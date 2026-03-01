@@ -123,10 +123,18 @@ export async function getDesignSystem(input: Input): Promise<string> {
       "Use EXACT token names from this workspace's variables list.",
       "fill/stroke/textColor accept either a token name (e.g. 'color/bg/default') or hex (#ffffff).",
       "Token names MUST match exactly — check the variables list above before writing layers.",
-      "layout:'horizontal' or 'vertical' enables auto-layout. 'none' = free/absolute.",
+      "layout:'horizontal' or 'vertical' enables auto-layout. 'none' = free/absolute positioning.",
       "width/height: use a number for fixed px, 'fill' to stretch in parent, 'hug' to wrap content.",
       "primaryAlign:'space-between' pushes children to opposite ends (like justify-between).",
       "variantCondition: hide/show layers per variant. Key is 'PropName=Value', value is true/false.",
+      "variantStyles: change fill/stroke/textColor/padding/size per variant. Key is 'PropName=Value'. ALL matching keys are merged.",
+      "  → Use variantStyles on the ROOT layer to change background/border per Type/State variant.",
+      "  → Use variantStyles on child layers to change icon color, label color, etc. per variant.",
+      "  → Multi-condition key: 'Type=Primary,State=Hover' — both must match for override to apply.",
+      "  → Example: { 'Type=Primary': { fill: brandPrimary, textColor: brandFg }, 'Type=Secondary': { fill: 'transparent', stroke: borderToken } }",
+      "  → Example size variants: { 'Size=Large': { paddingH: 24, paddingV: 14, fontSize: 16 }, 'Size=Small': { paddingH: 8, paddingV: 6, fontSize: 12 } }",
+      "variantText: change text content per variant. Key is 'PropName=Value', value is replacement string.",
+      "x/y: absolute position within a layout:'none' parent.",
       "componentRef: embed an existing Figma component by name (creates a real instance).",
     ],
     tokenReference: {
@@ -142,6 +150,93 @@ export async function getDesignSystem(input: Input): Promise<string> {
       warning: warningToken,
     },
     examples: {
+      Button: {
+        description: "Button with Type (Primary/Secondary/Destructive/Ghost) × Size (Small/Medium/Large) × State (Default/Hover/Disabled). " +
+          "Demonstrates variantStyles on root layer (fill/stroke per Type) and on child Label (textColor per Type), " +
+          "and variantStyles for size differences (padding/fontSize per Size).",
+        layers: [
+          {
+            type: "frame", name: "Button", layout: "horizontal",
+            width: "hug", height: "hug",
+            paddingH: 16, paddingV: 10, itemSpacing: 8,
+            cornerRadius: 6, counterAlign: "center", primaryAlign: "center",
+            // Base fill — will be overridden per Type via variantStyles
+            fill: brandPrimary,
+            variantStyles: {
+              "Type=Primary":     { fill: brandPrimary, stroke: undefined },
+              "Type=Secondary":   { fill: "transparent", stroke: borderToken },
+              "Type=Destructive": { fill: errorToken, stroke: undefined },
+              "Type=Ghost":       { fill: "transparent", stroke: undefined },
+              "State=Disabled":   { opacity: 0.4 },
+              "Size=Large":       { paddingH: 24, paddingV: 14 },
+              "Size=Small":       { paddingH: 8,  paddingV: 6 },
+            },
+            children: [
+              {
+                type: "icon", name: "LeadIcon", width: 16, height: 16,
+                fill: brandFg,
+                variantCondition: { "Icon=None": false },
+                variantStyles: {
+                  "Type=Secondary":   { fill: textPrimary },
+                  "Type=Ghost":       { fill: textPrimary },
+                  "Size=Large":       { width: 20, height: 20 },
+                  "Size=Small":       { width: 14, height: 14 },
+                },
+              },
+              {
+                type: "text", name: "Label", text: "Button",
+                fontSize: 14, fontWeight: 600,
+                textColor: brandFg,
+                variantStyles: {
+                  "Type=Secondary":   { textColor: textPrimary },
+                  "Type=Ghost":       { textColor: textPrimary },
+                  "Type=Destructive": { textColor: "#FFFFFF" },
+                  "Size=Large":       { fontSize: 16 },
+                  "Size=Small":       { fontSize: 12 },
+                },
+              },
+            ],
+          },
+        ],
+      },
+      Input: {
+        description: "Text input with Label, placeholder text, and optional error message. " +
+          "State=Default/Focus/Error/Disabled. variantStyles change border color per State.",
+        layers: [
+          {
+            type: "frame", name: "Input", layout: "vertical",
+            width: 320, height: "hug", itemSpacing: 6,
+            children: [
+              {
+                type: "text", name: "Label", text: "Label", fontSize: 13, fontWeight: 500,
+                textColor: textPrimary,
+              },
+              {
+                type: "frame", name: "InputBox", layout: "horizontal",
+                width: "fill", height: 40, paddingH: 12, paddingV: 0,
+                itemSpacing: 8, counterAlign: "center",
+                fill: surfaceToken, stroke: borderToken, strokeWeight: 1, cornerRadius: 6,
+                variantStyles: {
+                  "State=Focus":    { stroke: brandPrimary, strokeWeight: 2 },
+                  "State=Error":    { stroke: errorToken,   strokeWeight: 1 },
+                  "State=Disabled": { fill: subtleBg, opacity: 0.6 },
+                },
+                children: [
+                  {
+                    type: "text", name: "Placeholder", text: "Enter value…",
+                    fontSize: 14, fontWeight: 400, textColor: textSecondary, width: "fill",
+                  },
+                ],
+              },
+              {
+                type: "text", name: "ErrorMessage", text: "This field is required",
+                fontSize: 12, fontWeight: 400, textColor: errorToken,
+                variantCondition: { "State=Error": true },
+              },
+            ],
+          },
+        ],
+      },
       Toast: {
         description: "Notification bar with icon + message + close button. 3 variants: success/warning/error.",
         layers: [
@@ -216,15 +311,25 @@ export async function getDesignSystem(input: Input): Promise<string> {
         ],
       },
       Switch: {
-        description: "Toggle switch. Track frame + thumb circle. Use variantCondition for on/off states.",
+        description: "Toggle switch. Track frame + thumb circle. variantStyles changes track color On/Off. " +
+          "Thumb uses x position to slide left/right via variantStyles.",
         layers: [
           {
             type: "frame", name: "Track", layout: "none",
             width: 44, height: 24, cornerRadius: 9999,
-            fill: brandPrimary,
-            variantCondition: { "State=Off": false },
+            fill: subtleBg,
+            variantStyles: {
+              "State=On":  { fill: brandPrimary },
+              "State=Off": { fill: subtleBg },
+            },
             children: [
-              { type: "ellipse", name: "Thumb", width: 20, height: 20, fill: "#FFFFFF" },
+              {
+                type: "ellipse", name: "Thumb", width: 20, height: 20, fill: "#FFFFFF",
+                x: 2, y: 2,
+                variantStyles: {
+                  "State=On": { x: 22 },
+                },
+              },
             ],
           },
         ],

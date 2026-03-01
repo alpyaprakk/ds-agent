@@ -55,6 +55,28 @@ export const VariantSpecSchema = z.object({
 
 // Recursive LayerSpec schema — describes the internal anatomy of any component.
 // AI can use this to create Toast, Avatar, Tag, Switch, Tooltip, List Item, etc.
+// Per-variant style override object — all fields optional, applied on top of base layer styles
+const VariantStyleOverrideSchema = z.object({
+  fill: z.string().optional(),
+  stroke: z.string().optional(),
+  strokeWeight: z.number().optional(),
+  textColor: z.string().optional(),
+  fontSize: z.number().optional(),
+  fontWeight: z.union([z.literal(400), z.literal(500), z.literal(600), z.literal(700)]).optional(),
+  opacity: z.number().min(0).max(1).optional(),
+  cornerRadius: z.union([z.number(), z.string()]).optional(),
+  paddingH: z.number().optional(),
+  paddingV: z.number().optional(),
+  paddingLeft: z.number().optional(),
+  paddingRight: z.number().optional(),
+  paddingTop: z.number().optional(),
+  paddingBottom: z.number().optional(),
+  itemSpacing: z.number().optional(),
+  width: z.union([z.number(), z.enum(['fill', 'hug'])]).optional(),
+  height: z.union([z.number(), z.enum(['fill', 'hug'])]).optional(),
+  text: z.string().optional(),
+});
+
 const LayerSpecSchemaBase = z.object({
   type: z.enum(['frame', 'text', 'rectangle', 'ellipse', 'divider', 'icon', 'componentRef']).describe(
     'Node type: frame=container, text=text node, rectangle/ellipse=shape, divider=1px line, icon=icon placeholder, componentRef=embed existing Figma component instance'
@@ -63,6 +85,8 @@ const LayerSpecSchemaBase = z.object({
   layout: z.enum(['horizontal', 'vertical', 'none']).optional().describe('Auto layout direction (frames only)'),
   width: z.union([z.number(), z.enum(['fill', 'hug'])]).optional().describe('Width in px, or "fill" to fill parent, "hug" to hug contents'),
   height: z.union([z.number(), z.enum(['fill', 'hug'])]).optional().describe('Height in px, or "fill" to fill parent, "hug" to hug contents'),
+  x: z.number().optional().describe('Absolute X position — only used when parent has layout:"none"'),
+  y: z.number().optional().describe('Absolute Y position — only used when parent has layout:"none"'),
   primaryAlign: z.enum(['min', 'center', 'max', 'space-between']).optional().describe('Primary axis alignment'),
   counterAlign: z.enum(['min', 'center', 'max']).optional().describe('Counter axis alignment'),
   paddingH: z.number().optional().describe('Horizontal padding (left+right)'),
@@ -93,6 +117,17 @@ const LayerSpecSchemaBase = z.object({
     'Per-variant visibility control. Key format: "PropName=Value", value is true (show) or false (hide). ' +
     'Example: { "State=Error": true, "State=Default": false } — shows this layer only on Error state. ' +
     'If no key matches the current variant, the layer is always shown.'
+  ),
+  variantStyles: z.record(z.string(), VariantStyleOverrideSchema).optional().describe(
+    'Per-variant style overrides — changes fill/stroke/textColor/padding/size/opacity per variant. ' +
+    'Key format: "PropName=Value" or comma-joined "PropA=V1,PropB=V2" for multi-condition. ' +
+    'All matching keys are merged (later keys win). ' +
+    'Example: { "Type=Primary": { fill: "color/brand/primary", textColor: "color/text/inverse" }, ' +
+    '"Type=Secondary": { fill: "transparent", stroke: "color/border/default" }, ' +
+    '"Size=Large": { paddingH: 24, paddingV: 12, fontSize: 16 }, ' +
+    '"Size=Small": { paddingH: 8, paddingV: 4, fontSize: 12 } }. ' +
+    'Use this on the ROOT layer to vary the component background/border per variant. ' +
+    'Use on child layers to vary icon color, label color, or badge visibility per variant.'
   ),
   componentRef: z.object({
     componentName: z.string().describe('Exact name of the Figma ComponentSet to embed e.g. "Button", "Input"'),
