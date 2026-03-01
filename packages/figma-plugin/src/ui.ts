@@ -2,6 +2,14 @@ import { io, Socket } from 'socket.io-client';
 
 const SERVER_URL = 'https://ds-agent.alpy.io';
 
+// crypto.randomUUID is not available in Figma plugin sandbox
+function generateUUID(): string {
+  return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, c => {
+    const r = Math.random() * 16 | 0;
+    return (c === 'x' ? r : (r & 0x3 | 0x8)).toString(16);
+  });
+}
+
 let socket: Socket | null = null;
 let heartbeatInterval: ReturnType<typeof setInterval> | null = null;
 
@@ -245,7 +253,7 @@ async function handleLogin() {
   statusEl.textContent = '';
 
   try {
-    const sessionId = crypto.randomUUID();
+    const sessionId = generateUUID();
 
     const startRes = await fetch(`${SERVER_URL}/api/auth/plugin-session/start`, {
       method: 'POST',
