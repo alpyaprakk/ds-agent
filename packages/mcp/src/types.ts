@@ -53,10 +53,51 @@ export const VariantSpecSchema = z.object({
   ),
 });
 
+// Recursive LayerSpec schema — describes the internal anatomy of any component.
+// AI can use this to create Toast, Avatar, Tag, Switch, Tooltip, List Item, etc.
+const LayerSpecSchemaBase = z.object({
+  type: z.enum(['frame', 'text', 'rectangle', 'ellipse', 'divider', 'icon']).describe(
+    'Node type: frame=container, text=text node, rectangle/ellipse=shape, divider=1px horizontal line, icon=icon placeholder'
+  ),
+  name: z.string().describe('Layer name in Figma'),
+  layout: z.enum(['horizontal', 'vertical', 'none']).optional().describe('Auto layout direction (frames only)'),
+  width: z.union([z.number(), z.enum(['fill', 'hug'])]).optional().describe('Width in px, or "fill" to fill parent, "hug" to hug contents'),
+  height: z.union([z.number(), z.enum(['fill', 'hug'])]).optional().describe('Height in px, or "fill" to fill parent, "hug" to hug contents'),
+  primaryAlign: z.enum(['min', 'center', 'max', 'space-between']).optional().describe('Primary axis alignment'),
+  counterAlign: z.enum(['min', 'center', 'max']).optional().describe('Counter axis alignment'),
+  paddingH: z.number().optional().describe('Horizontal padding (left+right)'),
+  paddingV: z.number().optional().describe('Vertical padding (top+bottom)'),
+  paddingLeft: z.number().optional(),
+  paddingRight: z.number().optional(),
+  paddingTop: z.number().optional(),
+  paddingBottom: z.number().optional(),
+  itemSpacing: z.number().optional().describe('Gap between children'),
+  fill: z.string().optional().describe('Fill color — hex (#ffffff) or token name (e.g. "color/surface/default")'),
+  stroke: z.string().optional().describe('Stroke color — hex or token name'),
+  strokeWeight: z.number().optional(),
+  cornerRadius: z.number().optional(),
+  opacity: z.number().min(0).max(1).optional(),
+  text: z.string().optional().describe('Text content (text nodes only)'),
+  fontSize: z.number().optional(),
+  fontWeight: z.union([z.literal(400), z.literal(500), z.literal(600), z.literal(700)]).optional(),
+  textColor: z.string().optional().describe('Text color — hex or token name'),
+  textAlign: z.enum(['left', 'center', 'right']).optional(),
+  clip: z.boolean().optional().describe('Clip children to bounds'),
+  variantText: z.record(z.string(), z.string()).optional().describe(
+    'Per-variant text overrides, key is "PropName=Value" e.g. { "State=Error": "Error message" }'
+  ),
+});
+
+// Lazy recursive type for children
+type LayerSpecInput = z.input<typeof LayerSpecSchemaBase> & { children?: LayerSpecInput[] };
+const LayerSpecSchema: z.ZodType<LayerSpecInput> = LayerSpecSchemaBase.extend({
+  children: z.lazy(() => LayerSpecSchema.array()).optional().describe('Nested child layers'),
+});
+
 export const CreateComponentInputSchema = z.object({
   workspaceId: z.string().describe('Workspace UUID'),
   pageName: z.string().describe('Figma page name e.g. "Buttons", "Forms", "Data Display"'),
-  componentName: z.string().describe('Component name e.g. "Button", "Input", "Badge"'),
+  componentName: z.string().describe('Component name e.g. "Button", "Input", "Badge", "Toast", "Avatar", "Tag"'),
   description: z.string().optional(),
   width: z.number().optional().describe('Component width in pixels (default: auto)'),
   variants: z.array(VariantSpecSchema).optional().describe(
@@ -67,6 +108,12 @@ export const CreateComponentInputSchema = z.object({
   ),
   tokenMappings: z.record(z.string(), z.string()).optional().describe(
     'Component token → existing variable, e.g. { "button-primary-bg": "color/brand/primary" }'
+  ),
+  layers: z.array(LayerSpecSchema).optional().describe(
+    'Layer anatomy — describes the full internal structure of the component. ' +
+    'When provided, the plugin builds the component from this layer tree instead of using built-in templates. ' +
+    'Use this for any component type: Toast, Avatar, Tag, Switch, Tooltip, List Item, Dropdown, Card, etc. ' +
+    'Fill/stroke/textColor accept hex (#ffffff) or token names (color/surface/default).'
   ),
 });
 

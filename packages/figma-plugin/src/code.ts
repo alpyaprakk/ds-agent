@@ -511,6 +511,49 @@ interface TokenBinding {
   token: TokenSpec;
 }
 
+// ─── Layer anatomy spec ───────────────────────────────────────────────────────
+// AI can describe any component's internal structure via a layer tree.
+// Plugin walks this tree and creates matching Figma nodes.
+
+interface LayerSpec {
+  type: 'frame' | 'text' | 'rectangle' | 'ellipse' | 'divider' | 'icon';
+  name: string;
+  // Layout
+  layout?: 'horizontal' | 'vertical' | 'none';
+  width?: number | 'fill' | 'hug';
+  height?: number | 'fill' | 'hug';
+  // Alignment
+  primaryAlign?: 'min' | 'center' | 'max' | 'space-between';
+  counterAlign?: 'min' | 'center' | 'max';
+  // Spacing
+  paddingH?: number;         // left + right
+  paddingV?: number;         // top + bottom
+  paddingLeft?: number;
+  paddingRight?: number;
+  paddingTop?: number;
+  paddingBottom?: number;
+  itemSpacing?: number;
+  // Styling — accepts hex (#fff) or token name (color/brand/primary)
+  fill?: string;
+  stroke?: string;
+  strokeWeight?: number;
+  cornerRadius?: number;
+  opacity?: number;
+  // Text specific
+  text?: string;
+  fontSize?: number;
+  fontWeight?: 400 | 500 | 600 | 700;
+  textColor?: string;        // hex or token name
+  textAlign?: 'left' | 'center' | 'right';
+  // Clipping
+  clip?: boolean;
+  // Nesting
+  children?: LayerSpec[];
+  // Per-variant text override key — variant prop value that changes this layer's text
+  // e.g. variantText: { "State=Error": "Error message" }
+  variantText?: Record<string, string>;
+}
+
 interface ComponentSpec {
   pageName: string;
   componentName: string;
@@ -529,6 +572,10 @@ interface ComponentSpec {
    *  e.g. { "button-primary-bg": "color/brand/primary" }
    *  Overrides the plugin's built-in aliasFor lists for matched token names. */
   tokenMappings?: Record<string, string>;
+  /** Layer anatomy — AI describes the full internal structure of the component.
+   *  When present, buildFromLayers() is used instead of the generic fallback.
+   *  Supports any component: Toast, Avatar, Tag, Switch, Tooltip, List Item, etc. */
+  layers?: LayerSpec[];
 }
 
 /** Override aliasFor on a TokenSpec using the AI-supplied tokenMappings. */
@@ -925,6 +972,274 @@ async function buildBadge(spec: ComponentSpec, variantProps: Record<string, stri
   return comp;
 }
 
+// ─── Layer anatomy engine ─────────────────────────────────────────────────────
+// Recursively builds a Figma node tree from a LayerSpec[] description.
+// Supports: frame, text, rectangle, ellipse, divider, icon.
+// Fill/stroke/textColor accept either a hex string (#fff) or a token name
+// (e.g. color/brand/primary) — token takes priority if found in local variables.
+
+function resolveFillPaint(value: string): Paint {
+  // Try to find a matching variable first
+  const variable = findVariable(value);
+  if (variable && variable.resolvedType === 'COLOR') {
+    return boundColorPaint(variable);
+  }
+  // Fallback to treating as hex
+  const hex = value.startsWith('#') ? value : `#${value}`;
+  return solidPaint(hex.length >= 7 ? hex : '#888888');
+}
+
+function applyLayerSizing(
+  node: FrameNode | RectangleNode,
+  spec: LayerSpec,
+  parent?: FrameNode | ComponentNode
+) {
+  if (node.type !== 'FRAME' && node.type !== 'RECTANGLE') return;
+
+  const w = spec.width;
+  const h = spec.height;
+
+  // Width
+  if (w === 'fill') {
+    node.layoutGrow = 1;
+    node.layoutSizingHorizontal = 'FILL';
+  } else if (w === 'hug') {
+    (node as FrameNode).primaryAxisSizingMode = 'AUTO';
+    node.layoutSizingHorizontal = 'HUG';
+  } else if (typeof w === 'number') {
+    node.resize(w, node.height || 40);
+    node.layoutSizingHorizontal = 'FIXED';
+  }
+
+  // Height
+  if (h === 'fill') {
+    node.layoutSizingVertical = 'FILL';
+  } else if (h === 'hug') {
+    (node as FrameNode).counterAxisSizingMode = 'AUTO';
+    node.layoutSizingVertical = 'HUG';
+  } else if (typeof h === 'number') {
+    node.resize(node.width || 100, h);
+    node.layoutSizingVertical = 'FIXED';
+  }
+}
+
+function buildLayerNode(
+  layerSpec: LayerSpec,
+  variantProps: Record<string, string>,
+  tokenMappings?: Record<string, string>
+): SceneNode {
+  const variantKey = Object.entries(variantProps).map(([k, v]) => `${k}=${v}`).join(',');
+
+  switch (layerSpec.type) {
+    case 'text': {
+      const t = figma.createText();
+      t.name = layerSpec.name;
+      const style = layerSpec.fontWeight === 700 ? 'Bold'
+                  : layerSpec.fontWeight === 600 ? 'Semi Bold'
+                  : layerSpec.fontWeight === 500 ? 'Medium'
+                  : 'Regular';
+      t.fontName = { family: 'Inter', style };
+      t.fontSize = layerSpec.fontSize || 14;
+
+      // Check per-variant text override
+      const overrideText = layerSpec.variantText?.[variantKey];
+      t.characters = overrideText || layerSpec.text || layerSpec.name;
+      t.textAutoResize = 'WIDTH_AND_HEIGHT';
+
+      if (layerSpec.textAlign === 'center') t.textAlignHorizontal = 'CENTER';
+      else if (layerSpec.textAlign === 'right') t.textAlignHorizontal = 'RIGHT';
+
+      const textColor = layerSpec.textColor || '#18181B';
+      const textVar = findVariable(textColor);
+      if (textVar && textVar.resolvedType === 'COLOR') {
+        t.fills = [boundColorPaint(textVar)];
+      } else {
+        t.fills = [solidPaint(textColor.startsWith('#') ? textColor : '#18181B')];
+      }
+
+      if (layerSpec.opacity !== undefined) t.opacity = layerSpec.opacity;
+      return t;
+    }
+
+    case 'rectangle': {
+      const r = figma.createRectangle();
+      r.name = layerSpec.name;
+      if (typeof layerSpec.width === 'number' && typeof layerSpec.height === 'number') {
+        r.resize(layerSpec.width, layerSpec.height);
+      } else {
+        r.resize(layerSpec.width as number || 100, layerSpec.height as number || 40);
+      }
+      if (layerSpec.fill) r.fills = [resolveFillPaint(layerSpec.fill)];
+      if (layerSpec.cornerRadius) r.cornerRadius = layerSpec.cornerRadius;
+      if (layerSpec.opacity !== undefined) r.opacity = layerSpec.opacity;
+      return r;
+    }
+
+    case 'ellipse': {
+      const e = figma.createEllipse();
+      e.name = layerSpec.name;
+      const sz = typeof layerSpec.width === 'number' ? layerSpec.width : 40;
+      e.resize(sz, typeof layerSpec.height === 'number' ? layerSpec.height : sz);
+      if (layerSpec.fill) e.fills = [resolveFillPaint(layerSpec.fill)];
+      if (layerSpec.opacity !== undefined) e.opacity = layerSpec.opacity;
+      return e;
+    }
+
+    case 'divider': {
+      const d = figma.createRectangle();
+      d.name = layerSpec.name || 'Divider';
+      const dw = typeof layerSpec.width === 'number' ? layerSpec.width : 200;
+      d.resize(dw, layerSpec.height as number || 1);
+      d.fills = [solidPaint(layerSpec.fill || '#E4E4E7')];
+      d.layoutGrow = 1;
+      d.layoutSizingHorizontal = 'FILL';
+      return d;
+    }
+
+    case 'icon': {
+      // Icon placeholder: a small rounded rectangle with an "icon" label
+      const iconFrame = figma.createFrame();
+      iconFrame.name = layerSpec.name || 'Icon';
+      const iconSz = typeof layerSpec.width === 'number' ? layerSpec.width : 16;
+      iconFrame.resize(iconSz, typeof layerSpec.height === 'number' ? layerSpec.height : iconSz);
+      iconFrame.layoutMode = 'NONE';
+      iconFrame.fills = [solidPaint(layerSpec.fill || '#71717A')];
+      if (layerSpec.cornerRadius) iconFrame.cornerRadius = layerSpec.cornerRadius;
+      else iconFrame.cornerRadius = 2;
+      if (layerSpec.opacity !== undefined) iconFrame.opacity = layerSpec.opacity;
+      return iconFrame;
+    }
+
+    case 'frame':
+    default: {
+      const f = figma.createFrame();
+      f.name = layerSpec.name;
+
+      // Layout
+      const layout = (layerSpec.layout || 'horizontal').toLowerCase();
+      f.layoutMode = layout === 'vertical' ? 'VERTICAL'
+                   : layout === 'none'     ? 'NONE'
+                   : 'HORIZONTAL';
+
+      if (f.layoutMode !== 'NONE') {
+        // Primary axis sizing
+        const wSpec = layerSpec.width;
+        if (wSpec === 'hug' || wSpec === undefined) {
+          f.primaryAxisSizingMode = 'AUTO';
+        } else if (wSpec === 'fill') {
+          f.layoutGrow = 1;
+          f.layoutSizingHorizontal = 'FILL';
+        } else if (typeof wSpec === 'number') {
+          f.resize(wSpec, f.height || 40);
+          f.primaryAxisSizingMode = 'FIXED';
+        }
+
+        // Counter axis sizing
+        const hSpec = layerSpec.height;
+        if (hSpec === 'hug' || hSpec === undefined) {
+          f.counterAxisSizingMode = 'AUTO';
+        } else if (hSpec === 'fill') {
+          f.layoutSizingVertical = 'FILL';
+        } else if (typeof hSpec === 'number') {
+          f.resize(f.width || 100, hSpec);
+          f.counterAxisSizingMode = 'FIXED';
+        }
+
+        // Alignment
+        const pa = layerSpec.primaryAlign || 'center';
+        f.primaryAxisAlignItems = pa === 'min' ? 'MIN' : pa === 'max' ? 'MAX' : pa === 'space-between' ? 'SPACE_BETWEEN' : 'CENTER';
+        const ca = layerSpec.counterAlign || 'center';
+        f.counterAxisAlignItems = ca === 'min' ? 'MIN' : ca === 'max' ? 'MAX' : 'CENTER';
+
+        // Padding
+        f.paddingLeft   = layerSpec.paddingLeft   ?? layerSpec.paddingH ?? 0;
+        f.paddingRight  = layerSpec.paddingRight  ?? layerSpec.paddingH ?? 0;
+        f.paddingTop    = layerSpec.paddingTop    ?? layerSpec.paddingV ?? 0;
+        f.paddingBottom = layerSpec.paddingBottom ?? layerSpec.paddingV ?? 0;
+        f.itemSpacing   = layerSpec.itemSpacing ?? 0;
+      } else {
+        // Free layout — set absolute size if given
+        if (typeof layerSpec.width === 'number' && typeof layerSpec.height === 'number') {
+          f.resize(layerSpec.width, layerSpec.height);
+        }
+      }
+
+      // Fill
+      if (layerSpec.fill) {
+        f.fills = [resolveFillPaint(layerSpec.fill)];
+      } else {
+        f.fills = [];
+      }
+
+      // Stroke
+      if (layerSpec.stroke) {
+        const strokeVar = findVariable(layerSpec.stroke);
+        if (strokeVar && strokeVar.resolvedType === 'COLOR') {
+          f.strokes = [boundColorPaint(strokeVar)];
+        } else {
+          f.strokes = [solidPaint(layerSpec.stroke.startsWith('#') ? layerSpec.stroke : '#E4E4E7')];
+        }
+        f.strokeWeight = layerSpec.strokeWeight ?? 1;
+        f.strokeAlign = 'INSIDE';
+      }
+
+      // Corner radius
+      if (layerSpec.cornerRadius !== undefined) {
+        // Check if it's a token name
+        const radVar = typeof layerSpec.cornerRadius === 'number' ? null : findVariable(String(layerSpec.cornerRadius));
+        if (radVar) {
+          applyRadius(f, radVar);
+        } else {
+          f.cornerRadius = layerSpec.cornerRadius;
+        }
+      }
+
+      // Opacity
+      if (layerSpec.opacity !== undefined) f.opacity = layerSpec.opacity;
+
+      // Clip content
+      if (layerSpec.clip) f.clipsContent = true;
+
+      // Recursively build children
+      if (layerSpec.children) {
+        for (const childSpec of layerSpec.children) {
+          const child = buildLayerNode(childSpec, variantProps, tokenMappings);
+          f.appendChild(child);
+        }
+      }
+
+      return f;
+    }
+  }
+}
+
+async function buildFromLayers(
+  spec: ComponentSpec,
+  variantProps: Record<string, string>
+): Promise<ComponentNode> {
+  const comp = figma.createComponent();
+  comp.name = Object.keys(variantProps).length > 0
+    ? Object.entries(variantProps).map(([k, v]) => `${k}=${v}`).join(', ')
+    : spec.componentName;
+  if (spec.description) comp.description = spec.description;
+
+  comp.fills = [];
+  comp.layoutMode = 'HORIZONTAL';
+  comp.primaryAxisSizingMode = 'AUTO';
+  comp.counterAxisSizingMode = 'AUTO';
+  comp.primaryAxisAlignItems = 'CENTER';
+  comp.counterAxisAlignItems = 'CENTER';
+
+  if (spec.layers) {
+    for (const layerSpec of spec.layers) {
+      const node = buildLayerNode(layerSpec, variantProps, spec.tokenMappings);
+      comp.appendChild(node);
+    }
+  }
+
+  return comp;
+}
+
 // ─── Generic component builder (fallback) ────────────────────────────────────
 
 async function buildGenericComponent(spec: ComponentSpec, variantProps: Record<string, string>): Promise<ComponentNode> {
@@ -990,7 +1305,8 @@ async function buildComponentNode(
     case 'Input':    return buildInput(spec, variantProps);
     case 'Checkbox': return buildCheckbox(spec, variantProps);
     case 'Badge':    return buildBadge(spec, variantProps);
-    default:         return buildGenericComponent(spec, variantProps);
+    default:
+      return spec.layers ? buildFromLayers(spec, variantProps) : buildGenericComponent(spec, variantProps);
   }
 }
 
@@ -1335,5 +1651,19 @@ figma.ui.onmessage = async (msg) => {
     if (result.success && msg.command.type !== 'sync') {
       setTimeout(() => runFullSync(), 1500);
     }
+  }
+
+  // ─── Auth persistence via clientStorage ──────────────────────────────────
+  if (msg.type === 'get-auth') {
+    const stored = await figma.clientStorage.getAsync('auth');
+    figma.ui.postMessage({ type: 'auth-restored', auth: stored || null });
+  }
+
+  if (msg.type === 'save-auth') {
+    await figma.clientStorage.setAsync('auth', msg.auth);
+  }
+
+  if (msg.type === 'clear-auth') {
+    await figma.clientStorage.deleteAsync('auth');
   }
 };

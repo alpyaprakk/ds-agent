@@ -5,6 +5,19 @@ const SERVER_URL = 'https://ds-agent.alpy.io';
 let socket: Socket | null = null;
 let heartbeatInterval: ReturnType<typeof setInterval> | null = null;
 
+// ─── Auth State ───────────────────────────────────────────────────────────────
+
+interface AuthState {
+  token: string;
+  userId: string;
+  userName: string;
+  userEmail: string;
+  workspaceId: string;
+  workspaceName: string;
+}
+
+let auth: AuthState | null = null;
+
 // ─── Job Queue State ──────────────────────────────────────────────────────────
 
 type JobStatus = 'pending' | 'running' | 'success' | 'error';
@@ -161,11 +174,8 @@ function updateJob(commandId: string, status: JobStatus, detail: string) {
 function setMcpStatus(connected: boolean, label?: string) {
   const badge = document.getElementById('mcp-badge')!;
   const lbl = document.getElementById('mcp-label')!;
-  badge.className = `mcp-badge ${connected ? 'connected' : 'disconnected'}`;
-  // also set id for CSS targeting
   badge.id = 'mcp-badge';
   badge.className = connected ? 'connected' : 'disconnected';
-  // re-add id (className overwrite doesn't touch id)
   lbl.textContent = label ?? (connected ? 'MCP Ready' : 'Connecting…');
 }
 
@@ -176,7 +186,6 @@ let collapsed = false;
 function toggleCollapse() {
   collapsed = !collapsed;
   document.body.classList.toggle('collapsed', collapsed);
-  // Resize plugin window
   parent.postMessage({
     pluginMessage: {
       type: 'resize',
@@ -184,6 +193,175 @@ function toggleCollapse() {
       height: collapsed ? 48 : 420,
     }
   }, '*');
+}
+
+// ─── Screen management ────────────────────────────────────────────────────────
+
+function showScreen(screen: 'auth' | 'workspace' | 'main') {
+  const authScreen = document.getElementById('auth-screen')!;
+  const wsScreen = document.getElementById('workspace-screen')!;
+  const mainContent = document.getElementById('main-content')!;
+  const userBar = document.getElementById('user-bar')!;
+
+  authScreen.style.display = screen === 'auth' ? 'flex' : 'none';
+  wsScreen.style.display = screen === 'workspace' ? 'flex' : 'none';
+  mainContent.style.display = screen === 'main' ? 'flex' : 'none';
+  userBar.style.display = screen === 'main' ? 'flex' : 'none';
+
+  if (screen === 'main') {
+    const height = collapsed ? 48 : 420;
+    parent.postMessage({ pluginMessage: { type: 'resize', width: 300, height } }, '*');
+  } else {
+    parent.postMessage({ pluginMessage: { type: 'resize', width: 300, height: 360 } }, '*');
+  }
+}
+
+// ─── Auth persistence ─────────────────────────────────────────────────────────
+
+function saveAuth(authState: AuthState) {
+  parent.postMessage({ pluginMessage: { type: 'save-auth', auth: authState } }, '*');
+}
+
+function clearAuth() {
+  parent.postMessage({ pluginMessage: { type: 'clear-auth' } }, '*');
+}
+
+// ─── Login flow ───────────────────────────────────────────────────────────────
+
+async function handleLogin() {
+  const emailEl = document.getElementById('auth-email') as HTMLInputElement;
+  const passwordEl = document.getElementById('auth-password') as HTMLInputElement;
+  const errorEl = document.getElementById('auth-error')!;
+  const btn = document.getElementById('auth-btn') as HTMLButtonElement;
+
+  const email = emailEl.value.trim();
+  const password = passwordEl.value;
+
+  if (!email || !password) {
+    errorEl.textContent = 'Email and password required';
+    return;
+  }
+
+  btn.disabled = true;
+  btn.textContent = 'Signing in…';
+  errorEl.textContent = '';
+
+  try {
+    const loginRes = await fetch(`${SERVER_URL}/api/auth/login`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email, password }),
+    });
+
+    if (!loginRes.ok) {
+      const err = await loginRes.json().catch(() => ({}));
+      throw new Error(err.error || 'Login failed');
+    }
+
+    const { token, user } = await loginRes.json();
+
+    // Fetch workspaces
+    const wsRes = await fetch(`${SERVER_URL}/api/workspaces`, {
+      headers: { Authorization: `Bearer ${token}` },
+    });
+
+    if (!wsRes.ok) throw new Error('Failed to load workspaces');
+
+    const workspaces: Array<{ id: string; name: string }> = await wsRes.json();
+
+    if (workspaces.length === 0) {
+      throw new Error('No workspaces found. Create one in the dashboard.');
+    }
+
+    if (workspaces.length === 1) {
+      // Auto-select the only workspace
+      completeLogin(token, user, workspaces[0]);
+    } else {
+      // Show workspace selector
+      showWorkspaceSelector(token, user, workspaces);
+    }
+  } catch (err: any) {
+    errorEl.textContent = err.message || 'Login failed';
+  } finally {
+    btn.disabled = false;
+    btn.textContent = 'Sign In';
+  }
+}
+
+function showWorkspaceSelector(token: string, user: any, workspaces: Array<{ id: string; name: string }>) {
+  const list = document.getElementById('workspace-list')!;
+  list.innerHTML = '';
+
+  workspaces.forEach(ws => {
+    const item = document.createElement('div');
+    item.className = 'workspace-item';
+    item.textContent = ws.name;
+    item.onclick = () => {
+      list.querySelectorAll('.workspace-item').forEach(el => el.classList.remove('selected'));
+      item.classList.add('selected');
+
+      // Store selection on confirm button and enable it
+      const confirmBtn = document.getElementById('ws-confirm-btn') as HTMLButtonElement;
+      confirmBtn.dataset.wsId = ws.id;
+      confirmBtn.dataset.wsName = ws.name;
+      confirmBtn.dataset.token = token;
+      confirmBtn.dataset.userId = user.id;
+      confirmBtn.dataset.userName = user.name || user.email;
+      confirmBtn.dataset.userEmail = user.email;
+      confirmBtn.disabled = false;
+    };
+    list.appendChild(item);
+  });
+
+  showScreen('workspace');
+}
+
+function handleWorkspaceConfirm() {
+  const btn = document.getElementById('ws-confirm-btn') as HTMLButtonElement;
+  const wsId = btn.dataset.wsId;
+  const wsName = btn.dataset.wsName;
+
+  if (!wsId || !wsName) return;
+
+  completeLogin(
+    btn.dataset.token!,
+    { id: btn.dataset.userId!, name: btn.dataset.userName!, email: btn.dataset.userEmail! },
+    { id: wsId, name: wsName }
+  );
+}
+
+function completeLogin(token: string, user: any, workspace: { id: string; name: string }) {
+  auth = {
+    token,
+    userId: user.id,
+    userName: user.name || user.email,
+    userEmail: user.email,
+    workspaceId: workspace.id,
+    workspaceName: workspace.name,
+  };
+
+  saveAuth(auth);
+  updateUserBar();
+  showScreen('main');
+  connectToServer();
+}
+
+function updateUserBar() {
+  if (!auth) return;
+  const nameEl = document.getElementById('user-bar-name')!;
+  const wsEl = document.getElementById('user-bar-workspace')!;
+  nameEl.textContent = auth.userName;
+  wsEl.textContent = auth.workspaceName;
+}
+
+function handleLogout() {
+  if (socket?.connected) socket.disconnect();
+  socket = null;
+  if (heartbeatInterval) clearInterval(heartbeatInterval);
+  heartbeatInterval = null;
+  auth = null;
+  clearAuth();
+  showScreen('auth');
 }
 
 // ─── Socket.IO ────────────────────────────────────────────────────────────────
@@ -200,10 +378,13 @@ function performSync() {
 }
 
 function connectToServer() {
+  if (socket?.connected) socket.disconnect();
+
   socket = io(SERVER_URL, {
     path: '/api/socket.io',
     transports: ['websocket', 'polling'],
     query: { plugin: 'true' },
+    auth: auth ? { token: auth.token } : {},
     reconnection: true,
     reconnectionDelay: 5000,
     reconnectionAttempts: Infinity,
@@ -212,7 +393,12 @@ function connectToServer() {
   socket.on('connect', () => {
     console.log('✅ Connected to Tokenhaus server');
     setMcpStatus(true, 'MCP Ready');
-    socket!.emit('plugin-connect', { plugin: 'figma', timestamp: new Date().toISOString() });
+    socket!.emit('plugin-connect', {
+      plugin: 'figma',
+      timestamp: new Date().toISOString(),
+      userId: auth?.userId,
+      workspaceId: auth?.workspaceId,
+    });
     startHeartbeat();
   });
 
@@ -251,7 +437,12 @@ function connectToServer() {
 
   socket.on('reconnect', () => {
     setMcpStatus(true, 'MCP Ready');
-    socket!.emit('plugin-connect', { plugin: 'figma', timestamp: new Date().toISOString() });
+    socket!.emit('plugin-connect', {
+      plugin: 'figma',
+      timestamp: new Date().toISOString(),
+      userId: auth?.userId,
+      workspaceId: auth?.workspaceId,
+    });
     startHeartbeat();
   });
 
@@ -285,15 +476,32 @@ window.onmessage = (event: MessageEvent) => {
   const msg = event.data?.pluginMessage;
   if (!msg) return;
 
+  if (msg.type === 'auth-restored') {
+    if (msg.auth) {
+      auth = msg.auth as AuthState;
+      updateUserBar();
+      showScreen('main');
+      connectToServer();
+    } else {
+      showScreen('auth');
+    }
+    return;
+  }
+
   if (msg.type === 'sync-data') {
+    const payload = {
+      data: msg.data,
+      workspaceId: auth?.workspaceId,
+      userId: auth?.userId,
+    };
     if (socket?.connected) {
-      socket.emit('design-system-sync', { data: msg.data });
+      socket.emit('design-system-sync', payload);
     } else {
       connectToServer();
       const wait = setInterval(() => {
         if (socket?.connected) {
           clearInterval(wait);
-          socket.emit('design-system-sync', { data: msg.data });
+          socket.emit('design-system-sync', payload);
         }
       }, 1000);
       setTimeout(() => clearInterval(wait), 15_000);
@@ -320,11 +528,21 @@ window.onmessage = (event: MessageEvent) => {
 
 document.addEventListener('DOMContentLoaded', () => {
   document.getElementById('toggle-btn')!.onclick = toggleCollapse;
+  document.getElementById('auth-btn')!.onclick = handleLogin;
+  document.getElementById('ws-confirm-btn')!.onclick = handleWorkspaceConfirm;
+  document.getElementById('logout-btn')!.onclick = handleLogout;
+
+  // Allow Enter key on password field
+  document.getElementById('auth-password')!.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter') handleLogin();
+  });
 
   // Initial window size
-  parent.postMessage({ pluginMessage: { type: 'resize', width: 300, height: 420 } }, '*');
+  parent.postMessage({ pluginMessage: { type: 'resize', width: 300, height: 360 } }, '*');
 
-  connectToServer();
+  // Restore auth from clientStorage
+  parent.postMessage({ pluginMessage: { type: 'get-auth' } }, '*');
+
   renderJobs();
 });
 

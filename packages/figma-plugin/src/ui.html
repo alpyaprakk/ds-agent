@@ -334,6 +334,196 @@
       margin-left: 8px;
     }
 
+    /* ── Auth screen ────────────────────────────────────── */
+    #auth-screen {
+      padding: 16px 12px;
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+    }
+
+    #auth-screen .auth-title {
+      font-size: 13px;
+      font-weight: 600;
+      color: var(--text);
+    }
+
+    #auth-screen .auth-subtitle {
+      font-size: 11px;
+      color: var(--muted);
+      margin-top: -6px;
+    }
+
+    .auth-field {
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+    }
+
+    .auth-field label {
+      font-size: 10px;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      color: var(--muted);
+    }
+
+    .auth-field input {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      padding: 8px 10px;
+      color: var(--text);
+      font-size: 12px;
+      font-family: inherit;
+      outline: none;
+      transition: border-color 0.2s;
+    }
+
+    .auth-field input:focus {
+      border-color: #525252;
+    }
+
+    #auth-error {
+      font-size: 11px;
+      color: var(--red);
+      display: none;
+    }
+
+    #auth-btn {
+      background: var(--text);
+      color: #0a0a0a;
+      border: none;
+      border-radius: 6px;
+      padding: 9px 12px;
+      font-size: 12px;
+      font-weight: 600;
+      font-family: inherit;
+      cursor: pointer;
+      transition: opacity 0.2s;
+      width: 100%;
+    }
+
+    #auth-btn:hover { opacity: 0.85; }
+    #auth-btn:disabled { opacity: 0.4; cursor: not-allowed; }
+
+    /* ── Workspace selector ─────────────────────────────── */
+    #workspace-screen {
+      padding: 16px 12px;
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+      display: none;
+    }
+
+    #workspace-screen .auth-title {
+      font-size: 13px;
+      font-weight: 600;
+      color: var(--text);
+    }
+
+    .workspace-list {
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+    }
+
+    .workspace-item {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      padding: 10px 12px;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      transition: border-color 0.15s, background 0.15s;
+    }
+
+    .workspace-item:hover {
+      border-color: #525252;
+      background: var(--surface2);
+    }
+
+    .workspace-item.selected {
+      border-color: var(--green);
+      background: var(--green-dim);
+    }
+
+    .workspace-item .ws-name {
+      font-size: 12px;
+      font-weight: 500;
+      color: var(--text);
+    }
+
+    .workspace-item .ws-meta {
+      font-size: 10px;
+      color: var(--muted);
+    }
+
+    #ws-confirm-btn {
+      background: var(--text);
+      color: #0a0a0a;
+      border: none;
+      border-radius: 6px;
+      padding: 9px 12px;
+      font-size: 12px;
+      font-weight: 600;
+      font-family: inherit;
+      cursor: pointer;
+      width: 100%;
+      transition: opacity 0.2s;
+    }
+
+    #ws-confirm-btn:hover { opacity: 0.85; }
+    #ws-confirm-btn:disabled { opacity: 0.4; cursor: not-allowed; }
+
+    /* ── User bar (shown when logged in) ────────────────── */
+    #user-bar {
+      display: none;
+      align-items: center;
+      justify-content: space-between;
+      padding: 8px 10px;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      margin: 8px 12px 0;
+    }
+
+    #user-bar .user-info {
+      display: flex;
+      flex-direction: column;
+      gap: 1px;
+    }
+
+    #user-bar .user-name {
+      font-size: 11px;
+      font-weight: 500;
+      color: var(--text);
+    }
+
+    #user-bar .workspace-name {
+      font-size: 10px;
+      color: var(--muted);
+    }
+
+    #logout-btn {
+      background: none;
+      border: 1px solid var(--border);
+      border-radius: 4px;
+      color: var(--muted);
+      font-size: 10px;
+      font-family: inherit;
+      cursor: pointer;
+      padding: 3px 8px;
+      transition: color 0.2s, border-color 0.2s;
+    }
+
+    #logout-btn:hover {
+      color: var(--text);
+      border-color: #525252;
+    }
+
     /* ── Info row ───────────────────────────────────────── */
     #info-row {
       display: flex;
@@ -392,8 +582,40 @@
     </div>
   </div>
 
+  <!-- Auth screen (shown when not logged in) -->
+  <div id="auth-screen">
+    <div class="auth-title">Sign in to Tokenhaus</div>
+    <div class="auth-subtitle">Connect to your design system workspace</div>
+    <div class="auth-field">
+      <label>Email</label>
+      <input type="email" id="auth-email" placeholder="you@example.com" autocomplete="off" />
+    </div>
+    <div class="auth-field">
+      <label>Password</label>
+      <input type="password" id="auth-password" placeholder="••••••••" />
+    </div>
+    <div id="auth-error"></div>
+    <button id="auth-btn">Sign in</button>
+  </div>
+
+  <!-- Workspace selector (shown after login if multiple workspaces) -->
+  <div id="workspace-screen">
+    <div class="auth-title">Select Workspace</div>
+    <div class="workspace-list" id="workspace-list"></div>
+    <button id="ws-confirm-btn" disabled>Continue</button>
+  </div>
+
+  <!-- User bar (shown when logged in, above main content) -->
+  <div id="user-bar">
+    <div class="user-info">
+      <span class="user-name" id="user-bar-name"></span>
+      <span class="workspace-name" id="user-bar-workspace"></span>
+    </div>
+    <button id="logout-btn">Sign out</button>
+  </div>
+
   <!-- Expandable content -->
-  <div id="main-content">
+  <div id="main-content" style="display:none">
 
     <!-- Info chips -->
     <div id="info-row">

@@ -91,7 +91,7 @@ export function setupWebSocketHandlers(io: SocketIOServer) {
     socket.emit('plugin-status', currentStatus);
 
     // Plugin connection
-    socket.on('plugin-connect', (data: { plugin: string; timestamp: string }) => {
+    socket.on('plugin-connect', (data: { plugin: string; timestamp: string; userId?: string; workspaceId?: string }) => {
       pluginId = socket.id;
       connectedPlugins.set(pluginId, {
         socketId: socket.id,
@@ -99,6 +99,9 @@ export function setupWebSocketHandlers(io: SocketIOServer) {
         connectedAt: new Date(),
         lastHeartbeat: new Date()
       });
+      // Attach auth context to socket for use in other handlers
+      if (data.userId) (socket as any).pluginUserId = data.userId;
+      if (data.workspaceId) (socket as any).pluginWorkspaceId = data.workspaceId;
 
       console.log(`✅ Plugin connected: ${data.plugin} (${socket.id})`);
 
@@ -134,6 +137,8 @@ export function setupWebSocketHandlers(io: SocketIOServer) {
         // Handle both wrapped { data: {...} } and unwrapped { file, variables, ... } formats
         const syncPayload = data.data || data;
         const { file, variables, collections, components } = syncPayload;
+        // workspaceId may be sent by authenticated plugin
+        const pluginWorkspaceId: string | undefined = data.workspaceId;
 
         if (!file || !variables || !collections || !components) {
           console.error('❌ Invalid sync data format:', Object.keys(data));
@@ -145,11 +150,36 @@ export function setupWebSocketHandlers(io: SocketIOServer) {
 
         console.log(`📊 File: ${file.name} (${file.key})`);
         console.log(`📦 Variables: ${variables.length}, Collections: ${collections.length}, Components: ${components.length}`);
+        if (pluginWorkspaceId) console.log(`🔑 Plugin auth workspaceId: ${pluginWorkspaceId}`);
 
         // Find Figma file in database by key
         // If key is "unknown" (dev mode), try to match by file name first
         let figmaFileResult;
-        if (file.key === 'unknown') {
+
+        if (pluginWorkspaceId) {
+          // Authenticated plugin: scope file lookup to the plugin's workspace
+          if (file.key !== 'unknown') {
+            figmaFileResult = await pool.query(
+              `SELECT * FROM figma_files WHERE figma_key = $1 AND workspace_id = $2 LIMIT 1`,
+              [file.key, pluginWorkspaceId]
+            );
+          }
+          if (!figmaFileResult || figmaFileResult.rows.length === 0) {
+            figmaFileResult = await pool.query(
+              `SELECT * FROM figma_files WHERE name = $1 AND workspace_id = $2 LIMIT 1`,
+              [file.name, pluginWorkspaceId]
+            );
+          }
+          if (figmaFileResult.rows.length === 0) {
+            figmaFileResult = await pool.query(
+              `SELECT * FROM figma_files WHERE sync_status = 'syncing' AND workspace_id = $1 ORDER BY updated_at DESC LIMIT 1`,
+              [pluginWorkspaceId]
+            );
+            if (figmaFileResult.rows.length > 0) {
+              console.log(`⚠️ Matched syncing file by status (workspace-scoped): ${figmaFileResult.rows[0].name}`);
+            }
+          }
+        } else if (file.key === 'unknown') {
           console.log(`⚠️ File key is "unknown" (dev mode plugin). Matching by name: ${file.name}`);
           figmaFileResult = await pool.query(
             `SELECT * FROM figma_files WHERE name = $1 AND figma_key != 'unknown' LIMIT 1`,
@@ -186,23 +216,27 @@ export function setupWebSocketHandlers(io: SocketIOServer) {
           }
         }
 
-        // Auto-register: if file not found, create it in the first available workspace
+        // Auto-register: if file not found, create it in the authenticated workspace (or first available)
         if (figmaFileResult.rows.length === 0) {
           console.log(`⚠️ Figma file not found in DB. Auto-registering: ${file.name} (${file.key})`);
 
-          // Find first workspace to associate with
-          const workspaceResult = await pool.query(
-            'SELECT id FROM workspaces ORDER BY created_at ASC LIMIT 1'
-          );
+          // Use plugin's authenticated workspace if available, otherwise fall back to first workspace
+          let workspaceId: string;
+          if (pluginWorkspaceId) {
+            workspaceId = pluginWorkspaceId;
+          } else {
+            const workspaceResult = await pool.query(
+              'SELECT id FROM workspaces ORDER BY created_at ASC LIMIT 1'
+            );
 
-          if (workspaceResult.rows.length === 0) {
-            socket.emit('sync-error', {
-              error: 'No workspace found. Please create a workspace in the dashboard first.'
-            });
-            return;
+            if (workspaceResult.rows.length === 0) {
+              socket.emit('sync-error', {
+                error: 'No workspace found. Please create a workspace in the dashboard first.'
+              });
+              return;
+            }
+            workspaceId = workspaceResult.rows[0].id;
           }
-
-          const workspaceId = workspaceResult.rows[0].id;
 
           // Create the Figma file record
           figmaFileResult = await pool.query(
