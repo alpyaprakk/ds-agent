@@ -298,15 +298,40 @@ interface VariantStyle {
   fontStyle?: string;
 }
 
-function resolveVariantStyle(componentName: string, props: Record<string, string>): VariantStyle {
-  const type     = props['Type'] || props['Variant'] || 'Default';
-  const state    = props['State'] || 'Default';
-  const size     = props['Size'] || 'Medium';
+// Normalize shadcn-style lowercase/short values to the internal Title Case used throughout
+function normalizeVariantProp(value: string): string {
+  const map: Record<string, string> = {
+    // Type / Variant
+    'default': 'Default', 'primary': 'Primary', 'secondary': 'Secondary',
+    'destructive': 'Destructive', 'outline': 'Outline', 'ghost': 'Ghost',
+    'link': 'Link', 'success': 'Success', 'warning': 'Warning',
+    // State
+    'hover': 'Hover', 'pressed': 'Pressed', 'focus': 'Focus', 'focused': 'Focus',
+    'disabled': 'Disabled', 'error': 'Error', 'filled': 'Filled',
+    'unchecked': 'Unchecked', 'checked': 'Checked', 'indeterminate': 'Indeterminate',
+    // Size — shadcn uses 'sm', 'default', 'lg', 'icon'
+    'sm': 'Small', 'md': 'Medium', 'lg': 'Large', 'icon': 'Icon',
+    // Title-case passthroughs (already correct)
+    'small': 'Small', 'medium': 'Medium', 'large': 'Large',
+  };
+  return map[value.toLowerCase()] ?? (value.charAt(0).toUpperCase() + value.slice(1));
+}
 
+function resolveVariantStyle(componentName: string, props: Record<string, string>): VariantStyle {
+  const rawType  = props['Type'] || props['Variant'] || 'Default';
+  const rawState = props['State'] || 'Default';
+  const rawSize  = props['Size'] || 'Medium';
+
+  const type  = normalizeVariantProp(rawType);
+  const state = normalizeVariantProp(rawState);
+  const size  = normalizeVariantProp(rawSize);
+
+  // shadcn 'default' size maps to 'Medium'
   const sizeMap: Record<string, { height: number; paddingH: number; paddingV: number; fontSize: number }> = {
     'Small':  { height: 32, paddingH: 12, paddingV: 6,  fontSize: 12 },
     'Medium': { height: 40, paddingH: 16, paddingV: 8,  fontSize: 14 },
     'Large':  { height: 48, paddingH: 20, paddingV: 12, fontSize: 16 },
+    'Icon':   { height: 40, paddingH: 0,  paddingV: 0,  fontSize: 14 },
   };
   const sizeStyle = sizeMap[size] || sizeMap['Medium'];
 
@@ -426,12 +451,57 @@ function resolveVariantStyle(componentName: string, props: Record<string, string
     };
   }
 
-  // ── Fallback (generic component) ──────────────────────────────────────
-  return {
-    ...sizeStyle,
-    bgToken:   ct(`bg`,   ['color/bg/default'],    '#FFFFFF'),
-    textToken: ct(`text`, ['color/text/primary'],  '#18181B'),
+  // ── Fallback (generic component) — variant-aware ──────────────────────
+  // Applies meaningful styles based on Type/Variant + State properties
+  // so any custom component gets differentiated variants automatically.
+  const variantKey = type.toLowerCase();
+  const styleByType: Record<string, { bgHex: string; textHex: string; strokeHex?: string; strokeWeight?: number }> = {
+    'primary':     { bgHex: '#18181B', textHex: '#FAFAFA' },
+    'default':     { bgHex: '#18181B', textHex: '#FAFAFA' },
+    'secondary':   { bgHex: '#F4F4F5', textHex: '#18181B' },
+    'destructive': { bgHex: '#EF4444', textHex: '#FAFAFA' },
+    'outline':     { bgHex: '#FFFFFF', textHex: '#18181B', strokeHex: '#E4E4E7', strokeWeight: 1 },
+    'ghost':       { bgHex: 'transparent', textHex: '#18181B' },
+    'success':     { bgHex: '#16A34A', textHex: '#FAFAFA' },
+    'warning':     { bgHex: '#D97706', textHex: '#FAFAFA' },
+    'info':        { bgHex: '#2563EB', textHex: '#FAFAFA' },
+    'error':       { bgHex: '#EF4444', textHex: '#FAFAFA' },
   };
+
+  const typeStyle = styleByType[variantKey] || styleByType['primary'];
+
+  // State overrides
+  const isDisabledState = state === 'Disabled';
+
+  const bgTokenSpec = isDisabledState
+    ? ct(`${variantKey}-bg-disabled`, ['color/text/disabled', 'color/neutral/400'], '#A1A1AA')
+    : typeStyle.bgHex === 'transparent'
+      ? undefined  // ghost — no fill
+      : ct(`${variantKey}-bg`, [`color/${variantKey}/default`, `color/bg/default`], typeStyle.bgHex);
+
+  const textTokenSpec = isDisabledState
+    ? ct(`${variantKey}-text-disabled`, ['color/text/disabled'], '#A1A1AA')
+    : ct(`${variantKey}-text`, [`color/${variantKey}/text`, 'color/text/primary'], typeStyle.textHex);
+
+  const strokeTokenSpec = typeStyle.strokeHex
+    ? ct(`${variantKey}-border`, ['color/border/default'], typeStyle.strokeHex)
+    : undefined;
+
+  const result: VariantStyle = {
+    ...sizeStyle,
+    bgToken:   bgTokenSpec,
+    bgHex:     (!bgTokenSpec && typeStyle.bgHex === 'transparent') ? undefined : undefined,
+    textToken: textTokenSpec,
+    strokeToken: strokeTokenSpec,
+    strokeWeight: typeStyle.strokeWeight,
+  };
+
+  if (isDisabledState) {
+    // Signal to builder to apply opacity
+    result.fontStyle = 'Regular';
+  }
+
+  return result;
 }
 
 // ─── AI Execute Commands ──────────────────────────────────────────────────────
@@ -611,16 +681,18 @@ async function buildButton(spec: ComponentSpec, variantProps: Record<string, str
   bg.primaryAxisAlignItems = 'CENTER';
   bg.counterAxisAlignItems = 'CENTER';
   bg.layoutGrow = 0;
-  const sizeKey = variantProps['Size'] || 'Medium';
+  const sizeKey = normalizeVariantProp(variantProps['Size'] || 'Medium');
   const hTokenMap: Record<string, [string, number]> = {
     Small:  ['spacing/3', 12],
     Medium: ['spacing/4', 16],
     Large:  ['spacing/5', 20],
+    Icon:   ['spacing/0', 0],
   };
   const vTokenMap: Record<string, [string, number]> = {
     Small:  ['spacing/1-5', 6],
     Medium: ['spacing/2', 8],
     Large:  ['spacing/3', 12],
+    Icon:   ['spacing/0', 0],
   };
   const [hTok, hFallback] = hTokenMap[sizeKey] || hTokenMap['Medium'];
   const [vTok, vFallback] = vTokenMap[sizeKey] || vTokenMap['Medium'];
@@ -809,6 +881,50 @@ async function buildCheckbox(_spec: ComponentSpec, variantProps: Record<string, 
   return comp;
 }
 
+// ─── Badge builder (shadcn-accurate) ─────────────────────────────────────────
+// Structure: Component (horizontal, hug) → bg Frame (hug, horizontal) → Label text
+
+async function buildBadge(spec: ComponentSpec, variantProps: Record<string, string>): Promise<ComponentNode> {
+  let style = resolveVariantStyle('Badge', variantProps);
+  if (spec.tokenMappings) style = applyTokenMappings(style, spec.tokenMappings);
+
+  const comp = figma.createComponent();
+  comp.name = Object.entries(variantProps).map(([k, v]) => `${k}=${v}`).join(', ');
+  comp.fills = [];
+  comp.layoutMode = 'HORIZONTAL';
+  comp.primaryAxisSizingMode = 'AUTO';
+  comp.counterAxisSizingMode = 'AUTO';
+  comp.primaryAxisAlignItems = 'CENTER';
+  comp.counterAxisAlignItems = 'CENTER';
+
+  const bg = figma.createFrame();
+  bg.name = 'Background';
+  bg.layoutMode = 'HORIZONTAL';
+  bg.primaryAxisSizingMode = 'AUTO';
+  bg.counterAxisSizingMode = 'AUTO';
+  bg.primaryAxisAlignItems = 'CENTER';
+  bg.counterAxisAlignItems = 'CENTER';
+  applyPaddingToken(bg, 'paddingLeft',   'spacing/2-5', 10);
+  applyPaddingToken(bg, 'paddingRight',  'spacing/2-5', 10);
+  applyPaddingToken(bg, 'paddingTop',    'spacing/0-5', 2);
+  applyPaddingToken(bg, 'paddingBottom', 'spacing/0-5', 2);
+
+  applyFill(bg, style);
+  applyStroke(bg, style);
+  // Badge uses pill shape
+  bg.cornerRadius = 9999;
+
+  const label = makeText('Badge', {
+    fontSize: style.fontSize || 12,
+    fontStyle: 'Medium',
+    tokenSpec: style.textToken,
+    color: '#18181B',
+  });
+  bg.appendChild(label);
+  comp.appendChild(bg);
+  return comp;
+}
+
 // ─── Generic component builder (fallback) ────────────────────────────────────
 
 async function buildGenericComponent(spec: ComponentSpec, variantProps: Record<string, string>): Promise<ComponentNode> {
@@ -848,6 +964,9 @@ async function buildGenericComponent(spec: ComponentSpec, variantProps: Record<s
   applyStroke(bg, style);
   applyRadiusToken(bg, 'radius/md', 6);
 
+  const isDisabledState = normalizeVariantProp(variantProps['State'] || '') === 'Disabled';
+  if (isDisabledState) bg.opacity = 0.5;
+
   const label = makeText(spec.componentName, {
     fontSize: style.fontSize || 14,
     fontStyle: style.fontStyle || 'Medium',
@@ -870,6 +989,7 @@ async function buildComponentNode(
     case 'Button':   return buildButton(spec, variantProps);
     case 'Input':    return buildInput(spec, variantProps);
     case 'Checkbox': return buildCheckbox(spec, variantProps);
+    case 'Badge':    return buildBadge(spec, variantProps);
     default:         return buildGenericComponent(spec, variantProps);
   }
 }
