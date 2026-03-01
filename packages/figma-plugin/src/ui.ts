@@ -267,7 +267,8 @@ async function handleLogin() {
 
     if (!wsRes.ok) throw new Error('Failed to load workspaces');
 
-    const workspaces: Array<{ id: string; name: string }> = await wsRes.json();
+    const wsData = await wsRes.json();
+    const workspaces: Array<{ id: string; name: string }> = wsData.workspaces ?? wsData;
 
     if (workspaces.length === 0) {
       throw new Error('No workspaces found. Create one in the dashboard.');
