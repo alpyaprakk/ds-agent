@@ -80,6 +80,66 @@ router.patch('/:id', async (req: AuthRequest, res) => {
   }
 });
 
+// POST /api/workspaces/:id/reset - Reset workspace data (owner only)
+// Deletes all tokens, collections, components, files, conflicts, and logs
+// Keeps workspace, members, and settings intact
+router.post('/:id/reset', async (req: AuthRequest, res) => {
+  try {
+    const role = await UserRepository.getMemberRole(req.user!.id, req.params.id);
+    if (role !== 'owner') {
+      return res.status(403).json({ error: 'Only the workspace owner can reset it' });
+    }
+
+    const workspace = await workspaceRepo.findById(req.params.id);
+    if (!workspace) {
+      return res.status(404).json({ error: 'Workspace not found' });
+    }
+
+    // Delete all workspace data in transaction
+    const client = await pool.connect();
+    try {
+      await client.query('BEGIN');
+
+      // Delete in order to respect foreign key constraints
+      await client.query('DELETE FROM conflicts WHERE workspace_id = $1', [req.params.id]);
+      await client.query('DELETE FROM change_logs WHERE workspace_id = $1', [req.params.id]);
+      await client.query('DELETE FROM sync_history WHERE workspace_id = $1', [req.params.id]);
+      await client.query('DELETE FROM components WHERE workspace_id = $1', [req.params.id]);
+      await client.query('DELETE FROM variables WHERE workspace_id = $1', [req.params.id]);
+      await client.query('DELETE FROM variable_collections WHERE workspace_id = $1', [req.params.id]);
+      await client.query('DELETE FROM figma_files WHERE workspace_id = $1', [req.params.id]);
+
+      // Clear console logs (in-memory)
+      consoleLogger.clearLogs(req.params.id);
+
+      await client.query('COMMIT');
+
+      // Notify workspace members about reset
+      NotificationService.notifyWorkspaceMembers({
+        workspaceId: req.params.id,
+        type: 'workspace_reset',
+        title: `${workspace.name} was reset`,
+        message: `${req.user!.name} reset all data in the workspace. Members and settings are preserved.`,
+        actorId: req.user!.id,
+        excludeUserId: req.user!.id,
+      }).catch(err => console.error('Failed to create reset notification:', err));
+
+      return res.json({
+        success: true,
+        message: 'Workspace data reset successfully. All tokens, components, and files have been deleted.'
+      });
+    } catch (error) {
+      await client.query('ROLLBACK');
+      throw error;
+    } finally {
+      client.release();
+    }
+  } catch (error) {
+    console.error('Error resetting workspace:', error);
+    return res.status(500).json({ error: 'Failed to reset workspace' });
+  }
+});
+
 // DELETE /api/workspaces/:id - Delete workspace (owner only)
 router.delete('/:id', async (req: AuthRequest, res) => {
   try {
@@ -91,6 +151,20 @@ router.delete('/:id', async (req: AuthRequest, res) => {
     if (!deleted) {
       return res.status(404).json({ error: 'Workspace not found' });
     }
+
+    // Notify workspace members before deletion (they will be removed)
+    const workspace = await workspaceRepo.findById(req.params.id);
+    if (workspace) {
+      NotificationService.notifyWorkspaceMembers({
+        workspaceId: req.params.id,
+        type: 'workspace_deleted',
+        title: `${workspace.name} was deleted`,
+        message: `${req.user!.name} deleted the workspace`,
+        actorId: req.user!.id,
+        excludeUserId: req.user!.id,
+      }).catch(err => console.error('Failed to create deletion notification:', err));
+    }
+
     return res.json({ success: true });
   } catch (error) {
     console.error('Error deleting workspace:', error);

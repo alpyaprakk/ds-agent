@@ -31,7 +31,9 @@ export type NotificationType =
   | 'figma_synced'
   | 'conflict_detected'
   | 'conflict_resolved'
-  | 'figma_file_removed';
+  | 'figma_file_removed'
+  | 'workspace_reset'
+  | 'workspace_deleted';
 
 export class NotificationRepository {
   static async create(data: {
