@@ -233,9 +233,13 @@ export function Settings() {
 
     setResettingWorkspace(true);
     try {
+      const token = localStorage.getItem('auth_token');
       const response = await fetch(`${import.meta.env.VITE_API_URL}/api/workspaces/${currentWorkspace.id}/reset`, {
         method: 'POST',
-        credentials: 'include',
+        headers: {
+          'Content-Type': 'application/json',
+          ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        },
       });
 
       if (!response.ok) {
@@ -260,9 +264,13 @@ export function Settings() {
 
     setDeletingWorkspace(true);
     try {
+      const token = localStorage.getItem('auth_token');
       const response = await fetch(`${import.meta.env.VITE_API_URL}/api/workspaces/${currentWorkspace.id}`, {
         method: 'DELETE',
-        credentials: 'include',
+        headers: {
+          'Content-Type': 'application/json',
+          ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        },
       });
 
       if (!response.ok) {
