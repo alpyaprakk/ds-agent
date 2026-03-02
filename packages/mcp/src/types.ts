@@ -248,3 +248,140 @@ export const UpdateComponentInputSchema = z.object({
     properties: z.record(z.string(), z.string()),
   })).optional().describe('New variant combinations to add to the existing component set'),
 });
+
+// ── generate_code ──────────────────────────────────────────────────────────────
+
+export const GenerateCodeInputSchema = z.object({
+  workspaceId: z.string().describe('Workspace UUID'),
+  nodeId: z.string().describe(
+    'Figma node ID to generate code from (e.g. "123:456"). Can be a frame, component, or any design node.'
+  ),
+  framework: z.enum(['react', 'vue', 'svelte', 'html']).describe('Target framework for code generation'),
+  styling: z.enum(['tailwind', 'css-modules', 'styled-components', 'css']).describe('Styling approach'),
+  useTokens: z.boolean().default(true).optional().describe(
+    'Map colors and spacing to design tokens (recommended: true)'
+  ),
+  includeTypes: z.boolean().default(true).optional().describe(
+    'Generate TypeScript types for React/Vue/Svelte (ignored for HTML)'
+  ),
+  componentName: z.string().optional().describe(
+    'Custom component name (default: auto-generated from node name)'
+  ),
+});
+
+// ── instantiate_component ──────────────────────────────────────────────────────
+
+export const InstantiateComponentInputSchema = z.object({
+  workspaceId: z.string().describe('Workspace UUID'),
+  componentKey: z.string().describe(
+    'Component key or component name to instantiate. Can be a Figma component key or the exact component name.'
+  ),
+  variant: z.record(z.string(), z.string()).optional().describe(
+    'Variant properties to select specific variant. E.g. { "Type": "Primary", "Size": "Large", "State": "Default" }'
+  ),
+  position: z.object({
+    x: z.number().describe('X coordinate in pixels'),
+    y: z.number().describe('Y coordinate in pixels'),
+  }).optional().describe('Position where the instance should be placed'),
+  size: z.object({
+    width: z.number().describe('Width in pixels'),
+    height: z.number().describe('Height in pixels'),
+  }).optional().describe('Custom size for the instance (overrides component default)'),
+  parentId: z.string().optional().describe(
+    'Parent node ID to append the instance to. If not provided, adds to current page.'
+  ),
+  overrides: z.record(z.string(), z.any()).optional().describe(
+    'Property overrides for the instance. E.g. text content, visibility, etc.'
+  ),
+});
+
+// ── capture_screenshot ─────────────────────────────────────────────────────────
+
+export const CaptureScreenshotInputSchema = z.object({
+  workspaceId: z.string().describe('Workspace UUID'),
+  nodeId: z.string().describe(
+    'Figma node ID to capture (e.g. "123:456"). Can be any visible node: frame, component, group, etc.'
+  ),
+  format: z.enum(['PNG', 'JPG', 'SVG', 'PDF']).default('PNG').optional().describe(
+    'Image format for the screenshot. PNG recommended for designs with transparency.'
+  ),
+  scale: z.number().min(1).max(4).default(2).optional().describe(
+    'Export scale factor (1x, 2x, 3x, 4x). Higher values = higher resolution but larger file size. Default: 2x for retina displays.'
+  ),
+});
+
+// ── get_node ───────────────────────────────────────────────────────────────────
+
+export const GetNodeInputSchema = z.object({
+  workspaceId: z.string().describe('Workspace UUID'),
+  nodeId: z.string().describe(
+    'Figma node ID to read (e.g. "123:456"). Can be any node: frame, component, text, shape, etc.'
+  ),
+  includeChildren: z.boolean().default(false).optional().describe(
+    'Include immediate children in the response (default: false)'
+  ),
+  depth: z.number().min(1).max(3).default(1).optional().describe(
+    'How many levels deep to traverse children (1-3, default: 1). Security: Limited to 3 to prevent memory exhaustion.'
+  ),
+});
+
+// ── update_node ────────────────────────────────────────────────────────────────
+
+const NodeUpdatesSchema = z.object({
+  fills: z.array(z.object({
+    type: z.enum(['SOLID', 'GRADIENT_LINEAR', 'GRADIENT_RADIAL', 'IMAGE']),
+    color: z.string().optional().describe('Hex color for SOLID fills'),
+    opacity: z.number().min(0).max(1).optional(),
+  })).optional().describe('Fill paints - hex colors or token names'),
+  strokes: z.array(z.object({
+    type: z.enum(['SOLID']),
+    color: z.string().describe('Hex color or token name'),
+    opacity: z.number().min(0).max(1).optional(),
+  })).optional().describe('Stroke paints'),
+  strokeWeight: z.number().min(0).optional().describe('Stroke thickness in pixels'),
+  cornerRadius: z.number().min(0).optional().describe('Corner radius in pixels'),
+  opacity: z.number().min(0).max(1).optional().describe('Node opacity (0-1)'),
+  x: z.number().optional().describe('X position in pixels'),
+  y: z.number().optional().describe('Y position in pixels'),
+  width: z.number().min(0).optional().describe('Width in pixels'),
+  height: z.number().min(0).optional().describe('Height in pixels'),
+  rotation: z.number().optional().describe('Rotation in degrees'),
+  characters: z.string().optional().describe('Text content'),
+  fontSize: z.number().min(1).optional().describe('Font size in pixels'),
+  fontWeight: z.number().optional().describe('Font weight (400, 500, 600, 700)'),
+  textColor: z.string().optional().describe('Text color - hex or token name'),
+  name: z.string().optional().describe('Node name'),
+  visible: z.boolean().optional().describe('Visibility'),
+  locked: z.boolean().optional().describe('Lock state'),
+});
+
+export const UpdateNodeInputSchema = z.object({
+  workspaceId: z.string().describe('Workspace UUID'),
+  nodeId: z.string().describe('Figma node ID to update (e.g. "123:456")'),
+  updates: NodeUpdatesSchema.describe('Properties to update - only specified properties will be changed'),
+}).describe('Update visual, layout, and text properties of any Figma node');
+
+// ── batch_update_nodes ─────────────────────────────────────────────────────────
+
+export const BatchUpdateNodesInputSchema = z.object({
+  workspaceId: z.string().describe('Workspace UUID'),
+  nodes: z.array(z.object({
+    nodeId: z.string().describe('Figma node ID to update'),
+    updates: NodeUpdatesSchema,
+  })).min(1).max(50).describe('Array of node update specs (max 50 nodes per batch)'),
+}).describe('Update multiple nodes in a single batch operation');
+
+// ── list_files ─────────────────────────────────────────────────────────────────
+
+export const ListFilesInputSchema = z.object({
+  workspaceId: z.string().describe('Workspace UUID'),
+}).describe('List all Figma files associated with a workspace');
+
+// ── get_console_logs ───────────────────────────────────────────────────────────
+
+export const GetConsoleLogsInputSchema = z.object({
+  workspaceId: z.string().describe('Workspace UUID'),
+  limit: z.number().min(1).max(1000).optional().describe('Maximum number of logs to return (default: 100, max: 1000)'),
+  level: z.enum(['all', 'log', 'info', 'warn', 'error']).optional().describe('Filter by log level (default: all)'),
+  source: z.enum(['all', 'plugin', 'server']).optional().describe('Filter by source (default: all)'),
+}).describe('Retrieve recent console logs from Figma plugin and server for debugging');

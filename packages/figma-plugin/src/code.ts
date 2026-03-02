@@ -966,6 +966,800 @@ async function executeCreateComponent(spec: ComponentSpec): Promise<{ success: b
   }
 }
 
+// ─── Code Generation ───────────────────────────────────────────────────────────
+
+interface GenerateCodeParams {
+  nodeId: string;
+  framework: 'react' | 'vue' | 'svelte' | 'html';
+  styling: 'tailwind' | 'css-modules' | 'styled-components' | 'css';
+  useTokens?: boolean;
+  includeTypes?: boolean;
+  componentName?: string;
+}
+
+function rgbToHex(color: RGB): string {
+  const toHex = (n: number) => Math.round(n * 255).toString(16).padStart(2, '0');
+  return `#${toHex(color.r)}${toHex(color.g)}${toHex(color.b)}`;
+}
+
+function extractColorFromPaint(paint: Paint): string | null {
+  if (paint.type === 'SOLID') {
+    return rgbToHex(paint.color);
+  }
+  return null;
+}
+
+function getNodeStyles(node: SceneNode): Record<string, string | number> {
+  const styles: Record<string, string | number> = {};
+
+  if ('fills' in node && Array.isArray(node.fills) && node.fills.length > 0) {
+    const fill = node.fills[0];
+    const color = extractColorFromPaint(fill);
+    if (color) styles.backgroundColor = color;
+  }
+
+  if ('strokes' in node && Array.isArray(node.strokes) && node.strokes.length > 0) {
+    const stroke = node.strokes[0];
+    const color = extractColorFromPaint(stroke);
+    if (color && 'strokeWeight' in node) {
+      styles.border = `${node.strokeWeight}px solid ${color}`;
+    }
+  }
+
+  if ('cornerRadius' in node && typeof node.cornerRadius === 'number') {
+    styles.borderRadius = `${node.cornerRadius}px`;
+  }
+
+  if ('opacity' in node && node.opacity < 1) {
+    styles.opacity = node.opacity;
+  }
+
+  if ('width' in node && 'height' in node) {
+    styles.width = `${node.width}px`;
+    styles.height = `${node.height}px`;
+  }
+
+  if ('paddingLeft' in node) {
+    styles.padding = `${node.paddingTop || 0}px ${node.paddingRight || 0}px ${node.paddingBottom || 0}px ${node.paddingLeft || 0}px`;
+  }
+
+  return styles;
+}
+
+function generateTailwindClasses(styles: Record<string, string | number>): string {
+  const classes: string[] = [];
+
+  // Convert styles to Tailwind classes (simplified - production would need full mapping)
+  if (styles.backgroundColor) {
+    // Would map to actual Tailwind colors or use arbitrary values
+    classes.push(`bg-[${styles.backgroundColor}]`);
+  }
+  if (styles.borderRadius) {
+    const radius = parseInt(String(styles.borderRadius));
+    if (radius === 4) classes.push('rounded');
+    else if (radius === 8) classes.push('rounded-lg');
+    else classes.push(`rounded-[${styles.borderRadius}]`);
+  }
+
+  return classes.join(' ');
+}
+
+function stylesToCSS(styles: Record<string, string | number>): string {
+  return Object.entries(styles)
+    .map(([key, value]) => {
+      const cssKey = key.replace(/([A-Z])/g, '-$1').toLowerCase();
+      return `  ${cssKey}: ${value};`;
+    })
+    .join('\n');
+}
+
+function toPascalCase(str: string): string {
+  return str
+    .replace(/[^a-zA-Z0-9]+(.)/g, (_m, chr) => chr.toUpperCase())
+    .replace(/^[a-z]/, chr => chr.toUpperCase());
+}
+
+async function generateReactCode(
+  node: SceneNode,
+  useTokens: boolean,
+  includeTypes: boolean,
+  styling: string,
+  componentName: string
+): Promise<string> {
+  const styles = getNodeStyles(node);
+  const ext = includeTypes ? 'tsx' : 'jsx';
+
+  let code = '';
+
+  if (includeTypes) {
+    code += `interface ${componentName}Props {\n`;
+    code += `  children?: React.ReactNode;\n`;
+    code += `  className?: string;\n`;
+    code += `}\n\n`;
+  }
+
+  code += `export function ${componentName}(`;
+  code += includeTypes ? `props: ${componentName}Props` : `props`;
+  code += `) {\n`;
+
+  if (styling === 'tailwind') {
+    const classes = generateTailwindClasses(styles);
+    code += `  return (\n`;
+    code += `    <div className="${classes}">\n`;
+    code += `      {props.children}\n`;
+    code += `    </div>\n`;
+    code += `  );\n`;
+  } else if (styling === 'styled-components') {
+    code += `  return (\n`;
+    code += `    <Container>\n`;
+    code += `      {props.children}\n`;
+    code += `    </Container>\n`;
+    code += `  );\n`;
+    code += `}\n\n`;
+    code += `const Container = styled.div\`\n`;
+    code += stylesToCSS(styles) + '\n';
+    code += `\`;\n`;
+  } else {
+    code += `  return (\n`;
+    code += `    <div className="${componentName.toLowerCase()}">\n`;
+    code += `      {props.children}\n`;
+    code += `    </div>\n`;
+    code += `  );\n`;
+  }
+
+  code += `}\n`;
+
+  return code;
+}
+
+async function executeGenerateCode(params: GenerateCodeParams): Promise<{ success: boolean; message: string; data?: any }> {
+  try {
+    const node = await figma.getNodeByIdAsync(params.nodeId);
+    if (!node) {
+      return { success: false, message: `Node ${params.nodeId} not found` };
+    }
+
+    const componentName = params.componentName || toPascalCase(node.name) || 'Component';
+    const useTokens = params.useTokens ?? true;
+    const includeTypes = params.includeTypes ?? true;
+
+    let code = '';
+
+    if (params.framework === 'react') {
+      code = await generateReactCode(node, useTokens, includeTypes, params.styling, componentName);
+    } else {
+      // Simplified for other frameworks - production would implement full support
+      code = `// ${params.framework.toUpperCase()} code generation not yet fully implemented\n`;
+      code += `// Framework: ${params.framework}, Styling: ${params.styling}\n`;
+      code += `// Component: ${componentName}\n`;
+    }
+
+    return {
+      success: true,
+      message: `Generated ${params.framework} code for "${node.name}"`,
+      data: {
+        code,
+        tokens: useTokens ? [] : undefined,
+        assets: {},
+      },
+    };
+  } catch (error) {
+    return {
+      success: false,
+      message: error instanceof Error ? error.message : 'Code generation failed',
+    };
+  }
+}
+
+// ─── Component Instantiation ───────────────────────────────────────────────────
+
+interface InstantiateComponentParams {
+  componentKey: string;
+  variant?: Record<string, string>;
+  position?: { x: number; y: number };
+  size?: { width: number; height: number };
+  parentId?: string;
+  overrides?: Record<string, any>;
+}
+
+async function executeInstantiateComponent(params: InstantiateComponentParams): Promise<{ success: boolean; message: string; data?: any }> {
+  try {
+    // 1. Find component by key or name
+    let component: ComponentNode | null = null;
+
+    // Try to find by component key first
+    try {
+      const imported = await figma.importComponentByKeyAsync(params.componentKey);
+      component = imported as ComponentNode;
+    } catch {
+      // If import fails, search by name in local file
+      const allComponentSets = figma.root.findAll(
+        n => n.type === 'COMPONENT_SET' && n.name === params.componentKey
+      ) as ComponentSetNode[];
+
+      if (allComponentSets.length > 0) {
+        const compSet = allComponentSets[0];
+
+        // Find best matching variant if variant props provided
+        if (params.variant && Object.keys(params.variant).length > 0) {
+          const candidates = compSet.children as ComponentNode[];
+          let bestScore = -1;
+          let bestMatch: ComponentNode | null = null;
+
+          for (const candidate of candidates) {
+            const props = (candidate as any).variantProperties as Record<string, string> || {};
+            let score = 0;
+            let mismatch = false;
+
+            for (const [k, v] of Object.entries(params.variant)) {
+              if (props[k] === v) {
+                score++;
+              } else if (props[k] !== undefined) {
+                mismatch = true;
+                break;
+              }
+            }
+
+            if (!mismatch && score > bestScore) {
+              bestScore = score;
+              bestMatch = candidate;
+            }
+          }
+
+          component = bestMatch || (compSet.children[0] as ComponentNode);
+        } else {
+          // No variant specified, use first child
+          component = compSet.children[0] as ComponentNode;
+        }
+      } else {
+        // Try finding a standalone component (not in a set)
+        const standalone = figma.root.findAll(
+          n => n.type === 'COMPONENT' && n.name === params.componentKey
+        ) as ComponentNode[];
+
+        if (standalone.length > 0) {
+          component = standalone[0];
+        }
+      }
+    }
+
+    if (!component) {
+      return {
+        success: false,
+        message: `Component "${params.componentKey}" not found. Make sure it exists in the file or provide a valid component key.`,
+      };
+    }
+
+    // 2. Create instance
+    const instance = component.createInstance();
+
+    // 3. Apply custom size if provided
+    if (params.size) {
+      instance.resize(params.size.width, params.size.height);
+    }
+
+    // 4. Apply position if provided
+    if (params.position) {
+      instance.x = params.position.x;
+      instance.y = params.position.y;
+    }
+
+    // 5. Add to parent or current page
+    if (params.parentId) {
+      const parent = await figma.getNodeByIdAsync(params.parentId);
+      if (parent && 'appendChild' in parent) {
+        (parent as FrameNode | GroupNode | ComponentNode).appendChild(instance);
+      } else {
+        return {
+          success: false,
+          message: `Parent node "${params.parentId}" not found or cannot contain children`,
+        };
+      }
+    } else {
+      figma.currentPage.appendChild(instance);
+    }
+
+    // 6. Apply overrides if provided (simplified - production would handle all override types)
+    if (params.overrides) {
+      // Example: text content override
+      if (params.overrides.text && instance.findOne(n => n.type === 'TEXT')) {
+        const textNode = instance.findOne(n => n.type === 'TEXT') as TextNode;
+        if (textNode) {
+          await figma.loadFontAsync(textNode.fontName as FontName);
+          textNode.characters = params.overrides.text;
+        }
+      }
+    }
+
+    figma.notify(`✅ Created instance: ${component.name}`);
+
+    return {
+      success: true,
+      message: `Created instance of "${component.name}"`,
+      data: {
+        nodeId: instance.id,
+        instanceName: instance.name,
+      },
+    };
+  } catch (error) {
+    return {
+      success: false,
+      message: error instanceof Error ? error.message : 'Component instantiation failed',
+    };
+  }
+}
+
+// ─── Update Node ───────────────────────────────────────────────────────────────
+
+interface UpdateNodeParams {
+  nodeId: string;
+  updates: {
+    fills?: Array<{ type: string; color?: string; opacity?: number }>;
+    strokes?: Array<{ type: string; color: string; opacity?: number }>;
+    strokeWeight?: number;
+    cornerRadius?: number;
+    opacity?: number;
+    x?: number;
+    y?: number;
+    width?: number;
+    height?: number;
+    rotation?: number;
+    characters?: string;
+    fontSize?: number;
+    fontWeight?: number;
+    textColor?: string;
+    name?: string;
+    visible?: boolean;
+    locked?: boolean;
+  };
+}
+
+async function executeUpdateNode(params: UpdateNodeParams): Promise<{ success: boolean; message: string; data?: any }> {
+  try {
+    const node = await figma.getNodeByIdAsync(params.nodeId);
+    if (!node) {
+      return { success: false, message: `Node ${params.nodeId} not found` };
+    }
+
+    const updates = params.updates;
+    let changedProperties = 0;
+
+    // Name
+    if (updates.name !== undefined) {
+      node.name = updates.name;
+      changedProperties++;
+    }
+
+    // Visibility
+    if (updates.visible !== undefined) {
+      node.visible = updates.visible;
+      changedProperties++;
+    }
+
+    // Lock state
+    if (updates.locked !== undefined) {
+      node.locked = updates.locked;
+      changedProperties++;
+    }
+
+    // Position
+    if (updates.x !== undefined || updates.y !== undefined) {
+      if ('x' in node && 'y' in node) {
+        if (updates.x !== undefined) node.x = updates.x;
+        if (updates.y !== undefined) node.y = updates.y;
+        changedProperties++;
+      }
+    }
+
+    // Size
+    if (updates.width !== undefined || updates.height !== undefined) {
+      if ('resize' in node) {
+        const currentWidth = 'width' in node ? node.width : 100;
+        const currentHeight = 'height' in node ? node.height : 100;
+        const newWidth = updates.width ?? currentWidth;
+        const newHeight = updates.height ?? currentHeight;
+        (node as any).resize(newWidth, newHeight);
+        changedProperties++;
+      }
+    }
+
+    // Rotation
+    if (updates.rotation !== undefined && 'rotation' in node) {
+      node.rotation = updates.rotation;
+      changedProperties++;
+    }
+
+    // Opacity
+    if (updates.opacity !== undefined && 'opacity' in node) {
+      node.opacity = updates.opacity;
+      changedProperties++;
+    }
+
+    // Fills
+    if (updates.fills && 'fills' in node) {
+      const fills: Paint[] = updates.fills.map((fillSpec: any) => {
+        if (fillSpec.type === 'SOLID' && fillSpec.color) {
+          // Try to resolve as token first
+          const tokenVar = resolveColorValue(fillSpec.color);
+          if (tokenVar) {
+            return boundColorPaint(tokenVar);
+          }
+          // Otherwise treat as hex
+          const hex = fillSpec.color.startsWith('#') ? fillSpec.color : `#${fillSpec.color}`;
+          return solidPaint(hex);
+        }
+        return solidPaint('#888888'); // Fallback
+      });
+      node.fills = fills;
+      changedProperties++;
+    }
+
+    // Strokes
+    if (updates.strokes && 'strokes' in node) {
+      const strokes: Paint[] = updates.strokes.map((strokeSpec: any) => {
+        if (strokeSpec.type === 'SOLID' && strokeSpec.color) {
+          const tokenVar = resolveColorValue(strokeSpec.color);
+          if (tokenVar) {
+            return boundColorPaint(tokenVar);
+          }
+          const hex = strokeSpec.color.startsWith('#') ? strokeSpec.color : `#${strokeSpec.color}`;
+          return solidPaint(hex);
+        }
+        return solidPaint('#E4E4E7'); // Fallback
+      });
+      node.strokes = strokes;
+      changedProperties++;
+    }
+
+    // Stroke weight
+    if (updates.strokeWeight !== undefined && 'strokeWeight' in node) {
+      node.strokeWeight = updates.strokeWeight;
+      changedProperties++;
+    }
+
+    // Corner radius
+    if (updates.cornerRadius !== undefined && 'cornerRadius' in node) {
+      node.cornerRadius = updates.cornerRadius;
+      changedProperties++;
+    }
+
+    // Text-specific properties
+    if (node.type === 'TEXT') {
+      const textNode = node as TextNode;
+
+      if (updates.characters !== undefined) {
+        await figma.loadFontAsync(textNode.fontName as FontName);
+        textNode.characters = updates.characters;
+        changedProperties++;
+      }
+
+      if (updates.fontSize !== undefined) {
+        await figma.loadFontAsync(textNode.fontName as FontName);
+        textNode.fontSize = updates.fontSize;
+        changedProperties++;
+      }
+
+      if (updates.fontWeight !== undefined) {
+        const fw = updates.fontWeight;
+        const style = fw === 700 ? 'Bold' : fw === 600 ? 'Semi Bold' : fw === 500 ? 'Medium' : 'Regular';
+        await figma.loadFontAsync({ family: 'Inter', style });
+        textNode.fontName = { family: 'Inter', style };
+        changedProperties++;
+      }
+
+      if (updates.textColor !== undefined) {
+        const tokenVar = resolveColorValue(updates.textColor);
+        if (tokenVar) {
+          textNode.fills = [boundColorPaint(tokenVar)];
+        } else {
+          const hex = updates.textColor.startsWith('#') ? updates.textColor : `#${updates.textColor}`;
+          textNode.fills = [solidPaint(hex)];
+        }
+        changedProperties++;
+      }
+    }
+
+    figma.notify(`✅ Updated ${changedProperties} propert${changedProperties === 1 ? 'y' : 'ies'}`);
+
+    return {
+      success: true,
+      message: `Updated node "${node.name}" (${changedProperties} propert${changedProperties === 1 ? 'y' : 'ies'})`,
+      data: { changedProperties },
+    };
+  } catch (error) {
+    return {
+      success: false,
+      message: error instanceof Error ? error.message : 'Node update failed',
+    };
+  }
+}
+
+// ─── Batch Update Nodes ────────────────────────────────────────────────────────
+
+interface BatchUpdateNodesParams {
+  nodes: Array<{
+    nodeId: string;
+    updates: UpdateNodeParams['updates'];
+  }>;
+}
+
+async function executeBatchUpdateNodes(params: BatchUpdateNodesParams): Promise<{ success: boolean; message: string; data?: any }> {
+  try {
+    const results: Array<{ nodeId: string; success: boolean; message?: string }> = [];
+    let successCount = 0;
+    let failureCount = 0;
+
+    for (const nodeSpec of params.nodes) {
+      try {
+        const result = await executeUpdateNode({
+          nodeId: nodeSpec.nodeId,
+          updates: nodeSpec.updates,
+        });
+
+        results.push({
+          nodeId: nodeSpec.nodeId,
+          success: result.success,
+          message: result.message,
+        });
+
+        if (result.success) {
+          successCount++;
+        } else {
+          failureCount++;
+        }
+      } catch (error) {
+        results.push({
+          nodeId: nodeSpec.nodeId,
+          success: false,
+          message: error instanceof Error ? error.message : 'Update failed',
+        });
+        failureCount++;
+      }
+    }
+
+    const totalCount = params.nodes.length;
+    figma.notify(`✅ Batch update: ${successCount} succeeded, ${failureCount} failed`);
+
+    return {
+      success: true,
+      message: `Batch update completed: ${successCount} succeeded, ${failureCount} failed out of ${totalCount}`,
+      data: {
+        totalCount,
+        successCount,
+        failureCount,
+        results,
+      },
+    };
+  } catch (error) {
+    return {
+      success: false,
+      message: error instanceof Error ? error.message : 'Batch update failed',
+    };
+  }
+}
+
+// ─── Get Node ──────────────────────────────────────────────────────────────────
+
+interface GetNodeParams {
+  nodeId: string;
+  includeChildren?: boolean;
+  depth?: number;
+}
+
+function serializeNodeData(node: SceneNode, includeChildren: boolean, depth: number, currentDepth: number = 1): any {
+  const base: any = {
+    id: node.id,
+    name: node.name,
+    type: node.type,
+  };
+
+  // Layout properties
+  if ('width' in node && 'height' in node) {
+    base.width = node.width;
+    base.height = node.height;
+  }
+
+  if ('x' in node && 'y' in node) {
+    base.x = node.x;
+    base.y = node.y;
+  }
+
+  if ('rotation' in node) {
+    base.rotation = node.rotation;
+  }
+
+  // Fills
+  if ('fills' in node && Array.isArray(node.fills)) {
+    base.fills = node.fills.map((f: Paint) => {
+      if (f.type === 'SOLID') {
+        return {
+          type: 'SOLID',
+          color: rgbToHex((f as SolidPaint).color),
+          opacity: f.opacity,
+        };
+      }
+      return { type: f.type };
+    });
+  }
+
+  // Strokes
+  if ('strokes' in node && Array.isArray(node.strokes)) {
+    base.strokes = node.strokes.map((s: Paint) => {
+      if (s.type === 'SOLID') {
+        return {
+          type: 'SOLID',
+          color: rgbToHex((s as SolidPaint).color),
+          opacity: s.opacity,
+        };
+      }
+      return { type: s.type };
+    });
+  }
+
+  if ('strokeWeight' in node) {
+    base.strokeWeight = node.strokeWeight;
+  }
+
+  // Corner radius
+  if ('cornerRadius' in node) {
+    base.cornerRadius = node.cornerRadius;
+  }
+
+  // Opacity
+  if ('opacity' in node) {
+    base.opacity = node.opacity;
+  }
+
+  // Blend mode
+  if ('blendMode' in node) {
+    base.blendMode = node.blendMode;
+  }
+
+  // Text properties
+  if (node.type === 'TEXT') {
+    const textNode = node as TextNode;
+    base.characters = textNode.characters;
+    base.fontSize = textNode.fontSize;
+    base.fontName = textNode.fontName;
+    base.textAlignHorizontal = textNode.textAlignHorizontal;
+    base.textAlignVertical = textNode.textAlignVertical;
+    base.lineHeight = textNode.lineHeight;
+    base.letterSpacing = textNode.letterSpacing;
+  }
+
+  // Layout mode (auto-layout)
+  if ('layoutMode' in node) {
+    base.layoutMode = node.layoutMode;
+  }
+
+  if ('primaryAxisAlignItems' in node) {
+    base.primaryAxisAlignItems = node.primaryAxisAlignItems;
+  }
+
+  if ('counterAxisAlignItems' in node) {
+    base.counterAxisAlignItems = node.counterAxisAlignItems;
+  }
+
+  if ('paddingLeft' in node) {
+    base.padding = {
+      left: node.paddingLeft,
+      right: node.paddingRight,
+      top: node.paddingTop,
+      bottom: node.paddingBottom,
+    };
+  }
+
+  if ('itemSpacing' in node) {
+    base.itemSpacing = node.itemSpacing;
+  }
+
+  // Component/instance properties
+  if (node.type === 'COMPONENT') {
+    const comp = node as ComponentNode;
+    base.key = comp.key;
+    base.description = comp.description;
+  }
+
+  if (node.type === 'INSTANCE') {
+    const inst = node as InstanceNode;
+    base.mainComponentId = inst.mainComponent?.id;
+    base.mainComponentKey = inst.mainComponent?.key;
+  }
+
+  // Variant properties
+  if (node.type === 'COMPONENT' || node.type === 'INSTANCE') {
+    const props = (node as any).variantProperties;
+    if (props) {
+      base.variantProperties = props;
+    }
+  }
+
+  // Children recursion
+  if (includeChildren && 'children' in node && currentDepth < depth) {
+    base.children = (node as ChildrenMixin).children.map((child: SceneNode) =>
+      serializeNodeData(child, true, depth, currentDepth + 1)
+    );
+  } else if (includeChildren && 'children' in node && currentDepth >= depth) {
+    base.childCount = (node as ChildrenMixin).children.length;
+  }
+
+  return base;
+}
+
+async function executeGetNode(params: GetNodeParams): Promise<{ success: boolean; message: string; data?: any }> {
+  try {
+    const node = await figma.getNodeByIdAsync(params.nodeId);
+    if (!node) {
+      return { success: false, message: `Node ${params.nodeId} not found` };
+    }
+
+    const includeChildren = params.includeChildren ?? false;
+    const depth = Math.max(1, Math.min(3, params.depth ?? 1)); // Clamp to 1-3 for security
+
+    const nodeData = serializeNodeData(node, includeChildren, depth);
+
+    return {
+      success: true,
+      message: `Read node "${node.name}" (${node.type})`,
+      data: { nodeData },
+    };
+  } catch (error) {
+    return {
+      success: false,
+      message: error instanceof Error ? error.message : 'Node read failed',
+    };
+  }
+}
+
+// ─── Screenshot Capture ────────────────────────────────────────────────────────
+
+interface CaptureScreenshotParams {
+  nodeId: string;
+  format?: 'PNG' | 'JPG' | 'SVG' | 'PDF';
+  scale?: number;
+}
+
+async function executeCaptureScreenshot(params: CaptureScreenshotParams): Promise<{ success: boolean; message: string; data?: any }> {
+  try {
+    const node = await figma.getNodeByIdAsync(params.nodeId);
+    if (!node) {
+      return { success: false, message: `Node ${params.nodeId} not found` };
+    }
+
+    const format = params.format || 'PNG';
+    const scale = Math.max(1, Math.min(4, params.scale || 2)); // Clamp to 1-4 for security
+
+    // Export the node
+    const bytes = await node.exportAsync({
+      format,
+      constraint: { type: 'SCALE', value: scale },
+    });
+
+    // Convert to base64
+    const base64 = figma.base64Encode(bytes);
+    const mimeType = `image/${format.toLowerCase()}`;
+    const dataUri = `data:${mimeType};base64,${base64}`;
+
+    figma.notify(`✅ Screenshot captured: ${format} ${scale}x`);
+
+    return {
+      success: true,
+      message: `Screenshot captured (${format}, ${scale}x)`,
+      data: {
+        imageData: dataUri,
+        mimeType,
+        width: 'width' in node ? node.width : undefined,
+        height: 'height' in node ? node.height : undefined,
+      },
+    };
+  } catch (error) {
+    return {
+      success: false,
+      message: error instanceof Error ? error.message : 'Screenshot capture failed',
+    };
+  }
+}
+
 async function executeCommand(command: any): Promise<{ success: boolean; message: string; data?: any }> {
   try {
     // Refresh variable cache once per command so findVariable() works correctly
@@ -1161,6 +1955,24 @@ async function executeCommand(command: any): Promise<{ success: boolean; message
 
         return { success: true, message: `Updated "${spec.componentName}" (${changes} change(s))` };
       }
+
+      case 'generate_code':
+        return await executeGenerateCode(command.params);
+
+      case 'instantiate_component':
+        return await executeInstantiateComponent(command.params);
+
+      case 'capture_screenshot':
+        return await executeCaptureScreenshot(command.params);
+
+      case 'get_node':
+        return await executeGetNode(command.params);
+
+      case 'update_node':
+        return await executeUpdateNode(command.params);
+
+      case 'batch_update_nodes':
+        return await executeBatchUpdateNodes(command.params);
 
       default:
         return { success: false, message: `Unknown command type: ${command.type}` };

@@ -1,11 +1,34 @@
 import { Router, Response } from 'express';
 import bcrypt from 'bcryptjs';
 import multer from 'multer';
+import rateLimit from 'express-rate-limit';
 import { UserRepository } from '../../db/repositories/user-repository';
 import { authMiddleware, generateToken, AuthRequest } from '../../middleware/auth';
 import { NotificationService } from '../../services/notification.service';
 import { PlanRepository } from '../../db/repositories/plan.repository';
 import pool from '../../db/connection';
+
+// ==========================================
+// Rate Limiting Configuration
+// ==========================================
+
+// Strict rate limiting for auth endpoints (prevent brute force attacks)
+const authLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000, // 15 minutes
+  max: 5, // 5 requests per window
+  message: 'Too many authentication attempts, please try again later',
+  standardHeaders: true, // Return rate limit info in headers
+  legacyHeaders: false,
+});
+
+// Plugin session endpoints rate limiting (more lenient for polling)
+const pluginSessionLimiter = rateLimit({
+  windowMs: 1 * 60 * 1000, // 1 minute
+  max: 30, // 30 requests per minute (allows polling every 2 seconds)
+  message: 'Too many session requests, please try again later',
+  standardHeaders: true,
+  legacyHeaders: false,
+});
 
 // Store avatar in memory, convert to base64 data URL and save to DB
 const avatarUpload = multer({
@@ -24,7 +47,7 @@ const avatarUpload = multer({
 const router = Router();
 
 // POST /api/auth/register
-router.post('/register', async (req, res: Response) => {
+router.post('/register', authLimiter, async (req, res: Response) => {
   try {
     const { email, password, name } = req.body;
 
@@ -74,7 +97,7 @@ router.post('/register', async (req, res: Response) => {
 });
 
 // POST /api/auth/login
-router.post('/login', async (req, res: Response) => {
+router.post('/login', authLimiter, async (req, res: Response) => {
   try {
     const { email, password } = req.body;
 
@@ -351,7 +374,7 @@ const DASHBOARD_URL = process.env.DASHBOARD_URL || 'https://ds-agent.alpy.io';
 
 // POST /api/auth/plugin-session/start (public)
 // Plugin calls this to start a browser-based auth session
-router.post('/plugin-session/start', async (req, res: Response) => {
+router.post('/plugin-session/start', pluginSessionLimiter, async (req, res: Response) => {
   try {
     const { sessionId } = req.body;
     if (!sessionId || typeof sessionId !== 'string') {
@@ -413,7 +436,7 @@ router.post('/plugin-session/complete', authMiddleware, async (req: AuthRequest,
 
 // GET /api/auth/plugin-session/:sessionId/status (public)
 // Plugin polls this until status === 'completed'
-router.get('/plugin-session/:sessionId/status', async (req, res: Response) => {
+router.get('/plugin-session/:sessionId/status', pluginSessionLimiter, async (req, res: Response) => {
   try {
     const { sessionId } = req.params;
 

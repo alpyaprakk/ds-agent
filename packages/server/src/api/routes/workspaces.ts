@@ -4,6 +4,7 @@ import { authMiddleware, AuthRequest } from '../../middleware/auth';
 import { NotificationService } from '../../services/notification.service';
 import { PlanRepository } from '../../db/repositories/plan.repository';
 import pool from '../../db/connection';
+import { consoleLogger } from '../../services/console-logger.service';
 
 const router = Router();
 const workspaceRepo = new WorkspaceRepository();
@@ -535,6 +536,42 @@ router.get('/:id/components', async (req: AuthRequest, res) => {
   } catch (error) {
     console.error('Error fetching components:', error);
     return res.status(500).json({ error: 'Failed to fetch components' });
+  }
+});
+
+// ==========================================
+// Console Logs (Debugging)
+// ==========================================
+
+// GET /api/workspaces/:id/console-logs - Get recent console logs for debugging
+router.get('/:id/console-logs', async (req: AuthRequest, res) => {
+  try {
+    const isMember = await UserRepository.isWorkspaceMember(req.user!.id, req.params.id);
+    if (!isMember) return res.status(403).json({ error: 'Access denied' });
+
+    const limit = Math.min(Number(req.query.limit) || 100, 1000);
+    const level = (req.query.level as string) || 'all';
+    const source = (req.query.source as string) || 'all';
+
+    const logs = consoleLogger.getLogs(req.params.id, {
+      limit,
+      level: level as any,
+      source: source as any,
+    });
+
+    const totalCount = consoleLogger.getLogCount(req.params.id);
+    const oldestTimestamp = logs.length > 0 ? logs[logs.length - 1].timestamp : undefined;
+    const newestTimestamp = logs.length > 0 ? logs[0].timestamp : undefined;
+
+    return res.json({
+      logs,
+      totalCount,
+      oldestTimestamp,
+      newestTimestamp,
+    });
+  } catch (error) {
+    console.error('Error fetching console logs:', error);
+    return res.status(500).json({ error: 'Failed to fetch console logs' });
   }
 });
 
