@@ -250,8 +250,9 @@ export function Settings() {
       toast.success('Workspace data reset successfully');
       setShowResetDialog(false);
 
-      // Refresh workspace data
+      // Refresh workspace data and navigate to dashboard
       await fetchWorkspaces();
+      navigate('/');
     } catch (error: any) {
       toast.error(error.message || 'Failed to reset workspace');
     } finally {
