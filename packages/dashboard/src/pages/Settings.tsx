@@ -4,7 +4,7 @@ import {
   AiCloudIcon, SaveMoneyDollarIcon, User02Icon, FigmaIcon,
   UserGroupIcon, Mail01Icon, Delete02Icon, Crown02Icon,
   Tick02Icon, Cancel01Icon, Camera01Icon, Notification03Icon,
-  LinkSquare01Icon,
+  LinkSquare01Icon, Settings02Icon, RefreshIcon, AlertCircleIcon,
 } from '@hugeicons/core-free-icons';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
@@ -21,12 +21,22 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { Switch } from '@/components/ui/switch';
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog';
 import { useAuthStore } from '@/store/auth-store';
 import { useWorkspaceStore } from '@/store/workspace-store';
 import { apiClient, getAvatarUrl } from '@/lib/api-client';
 import { toast } from 'sonner';
+import { useNavigate } from 'react-router-dom';
 
 export function Settings() {
+  const navigate = useNavigate();
   const { user, settings: userSettings, fetchSettings, updateSettings, updateProfile, uploadAvatar } = useAuthStore();
   const avatarInputRef = useRef<HTMLInputElement>(null);
   const [uploadingAvatar, setUploadingAvatar] = useState(false);
@@ -34,7 +44,7 @@ export function Settings() {
     currentWorkspace, members, invitations, myInvitations,
     fetchMembers, fetchInvitations, inviteMember, removeMember,
     updateMemberRole, cancelInvitation, fetchMyInvitations,
-    acceptInvitation, rejectInvitation,
+    acceptInvitation, rejectInvitation, fetchWorkspaces, setCurrentWorkspace,
   } = useWorkspaceStore();
 
   const [aiProvider, setAiProvider] = useState<'anthropic' | 'openai'>('anthropic');
@@ -51,6 +61,11 @@ export function Settings() {
 
   const [notifPrefs, setNotifPrefs] = useState<Record<string, boolean>>({});
   const [notifPrefsLoaded, setNotifPrefsLoaded] = useState(false);
+
+  const [showResetDialog, setShowResetDialog] = useState(false);
+  const [showDeleteDialog, setShowDeleteDialog] = useState(false);
+  const [resettingWorkspace, setResettingWorkspace] = useState(false);
+  const [deletingWorkspace, setDeletingWorkspace] = useState(false);
 
   useEffect(() => {
     fetchSettings();
@@ -209,6 +224,67 @@ export function Settings() {
       toast.success('Invitation declined');
     } catch (error: any) {
       toast.error(error?.message || 'Failed to decline invitation');
+    }
+  };
+
+  const handleResetWorkspace = async () => {
+    if (!currentWorkspace) return;
+
+    setResettingWorkspace(true);
+    try {
+      const response = await fetch(`${import.meta.env.VITE_API_URL}/api/workspaces/${currentWorkspace.id}/reset`, {
+        method: 'POST',
+        credentials: 'include',
+      });
+
+      if (!response.ok) {
+        const error = await response.json();
+        throw new Error(error.error || 'Failed to reset workspace');
+      }
+
+      toast.success('Workspace data reset successfully');
+      setShowResetDialog(false);
+
+      // Refresh workspace data
+      await fetchWorkspaces();
+    } catch (error: any) {
+      toast.error(error.message || 'Failed to reset workspace');
+    } finally {
+      setResettingWorkspace(false);
+    }
+  };
+
+  const handleDeleteWorkspace = async () => {
+    if (!currentWorkspace) return;
+
+    setDeletingWorkspace(true);
+    try {
+      const response = await fetch(`${import.meta.env.VITE_API_URL}/api/workspaces/${currentWorkspace.id}`, {
+        method: 'DELETE',
+        credentials: 'include',
+      });
+
+      if (!response.ok) {
+        const error = await response.json();
+        throw new Error(error.error || 'Failed to delete workspace');
+      }
+
+      toast.success('Workspace deleted successfully');
+      setShowDeleteDialog(false);
+
+      // Refresh workspaces and navigate away
+      await fetchWorkspaces();
+      const { workspaces } = useWorkspaceStore.getState();
+      if (workspaces && workspaces.length > 0) {
+        setCurrentWorkspace(workspaces[0]);
+        navigate('/');
+      } else {
+        navigate('/');
+      }
+    } catch (error: any) {
+      toast.error(error.message || 'Failed to delete workspace');
+    } finally {
+      setDeletingWorkspace(false);
     }
   };
 
@@ -723,6 +799,158 @@ export function Settings() {
             </CardContent>
           </Card>
         )}
+
+        {/* Workspace Settings - Owner Only */}
+        {currentWorkspace && myRole === 'owner' && (
+          <Card className="border-destructive/20">
+            <CardHeader>
+              <div className="flex items-center gap-3">
+                <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-destructive/10">
+                  <HugeiconsIcon icon={Settings02Icon} size={16} className="text-destructive" />
+                </div>
+                <div className="flex-1">
+                  <CardTitle>Workspace Settings</CardTitle>
+                  <CardDescription>Manage workspace data and configuration</CardDescription>
+                </div>
+                <Badge variant="secondary" className="text-amber-600 dark:text-amber-400">
+                  <HugeiconsIcon icon={Crown02Icon} size={10} className="mr-1" />
+                  Owner Only
+                </Badge>
+              </div>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div className="rounded-lg border border-orange-200 dark:border-orange-900/30 bg-orange-50 dark:bg-orange-950/10 p-4">
+                <div className="flex items-start gap-3">
+                  <HugeiconsIcon icon={RefreshIcon} size={16} className="text-orange-600 dark:text-orange-400 mt-0.5 flex-shrink-0" />
+                  <div className="flex-1 min-w-0 space-y-2">
+                    <div>
+                      <h4 className="text-sm font-semibold text-orange-900 dark:text-orange-100">Reset Workspace Data</h4>
+                      <p className="text-xs text-orange-700 dark:text-orange-300 mt-1">
+                        Delete all design tokens, components, and Figma files. Workspace members and settings will be preserved.
+                      </p>
+                    </div>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => setShowResetDialog(true)}
+                      className="border-orange-300 dark:border-orange-700 text-orange-700 dark:text-orange-300 hover:bg-orange-100 dark:hover:bg-orange-950/30"
+                    >
+                      <HugeiconsIcon icon={RefreshIcon} size={14} className="mr-1.5" />
+                      Reset Data
+                    </Button>
+                  </div>
+                </div>
+              </div>
+
+              <Separator />
+
+              <div className="rounded-lg border border-destructive/30 bg-destructive/5 p-4">
+                <div className="flex items-start gap-3">
+                  <HugeiconsIcon icon={AlertCircleIcon} size={16} className="text-destructive mt-0.5 flex-shrink-0" />
+                  <div className="flex-1 min-w-0 space-y-2">
+                    <div>
+                      <h4 className="text-sm font-semibold text-destructive">Delete Workspace</h4>
+                      <p className="text-xs text-muted-foreground mt-1">
+                        Permanently delete this workspace and all its data. This action cannot be undone.
+                      </p>
+                    </div>
+                    <Button
+                      variant="destructive"
+                      size="sm"
+                      onClick={() => setShowDeleteDialog(true)}
+                    >
+                      <HugeiconsIcon icon={Delete02Icon} size={14} className="mr-1.5" />
+                      Delete Workspace
+                    </Button>
+                  </div>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+        )}
+
+        {/* Reset Workspace Confirmation Dialog */}
+        <Dialog open={showResetDialog} onOpenChange={setShowResetDialog}>
+          <DialogContent>
+            <DialogHeader>
+              <DialogTitle className="flex items-center gap-2">
+                <HugeiconsIcon icon={RefreshIcon} size={18} className="text-orange-600 dark:text-orange-400" />
+                Reset Workspace Data?
+              </DialogTitle>
+              <DialogDescription className="space-y-2 pt-2">
+                <p>This will permanently delete:</p>
+                <ul className="list-disc list-inside space-y-1 text-xs ml-2">
+                  <li>All design tokens and collections</li>
+                  <li>All components</li>
+                  <li>All Figma files</li>
+                  <li>All sync history and logs</li>
+                  <li>All conflicts</li>
+                </ul>
+                <p className="pt-2 font-medium">Workspace members and settings will be preserved.</p>
+                <p className="text-destructive font-semibold">This action cannot be undone.</p>
+              </DialogDescription>
+            </DialogHeader>
+            <DialogFooter className="gap-2">
+              <Button
+                variant="outline"
+                onClick={() => setShowResetDialog(false)}
+                disabled={resettingWorkspace}
+              >
+                Cancel
+              </Button>
+              <Button
+                variant="outline"
+                onClick={handleResetWorkspace}
+                disabled={resettingWorkspace}
+                className="border-orange-300 dark:border-orange-700 text-orange-700 dark:text-orange-300 hover:bg-orange-100 dark:hover:bg-orange-950/30"
+              >
+                {resettingWorkspace ? 'Resetting...' : 'Reset Data'}
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
+
+        {/* Delete Workspace Confirmation Dialog */}
+        <Dialog open={showDeleteDialog} onOpenChange={setShowDeleteDialog}>
+          <DialogContent>
+            <DialogHeader>
+              <DialogTitle className="flex items-center gap-2 text-destructive">
+                <HugeiconsIcon icon={AlertCircleIcon} size={18} />
+                Delete Workspace?
+              </DialogTitle>
+              <DialogDescription className="space-y-2 pt-2">
+                <p>
+                  Are you sure you want to delete <span className="font-semibold">{currentWorkspace?.name}</span>?
+                </p>
+                <p>This will permanently delete:</p>
+                <ul className="list-disc list-inside space-y-1 text-xs ml-2">
+                  <li>All design tokens and collections</li>
+                  <li>All components</li>
+                  <li>All Figma files</li>
+                  <li>All workspace members</li>
+                  <li>All settings and history</li>
+                </ul>
+                <p className="text-destructive font-bold pt-2">This action cannot be undone.</p>
+              </DialogDescription>
+            </DialogHeader>
+            <DialogFooter className="gap-2">
+              <Button
+                variant="outline"
+                onClick={() => setShowDeleteDialog(false)}
+                disabled={deletingWorkspace}
+              >
+                Cancel
+              </Button>
+              <Button
+                variant="destructive"
+                onClick={handleDeleteWorkspace}
+                disabled={deletingWorkspace}
+              >
+                {deletingWorkspace ? 'Deleting...' : 'Delete Workspace'}
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
 
         {/* Bottom spacing */}
         <div className="h-4" />
