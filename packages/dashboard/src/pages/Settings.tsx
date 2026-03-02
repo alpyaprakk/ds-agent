@@ -29,6 +29,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog';
+import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
 import { useAuthStore } from '@/store/auth-store';
 import { useWorkspaceStore } from '@/store/workspace-store';
 import { apiClient, getAvatarUrl } from '@/lib/api-client';
@@ -325,7 +326,7 @@ export function Settings() {
 
   return (
     <div className="p-6 md:p-8">
-      <div className="max-w-3xl mx-auto space-y-8">
+      <div className="max-w-4xl mx-auto space-y-6">
         {/* Page Header */}
         <div>
           <h1 className="text-lg font-semibold tracking-tight">Settings</h1>
@@ -333,6 +334,35 @@ export function Settings() {
             Manage your profile, workspace team, and integrations.
           </p>
         </div>
+
+        <Tabs defaultValue="profile" className="w-full">
+          <TabsList className="grid w-full grid-cols-5 mb-6">
+            <TabsTrigger value="profile">
+              <HugeiconsIcon icon={User02Icon} size={14} className="mr-1.5" />
+              Profile
+            </TabsTrigger>
+            <TabsTrigger value="team">
+              <HugeiconsIcon icon={UserGroupIcon} size={14} className="mr-1.5" />
+              Team
+            </TabsTrigger>
+            <TabsTrigger value="integrations">
+              <HugeiconsIcon icon={LinkSquare01Icon} size={14} className="mr-1.5" />
+              Integrations
+            </TabsTrigger>
+            <TabsTrigger value="notifications">
+              <HugeiconsIcon icon={Notification03Icon} size={14} className="mr-1.5" />
+              Notifications
+            </TabsTrigger>
+            {myRole === 'owner' && (
+              <TabsTrigger value="workspace">
+                <HugeiconsIcon icon={Settings02Icon} size={14} className="mr-1.5" />
+                Workspace
+              </TabsTrigger>
+            )}
+          </TabsList>
+
+          {/* Profile Tab */}
+          <TabsContent value="profile" className="space-y-6">
 
         {/* My Pending Invitations - shown prominently at top */}
         {myInvitations.length > 0 && (
@@ -436,9 +466,12 @@ export function Settings() {
             </div>
           </CardContent>
         </Card>
+          </TabsContent>
 
-        {/* Team / Members */}
+          {/* Team Tab */}
+          <TabsContent value="team" className="space-y-6">
         {currentWorkspace && (
+          <>
           <Card>
             <CardHeader>
               <div className="flex items-center gap-3">
@@ -586,13 +619,12 @@ export function Settings() {
               </div>
             </CardContent>
           </Card>
+          </>
         )}
+          </TabsContent>
 
-        {/* Integrations section header */}
-        <div className="pt-2">
-          <h2 className="text-sm font-medium">Integrations</h2>
-          <p className="text-xs text-muted-foreground mt-0.5">Connect external services and configure API keys.</p>
-        </div>
+          {/* Integrations Tab */}
+          <TabsContent value="integrations" className="space-y-6">
 
         {/* Figma Token */}
         <Card>
@@ -760,8 +792,10 @@ export function Settings() {
             </Button>
           </CardContent>
         </Card>
+          </TabsContent>
 
-        {/* Notification Preferences */}
+          {/* Notifications Tab */}
+          <TabsContent value="notifications" className="space-y-6">
         {notifPrefsLoaded && (
           <Card>
             <CardHeader>
@@ -799,8 +833,10 @@ export function Settings() {
             </CardContent>
           </Card>
         )}
+          </TabsContent>
 
-        {/* Workspace Settings - Owner Only */}
+          {/* Workspace Tab */}
+          <TabsContent value="workspace" className="space-y-6">
         {currentWorkspace && myRole === 'owner' && (
           <Card className="border-destructive/20">
             <CardHeader>
@@ -868,6 +904,8 @@ export function Settings() {
             </CardContent>
           </Card>
         )}
+          </TabsContent>
+        </Tabs>
 
         {/* Reset Workspace Confirmation Dialog */}
         <Dialog open={showResetDialog} onOpenChange={setShowResetDialog}>
@@ -951,9 +989,6 @@ export function Settings() {
             </DialogFooter>
           </DialogContent>
         </Dialog>
-
-        {/* Bottom spacing */}
-        <div className="h-4" />
       </div>
     </div>
   );
